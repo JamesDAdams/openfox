@@ -34,7 +34,12 @@ import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
-import { createQueueStateMessage, createChatVisionFallbackMessage } from '../ws/protocol.js'
+import {
+  createQueueStateMessage,
+  createChatVisionFallbackMessage,
+  createChatMessageMessage,
+  createChatDoneMessage,
+} from '../ws/protocol.js'
 import type { DangerLevel } from '../../shared/types.js'
 import stripAnsi from 'strip-ansi'
 import { getConversationMessages } from './conversation-history.js'
@@ -488,6 +493,18 @@ export async function runTopLevelAgentLoop(
           }),
         )
         eventStore.append(sessionId, { type: 'message.done', data: { messageId: asapMsgId } })
+
+        // Broadcast message events to frontend so it knows about the user message
+        // before tool.preparing events arrive for the assistant response
+        const message: import('../../shared/types.js').Message = {
+          id: asapMsgId,
+          role: 'user',
+          content: asap.content,
+          timestamp: new Date().toISOString(),
+          ...(asap.attachments ? { attachments: asap.attachments } : {}),
+        }
+        onMessage?.(createChatMessageMessage(message))
+        onMessage?.(createChatDoneMessage(asapMsgId, 'complete'))
       }
       if (asapMessages.length > 0) {
         onMessage?.(createQueueStateMessage(sessionManager.getQueueState(sessionId)))

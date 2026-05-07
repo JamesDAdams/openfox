@@ -1292,18 +1292,21 @@ export const useSessionStore = create<SessionState>((set, get) => {
           }
           const payload = message.payload as ChatToolPreparingPayload
 
-          // Skip if the message already has a full tool call with this name — stale preparing event
+          // Skip if the message already has a full tool call at this INDEX with this NAME — stale preparing event
           // This can happen when session.state replaces messages mid-stream.
-          const skipIfAlreadyHasToolCall = (toolCalls: unknown[] | undefined, name: string): boolean => {
+          const skipIfAlreadyHasToolCall = (toolCalls: unknown[] | undefined, index: number, name: string): boolean => {
             if (!toolCalls) return false
-            return toolCalls.some((tc: unknown) => (tc as { name?: string }).name === name)
+            return toolCalls.some((tc: unknown) => {
+              const toolCall = tc as { name?: string; index?: number }
+              return toolCall.name === name && toolCall.index === index
+            })
           }
 
           set((state) => {
             const sm = state.streamingMessage
             if (sm && sm.id === payload.messageId) {
               // Don't override existing full tool call with stale preparing indicator
-              if (skipIfAlreadyHasToolCall(sm.toolCalls, payload.name)) return state
+              if (skipIfAlreadyHasToolCall(sm.toolCalls, payload.index, payload.name)) return state
 
               const existing = sm.preparingToolCalls ?? []
               const existingIndex = existing.findIndex((p) => p.index === payload.index)
@@ -1336,7 +1339,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
                 if (m.id !== payload.messageId) return m
 
                 // Don't override existing full tool call with stale preparing indicator
-                if (skipIfAlreadyHasToolCall(m.toolCalls, payload.name)) return m
+                if (skipIfAlreadyHasToolCall(m.toolCalls, payload.index, payload.name)) return m
 
                 return {
                   ...m,
