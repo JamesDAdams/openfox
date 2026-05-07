@@ -1292,74 +1292,40 @@ export const useSessionStore = create<SessionState>((set, get) => {
           }
           const payload = message.payload as ChatToolPreparingPayload
 
-          // Skip if the message already has a full tool call at this INDEX with this NAME — stale preparing event
-          // This can happen when session.state replaces messages mid-stream.
-          const skipIfAlreadyHasToolCall = (toolCalls: unknown[] | undefined, index: number, name: string): boolean => {
-            if (!toolCalls) return false
-            return toolCalls.some((tc: unknown) => {
-              const toolCall = tc as { name?: string; index?: number }
-              return toolCall.name === name && toolCall.index === index
-            })
+          // Only update the current streaming message - ignore stale events for old messages
+          const sm = get().streamingMessage
+          if (!sm || sm.id !== payload.messageId) {
+            return
           }
 
+          // Skip if the tool call has already progressed beyond preparing
+          const existingToolCall = sm.toolCalls?.find((_, idx) => idx === payload.index)
+          if (existingToolCall) return
+
           set((state) => {
-            const sm = state.streamingMessage
-            if (sm && sm.id === payload.messageId) {
-              // Don't override existing full tool call with stale preparing indicator
-              if (skipIfAlreadyHasToolCall(sm.toolCalls, payload.index, payload.name)) return state
-
-              const existing = sm.preparingToolCalls ?? []
-              const existingIndex = existing.findIndex((p) => p.index === payload.index)
-              let preparingToolCalls: typeof existing
-              if (existingIndex >= 0) {
-                // Update existing entry with new partial arguments
-                preparingToolCalls = existing.map((p, i) =>
-                  i === existingIndex ? { ...p, arguments: payload.arguments } : p,
-                )
-              } else {
-                preparingToolCalls = [
-                  ...existing,
-                  {
-                    index: payload.index,
-                    name: payload.name,
-                    ...(payload.arguments ? { arguments: payload.arguments } : {}),
-                  },
-                ]
-              }
-              return {
-                streamingMessage: {
-                  ...sm,
-                  preparingToolCalls,
+            const existing = state.streamingMessage!.preparingToolCalls ?? []
+            const existingIndex = existing.findIndex((p: any) => p.index === payload.index)
+            let preparingToolCalls: typeof existing
+            if (existingIndex >= 0) {
+              // Update existing entry with new partial arguments
+              preparingToolCalls = existing.map((p: any, i: any) =>
+                i === existingIndex ? { ...p, arguments: payload.arguments } : p,
+              )
+            } else {
+              preparingToolCalls = [
+                ...existing,
+                {
+                  index: payload.index,
+                  name: payload.name,
+                  ...(payload.arguments ? { arguments: payload.arguments } : {}),
                 },
-              }
+              ]
             }
-            // Fallback: update in messages array if no streaming message
             return {
-              messages: state.messages.map((m) => {
-                if (m.id !== payload.messageId) return m
-
-                // Don't override existing full tool call with stale preparing indicator
-                if (skipIfAlreadyHasToolCall(m.toolCalls, payload.index, payload.name)) return m
-
-                return {
-                  ...m,
-                  preparingToolCalls: (() => {
-                    const existing = m.preparingToolCalls ?? []
-                    const existingIndex = existing.findIndex((p) => p.index === payload.index)
-                    if (existingIndex >= 0) {
-                      return existing.map((p, i) => (i === existingIndex ? { ...p, arguments: payload.arguments } : p))
-                    }
-                    return [
-                      ...existing,
-                      {
-                        index: payload.index,
-                        name: payload.name,
-                        ...(payload.arguments ? { arguments: payload.arguments } : {}),
-                      },
-                    ]
-                  })(),
-                }
-              }),
+              streamingMessage: {
+                ...state.streamingMessage!,
+                preparingToolCalls,
+              },
             }
           })
           break
@@ -1432,6 +1398,14 @@ export const useSessionStore = create<SessionState>((set, get) => {
             break
           }
           const payload = message.payload as ChatToolOutputPayload
+
+          // Skip if this is a stale event — the message already has this tool call completed
+          // This can happen when session.state replaces messages mid-stream during parallel execution
+          const messageHasToolCall = get()
+            .messages.find((m) => m.id === payload.messageId)
+            ?.toolCalls?.some((tc) => tc.id === payload.callId)
+          if (messageHasToolCall) break
+
           streamingBuffer.messageId = payload.messageId
           streamingBuffer.toolOutput.push({
             messageId: payload.messageId,

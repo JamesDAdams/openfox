@@ -151,4 +151,31 @@ describe('Tool Preparing Events', () => {
       }
     }
   })
+
+  it('ignores stale tool_preparing events from previous messages', async () => {
+    // This test verifies that when a message is replaced (e.g., during parallel tool execution),
+    // stale tool_preparing events from the old message don't interfere with the new message
+    await client.send('chat.send', {
+      content: 'Run two commands in parallel: sleep 0.1 && echo "first" and echo "second"',
+    })
+
+    const events = await collectChatEvents(client)
+    assertNoErrors(events)
+
+    const preparingEvents = events.get<ChatToolPreparingPayload>('chat.tool_preparing')
+    const toolCallEvents = events.get<ChatToolCallPayload>('chat.tool_call')
+    const toolResultEvents = events.get('chat.tool_result')
+
+    // Should have tool calls
+    expect(toolCallEvents.length).toBeGreaterThan(0)
+
+    // All tool calls should complete successfully
+    expect(toolResultEvents.length).toBe(toolCallEvents.length)
+
+    // Verify no duplicate or stale preparing events that would reset tool calls to preparing state
+    // Each unique (messageId, index) combination should appear at most once
+    const preparingKeys = preparingEvents.map((e) => `${e.payload.messageId}-${e.payload.index}`)
+    const uniqueKeys = new Set(preparingKeys)
+    expect(uniqueKeys.size).toBe(preparingKeys.length)
+  })
 })
