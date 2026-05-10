@@ -40,6 +40,7 @@ import {
   createChatVisionFallbackMessage,
   createChatMessageMessage,
   createChatDoneMessage,
+  createChatMessageUpdatedMessage,
 } from '../ws/protocol.js'
 import type { DangerLevel } from '../../shared/types.js'
 import stripAnsi from 'strip-ansi'
@@ -298,6 +299,7 @@ export async function executeToolBatch(
 // ============================================================================
 
 const MAX_FORMAT_RETRIES = 10
+const MAX_TRUNCATION_RETRIES = 3
 const FORMAT_CORRECTION_PROMPT = `IMPORTANT: You MUST use the JSON function calling API. Do NOT output XML tags like <function=>, <parameter=>, or <invoke=>. Your previous attempt was stopped because you used the wrong format. Use the proper tool_calls format.`
 
 export async function runTopLevelAgentLoop(
@@ -308,8 +310,10 @@ export async function runTopLevelAgentLoop(
   const eventStore = getEventStore()
 
   let formatRetryCount = 0
+  let truncationRetryCount = 0
   let returnValueContent: string | undefined
   let returnValueResult: string | undefined
+  let currentMaxTokensOverride: number | undefined
 
   for (;;) {
     await maybeAutoCompactContext({
@@ -415,7 +419,10 @@ export async function runTopLevelAgentLoop(
       )
     }
 
-    const modelSettings = sessionManager.getCurrentModelSettings()
+    const modelSettings =
+      currentMaxTokensOverride !== undefined
+        ? { ...sessionManager.getCurrentModelSettings(), maxTokens: currentMaxTokensOverride }
+        : sessionManager.getCurrentModelSettings()
 
     const streamGen = streamLLMPure({
       messageId: assistantMsgId,
@@ -463,6 +470,60 @@ export async function runTopLevelAgentLoop(
 
     turnMetrics.addLLMCall(result.timing, result.usage.promptTokens, result.usage.completionTokens, result.modelParams)
     sessionManager.setCurrentContextSize(sessionId, result.usage.promptTokens)
+
+    if (result.finishReason === 'length' && result.toolCalls.length === 0) {
+      if (truncationRetryCount < MAX_TRUNCATION_RETRIES) {
+        truncationRetryCount += 1
+        const currentMaxTokens = result.modelParams?.maxTokens ?? 16384
+        const promptTokens = result.usage.promptTokens
+        const contextWindow = sessionManager.getCurrentModelContext()
+        const newMaxTokens = Math.min(Math.floor(currentMaxTokens * 1.5), contextWindow - promptTokens - 2048)
+        currentMaxTokensOverride = newMaxTokens
+        // Finalize the truncated assistant message so the frontend properly closes it
+        const interimStats = turnMetrics.buildStats(statsIdentity, mode)
+        eventStore.append(
+          sessionId,
+          createMessageDoneEvent(assistantMsgId, {
+            segments: result.segments,
+            stats: interimStats,
+            promptContext: assembledRequest.promptContext,
+          }),
+        )
+        // Tell the frontend to fold the streaming message back into messages
+        onMessage?.(createChatMessageUpdatedMessage(assistantMsgId, { isStreaming: false }))
+        // Emit continue message to event store so getConversationMessages picks it up next iteration
+        // We don't broadcast it via WebSocket, so the frontend won't see it
+        const continueMsgId = crypto.randomUUID()
+        eventStore.append(
+          sessionId,
+          createMessageStartEvent(
+            continueMsgId,
+            'user',
+            'Continue your previous response exactly where you left off.',
+            {
+              ...(currentWindowMessageOptions ?? {}),
+              isSystemGenerated: true,
+            },
+          ),
+        )
+        eventStore.append(sessionId, { type: 'message.done', data: { messageId: continueMsgId } })
+        continue
+      } else {
+        // Exhausted retries, emit truncated
+        const stats = turnMetrics.buildStats(statsIdentity, mode)
+        eventStore.append(
+          sessionId,
+          createMessageDoneEvent(assistantMsgId, {
+            segments: result.segments,
+            stats,
+            partial: true,
+            promptContext: assembledRequest.promptContext,
+          }),
+        )
+        eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'truncated', stats))
+        break
+      }
+    }
 
     if (result.toolCalls.length > 0) {
       eventStore.append(

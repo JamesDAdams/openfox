@@ -294,6 +294,7 @@ export interface Message {
   segments?: MessageSegment[] // Preserves streaming order: text/thinking chunks + tool call refs
   stats?: MessageStats // LLM performance stats for this response
   partial?: boolean // true if message was interrupted mid-stream
+  completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' // How the message ended
   isSystemGenerated?: boolean // true for auto-injected messages (retry prompts, etc.)
   isStreaming?: boolean // true while assistant is still generating
   messageKind?: 'correction' | 'auto-prompt' | 'context-reset' | 'task-completed' | 'workflow-started' | 'command' // Visual styling hint for system-generated messages

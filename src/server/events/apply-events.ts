@@ -149,7 +149,7 @@ export function applyEvents<
     preparingToolCalls?: PreparingToolCall[]
     formatRetries?: FormatRetry[]
     isComplete?: boolean
-    completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user'
+    completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'truncated'
   },
 >(
   initialMessages: T[],
@@ -264,10 +264,16 @@ export function applyEvents<
         const msg = messages.get(data.messageId)
         if (msg) {
           ;(
-            msg as T & { isComplete: boolean; completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' }
+            msg as T & {
+              isComplete: boolean
+              completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
+            }
           ).isComplete = true
           ;(
-            msg as T & { isComplete: boolean; completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' }
+            msg as T & {
+              isComplete: boolean
+              completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
+            }
           ).completeReason = data.reason
         }
         break
@@ -279,21 +285,21 @@ export function applyEvents<
             ;(
               msg as T & {
                 isComplete: boolean
-                completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user'
+                completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
                 stats?: { error?: string }
               }
             ).isComplete = true
             ;(
               msg as T & {
                 isComplete: boolean
-                completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user'
+                completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
                 stats?: { error?: string }
               }
             ).completeReason = 'error'
             ;(
               msg as T & {
                 isComplete: boolean
-                completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user'
+                completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
                 stats?: { error?: string }
               }
             ).stats = { error: data.error }

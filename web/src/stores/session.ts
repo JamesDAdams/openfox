@@ -1550,7 +1550,12 @@ export const useSessionStore = create<SessionState>((set, get) => {
             return {
               messages: state.messages.map((m) =>
                 m.id === payload.messageId
-                  ? (finalMessage ?? { ...m, isStreaming: false, stats: messageStats ?? m.stats })
+                  ? (finalMessage ?? {
+                      ...m,
+                      isStreaming: false,
+                      stats: messageStats ?? m.stats,
+                      completeReason: payload.reason,
+                    })
                   : m,
               ),
               streamingMessageId: null,

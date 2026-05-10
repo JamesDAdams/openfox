@@ -68,6 +68,7 @@ export interface PureStreamResult {
   aborted: boolean
   xmlFormatError: boolean
   modelParams?: ModelParams
+  finishReason: 'stop' | 'tool_calls' | 'length' | 'content_filter'
 }
 
 type StreamMessageInput = {
@@ -124,6 +125,7 @@ function createEmptyStreamResult(
     aborted,
     xmlFormatError,
     modelParams,
+    finishReason: 'stop',
   }
 }
 
@@ -383,6 +385,7 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
     aborted,
     xmlFormatError,
     modelParams,
+    finishReason: result.response.finishReason,
   }
 
   // Only include thinkingContent if it has content
@@ -569,7 +572,7 @@ export function createToolResultEvent(messageId: string, toolCallId: string, res
  */
 export function createChatDoneEvent(
   messageId: string,
-  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user',
+  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated',
   stats?: MessageStats,
 ): TurnEvent {
   return {

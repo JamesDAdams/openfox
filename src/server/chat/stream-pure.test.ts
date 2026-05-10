@@ -97,6 +97,7 @@ describe('stream-pure', () => {
         topP: expect.any(Number),
         maxTokens: expect.any(Number),
       }),
+      finishReason: 'tool_calls',
     })
   })
 
@@ -166,6 +167,7 @@ describe('stream-pure', () => {
         topP: expect.any(Number),
         maxTokens: expect.any(Number),
       }),
+      finishReason: 'stop',
     })
   })
 

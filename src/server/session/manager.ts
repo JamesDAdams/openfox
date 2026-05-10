@@ -98,6 +98,10 @@ export class SessionManager {
     return this.providerManager.getModelSettings(model)
   }
 
+  getCurrentModelContext(): number {
+    return this.providerManager.getCurrentModelContext()
+  }
+
   // ============================================================================
   // Session Lifecycle
   // ============================================================================

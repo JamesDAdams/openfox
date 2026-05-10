@@ -284,7 +284,7 @@ export type TurnEvent =
       type: 'chat.done'
       data: {
         messageId: string
-        reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user'
+        reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
         stats?: MessageStats
       }
     }
@@ -445,7 +445,7 @@ export interface TaskStats {
 
 export interface MessageStatsEntry {
   messageId: string
-  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user'
+  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
   stats?: MessageStats
 }
 
@@ -479,7 +479,7 @@ export interface SnapshotMessage {
   preparingToolCalls?: PreparingToolCall[]
   formatRetries?: FormatRetry[]
   isComplete?: boolean
-  completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user'
+  completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
   segments?: MessageSegment[]
   stats?: MessageStats
   timestamp: number

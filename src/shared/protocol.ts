@@ -253,7 +253,7 @@ export interface ChatMessageUpdatedPayload {
 
 export interface ChatDonePayload {
   messageId: string
-  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user'
+  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
   agentType?: 'sub-agent' // Set when this is a sub-agent completion
   stats?: {
     model: string

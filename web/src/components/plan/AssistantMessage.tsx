@@ -277,6 +277,13 @@ export const AssistantMessage = memo(function AssistantMessage({
             <span>Aborted</span>
           </div>
         )}
+
+        {message.completeReason === 'truncated' && (
+          <div className="flex items-center gap-1.5 text-[10px] text-amber-400/80 mt-1">
+            <WarningSmallIcon />
+            <span>Response was truncated — the model ran out of output tokens.</span>
+          </div>
+        )}
       </div>
     </div>
   )

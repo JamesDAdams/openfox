@@ -549,7 +549,7 @@ export function emitContextState(
 export function emitChatDone(
   sessionId: string,
   messageId: string,
-  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user',
+  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated',
   stats?: MessageStats,
 ): void {
   const eventStore = getEventStore()

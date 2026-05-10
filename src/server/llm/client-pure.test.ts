@@ -225,5 +225,32 @@ describe('llm client pure helpers', () => {
         maxTokens: 2000,
       },
     })
+
+    // modelSettings should override profile defaults
+    expect(
+      await buildNonStreamingCreateParams({
+        model: 'test-model',
+        request: {
+          messages: [{ role: 'user' as const, content: 'hi' }],
+          modelSettings: { maxTokens: 5000, temperature: 0.5, topP: 0.95 },
+        },
+        profile,
+        capabilities: { supportsTopK: false, supportsChatTemplateKwargs: false },
+      }),
+    ).toEqual({
+      params: {
+        model: 'test-model',
+        messages: [{ role: 'user', content: 'hi' }],
+        temperature: 0.5,
+        max_tokens: 5000,
+        top_p: 0.95,
+        stream: false,
+      },
+      modelParams: {
+        temperature: 0.5,
+        topP: 0.95,
+        maxTokens: 5000,
+      },
+    })
   })
 })

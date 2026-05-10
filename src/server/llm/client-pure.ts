@@ -357,9 +357,9 @@ async function buildChatCompletionCreateParams(
     onVisionFallbackDone,
   )
 
-  const temperature = request.temperature ?? profile.temperature
-  const maxTokens = request.maxTokens ?? profile.defaultMaxTokens
-  const topP = profile.topP
+  const temperature = request.modelSettings?.temperature ?? request.temperature ?? profile.temperature
+  const maxTokens = request.modelSettings?.maxTokens ?? request.maxTokens ?? profile.defaultMaxTokens
+  const topP = request.modelSettings?.topP ?? profile.topP
   const topK = capabilities.supportsTopK ? profile.topK : undefined
 
   const params: OpenAI.ChatCompletionCreateParamsNonStreaming | OpenAI.ChatCompletionCreateParamsStreaming = {
