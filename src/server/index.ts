@@ -280,10 +280,12 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
   app.put('/api/projects/:id', async (req, res) => {
     const { updateProject } = await import('./db/projects.js')
-    const { name, customInstructions } = req.body
-    const updates: { name?: string; customInstructions?: string | null } = {}
+    const { name, customInstructions, dangerLevel } = req.body
+    const updates: { name?: string; customInstructions?: string | null; dangerLevel?: 'normal' | 'dangerous' | null } =
+      {}
     if (name !== undefined) updates.name = name
     if (customInstructions !== undefined) updates.customInstructions = customInstructions
+    if (dangerLevel !== undefined) updates.dangerLevel = dangerLevel as 'normal' | 'dangerous' | null
     const updated = updateProject(req.params.id, updates)
     if (!updated) {
       return res.status(404).json({ error: 'Project not found' })

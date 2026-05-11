@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { loadConfig } from '../config.js'
 import { closeDatabase, initDatabase } from './index.js'
-import { createProject } from './projects.js'
+import { createProject, updateProject } from './projects.js'
 import {
   createSession,
   deleteSession,
@@ -72,10 +72,18 @@ describe('db sessions', () => {
         totalToolCalls: 0,
         iterationCount: 0,
       },
+      dangerLevel: 'normal',
     })
     expect(session.id).toBeDefined()
     expect(session.createdAt).toBeDefined()
     expect(session.updatedAt).toBeDefined()
+  })
+
+  it('creates sessions using project danger_level as default', () => {
+    updateProject(projectAId, { dangerLevel: 'dangerous' })
+
+    const session = createSession(projectAId, rootA, 'Dangerous Session')
+    expect(session.dangerLevel).toBe('dangerous')
   })
 
   it('gets session by id', () => {

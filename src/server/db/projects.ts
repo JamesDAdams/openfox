@@ -78,7 +78,7 @@ export function listProjects(): Project[] {
 
 export function updateProject(
   id: string,
-  updates: { name?: string; customInstructions?: string | null },
+  updates: { name?: string; customInstructions?: string | null; dangerLevel?: DangerLevel | null },
 ): Project | null {
   const db = getDatabase()
   const now = new Date().toISOString()
@@ -94,6 +94,11 @@ export function updateProject(
   if (updates.customInstructions !== undefined) {
     sets.push('custom_instructions = ?')
     values.push(updates.customInstructions)
+  }
+
+  if (updates.dangerLevel !== undefined) {
+    sets.push('danger_level = ?')
+    values.push(updates.dangerLevel)
   }
 
   values.push(id)
@@ -129,6 +134,7 @@ interface ProjectRow {
   name: string
   workdir: string
   custom_instructions: string | null
+  danger_level: string | null
   created_at: string
   updated_at: string
 }
@@ -139,7 +145,10 @@ function rowToProject(row: ProjectRow): Project {
     name: row.name,
     workdir: row.workdir,
     ...(row.custom_instructions ? { customInstructions: row.custom_instructions } : {}),
+    ...(row.danger_level ? { dangerLevel: row.danger_level as DangerLevel } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
+
+export type DangerLevel = 'normal' | 'dangerous'

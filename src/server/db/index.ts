@@ -149,6 +149,11 @@ function runMigrations(db: Database.Database): void {
     db.exec(`ALTER TABLE projects ADD COLUMN custom_instructions TEXT`)
   }
 
+  if (!projectColumnNames.includes('danger_level')) {
+    logger.info('Migrating projects table: adding danger_level column')
+    db.exec(`ALTER TABLE projects ADD COLUMN danger_level TEXT`)
+  }
+
   // Create events table for EventStore (single source of truth)
   // Note: EventStore creates this table with its own schema in initSchema()
   // We just ensure the index exists for the event_type column

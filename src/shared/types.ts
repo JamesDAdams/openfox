@@ -7,6 +7,7 @@ export interface Project {
   name: string
   workdir: string
   customInstructions?: string // Project-specific instructions injected into prompts
+  dangerLevel?: DangerLevel // Project default danger level for new sessions
   createdAt: string
   updatedAt: string
 }

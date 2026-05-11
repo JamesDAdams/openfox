@@ -10,6 +10,18 @@ import { getDatabase } from './index.js'
 
 export type DangerLevel = 'normal' | 'dangerous'
 
+function getProjectDangerLevel(projectId: string): DangerLevel {
+  try {
+    const db = getDatabase()
+    const row = db.prepare('SELECT danger_level FROM projects WHERE id = ?').get(projectId) as
+      | { danger_level: string | null }
+      | undefined
+    return (row?.danger_level as DangerLevel) ?? 'normal'
+  } catch {
+    return 'normal'
+  }
+}
+
 // ============================================================================
 // Session Operations
 // ============================================================================
@@ -24,13 +36,14 @@ export function createSession(
   const db = getDatabase()
   const now = new Date().toISOString()
   const id = crypto.randomUUID()
+  const dangerLevel = getProjectDangerLevel(projectId)
 
   db.prepare(
     `
     INSERT INTO sessions (id, project_id, workdir, phase, mode, workflow_phase, is_running, created_at, updated_at, title, provider_id, provider_model, danger_level)
-    VALUES (?, ?, ?, 'idle', 'planner', 'plan', 0, ?, ?, ?, ?, ?, 'normal')
+    VALUES (?, ?, ?, 'idle', 'planner', 'plan', 0, ?, ?, ?, ?, ?, ?)
   `,
-  ).run(id, projectId, workdir, now, now, title ?? null, providerId ?? null, providerModel ?? null)
+  ).run(id, projectId, workdir, now, now, title ?? null, providerId ?? null, providerModel ?? null, dangerLevel)
 
   return {
     id,
@@ -54,7 +67,7 @@ export function createSession(
       totalToolCalls: 0,
       iterationCount: 0,
     },
-    dangerLevel: 'normal',
+    dangerLevel,
   }
 }
 

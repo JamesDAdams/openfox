@@ -14,7 +14,7 @@ interface ProjectState {
   loadProject: (projectId: string) => Promise<Project | null>
   updateProject: (
     projectId: string,
-    updates: { name?: string; customInstructions?: string | null },
+    updates: { name?: string; customInstructions?: string | null; dangerLevel?: string | null },
   ) => Promise<Project | null>
   deleteProject: (projectId: string) => Promise<boolean>
   clearProject: () => void

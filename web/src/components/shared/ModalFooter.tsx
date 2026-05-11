@@ -18,7 +18,7 @@ export function ModalFooter({
   saveLabel = saving ? 'Saving...' : 'Save',
 }: ModalFooterProps) {
   return (
-    <div className="flex justify-end gap-2 pt-2 border-t border-border flex-shrink-0">
+    <div className="flex justify-end gap-2 flex-shrink-0">
       <Button variant="secondary" onClick={onCancel}>
         {cancelLabel}
       </Button>

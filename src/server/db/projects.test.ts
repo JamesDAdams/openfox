@@ -57,6 +57,13 @@ describe('db projects', () => {
     expect(cleared).toMatchObject({ id: projectA.id, name: 'OpenFox Renamed' })
     expect(cleared && 'customInstructions' in cleared).toBe(false)
 
+    const withDangerLevel = updateProject(projectB.id, { dangerLevel: 'dangerous' })
+    expect(withDangerLevel).toMatchObject({ id: projectB.id, dangerLevel: 'dangerous' })
+
+    const clearDangerLevel = updateProject(projectB.id, { dangerLevel: null })
+    expect(clearDangerLevel).toMatchObject({ id: projectB.id })
+    expect(clearDangerLevel && 'dangerLevel' in clearDangerLevel).toBe(false)
+
     expect(updateProject('missing', { name: 'Nope' })).toBeNull()
 
     deleteProject(projectA.id)
