@@ -177,6 +177,7 @@ async function performContextCompaction(
     workdir: session.workdir,
     onEvent: (event) => eventStore.append(sessionId, event),
     statsIdentity,
+    sessionManager,
     ...(session.dangerLevel ? { dangerLevel: session.dangerLevel } : {}),
     ...(signal ? { signal } : {}),
   })

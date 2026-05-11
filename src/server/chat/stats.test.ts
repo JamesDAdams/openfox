@@ -53,6 +53,38 @@ describe('stats computation', () => {
     })
   })
 
+  describe('prefTokenIncrement', () => {
+    it('computes prefillSpeed from increment when prefTokenIncrement is provided', () => {
+      // Example: 80k total prompt, 78k cached = 2k increment processed in 0.5s
+      // Old (inflated): 80000 / 0.5 = 160000 tok/s
+      // New (correct): 2000 / 0.5 = 4000 tok/s
+      const stats = computeMessageStats({
+        identity,
+        mode: 'builder',
+        timing: { ttft: 0.5, completionTime: 2, tps: 0, prefillTps: 0 },
+        usage: { promptTokens: 80000, completionTokens: 500 },
+        prefTokenIncrement: 2000,
+      })
+
+      expect(stats.prefillTokens).toBe(80000)
+      expect(stats.llmCalls?.[0]?.prefTokenIncrement).toBe(2000)
+      expect(stats.prefillSpeed).toBe(4000)
+    })
+
+    it('falls back to total tokens when prefTokenIncrement is not provided', () => {
+      const stats = computeMessageStats({
+        identity,
+        mode: 'builder',
+        timing: { ttft: 2, completionTime: 10, tps: 0, prefillTps: 0 },
+        usage: { promptTokens: 80000, completionTokens: 500 },
+      })
+
+      expect(stats.prefillTokens).toBe(80000)
+      expect(stats.llmCalls?.[0]?.prefTokenIncrement).toBeUndefined()
+      expect(stats.prefillSpeed).toBe(40000) // 80000 / 2
+    })
+  })
+
   describe('builder stats inflation bug', () => {
     it('demonstrates inflated speeds when using single-call timing with cumulative tokens', () => {
       // This is the BUG: using computeMessageStats with cumulative tokens

@@ -22,6 +22,7 @@ import type {
 import type { RequestContextMessage } from '../chat/request-context.js'
 import type { LLMClientWithModel } from '../llm/client.js'
 import type { LLMToolDefinition } from '../llm/types.js'
+import type { SessionManager } from '../session/index.js'
 import { buildModelParams } from '../llm/client-pure.js'
 import type { StreamTiming } from '../llm/streaming.js'
 import type { TurnEvent } from '../events/types.js'
@@ -414,6 +415,7 @@ export interface ModelParams {
 export class TurnMetrics {
   private startTime: number
   private totalPrefillTokens = 0
+  private totalPrefillIncrement = 0
   private totalPrefillTime = 0 // seconds
   private totalGenTokens = 0
   private totalGenTime = 0 // seconds
@@ -427,8 +429,16 @@ export class TurnMetrics {
     this.startTime = performance.now()
   }
 
-  /** Add metrics from an LLM call */
-  addLLMCall(timing: StreamTiming, promptTokens: number, completionTokens: number, modelParams?: ModelParams): void {
+  /** Add metrics from an LLM call.
+   * @param previousContextTokens - context size BEFORE this LLM call (for computing the non-cached increment)
+   */
+  addLLMCall(
+    timing: StreamTiming,
+    promptTokens: number,
+    completionTokens: number,
+    previousContextTokens?: number,
+    modelParams?: ModelParams,
+  ): void {
     const callIndex = this.llmCalls.length + 1
     this.totalPrefillTokens += promptTokens
     this.totalPrefillTime += timing.ttft
@@ -437,15 +447,22 @@ export class TurnMetrics {
     if (modelParams) {
       this.modelParams = modelParams
     }
+    const prefTokenIncrement =
+      previousContextTokens !== undefined ? Math.max(0, promptTokens - previousContextTokens) : undefined
+    if (prefTokenIncrement !== undefined) {
+      this.totalPrefillIncrement += prefTokenIncrement
+    }
+    const prefillSource = prefTokenIncrement ?? promptTokens
     this.llmCalls = [
       ...this.llmCalls,
       {
         callIndex,
         promptTokens,
         completionTokens,
+        ...(prefTokenIncrement !== undefined && { prefTokenIncrement }),
         ttft: timing.ttft,
         completionTime: timing.completionTime,
-        prefillSpeed: timing.ttft > 0 ? Math.round((promptTokens / timing.ttft) * 10) / 10 : 0,
+        prefillSpeed: timing.ttft > 0 ? Math.round((prefillSource / timing.ttft) * 10) / 10 : 0,
         generationSpeed:
           timing.completionTime > 0 ? Math.round((completionTokens / timing.completionTime) * 10) / 10 : 0,
         totalTime: Math.round((timing.ttft + timing.completionTime) * 10) / 10,
@@ -474,6 +491,7 @@ export class TurnMetrics {
       identity,
       mode,
       totalPrefillTokens: this.totalPrefillTokens,
+      ...(this.totalPrefillIncrement > 0 && { totalPrefillIncrement: this.totalPrefillIncrement }),
       totalGenTokens: this.totalGenTokens,
       totalPrefillTime: this.totalPrefillTime,
       totalGenTime: this.totalGenTime,
@@ -660,6 +678,7 @@ export interface ConsumeStreamWithToolLoopOptions {
   onEvent: (event: TurnEvent) => void
   statsIdentity: StatsIdentity
   dangerLevel?: 'normal' | 'dangerous'
+  sessionManager?: SessionManager
 }
 
 export async function consumeStreamWithToolLoop(options: ConsumeStreamWithToolLoopOptions): Promise<PureStreamResult> {
@@ -679,6 +698,7 @@ export async function consumeStreamWithToolLoop(options: ConsumeStreamWithToolLo
     onEvent,
     statsIdentity,
     dangerLevel,
+    sessionManager,
   } = options
 
   let currentMessages: Array<{
@@ -699,6 +719,8 @@ export async function consumeStreamWithToolLoop(options: ConsumeStreamWithToolLo
     if (++iterations > MAX_TOOL_LOOP_ITERATIONS) {
       throw new Error('Max tool loop iterations exceeded during compaction')
     }
+
+    const previousContextTokens = sessionManager?.getContextState(sessionId).currentTokens
 
     const streamGen = streamLLMPure({
       messageId,
@@ -723,7 +745,13 @@ export async function consumeStreamWithToolLoop(options: ConsumeStreamWithToolLo
       continue
     }
 
-    turnMetrics.addLLMCall(result.timing, result.usage.promptTokens, result.usage.completionTokens, result.modelParams)
+    turnMetrics.addLLMCall(
+      result.timing,
+      result.usage.promptTokens,
+      result.usage.completionTokens,
+      previousContextTokens,
+      result.modelParams,
+    )
 
     if (result.toolCalls.length > 0) {
       const stats = turnMetrics.buildStats(statsIdentity, 'compaction')

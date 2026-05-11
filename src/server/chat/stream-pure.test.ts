@@ -191,13 +191,79 @@ describe('stream-pure', () => {
     expect(result.content).toBe('')
   })
 
+  describe('prefTokenIncrement with context caching', () => {
+    it('computes prefillSpeed from increment not total tokens when previousContextTokens provided', () => {
+      const metrics = new TurnMetrics()
+      // Context already had 78k tokens, new call sends 80k total (2k new from cache)
+      metrics.addLLMCall({ ttft: 0.5, completionTime: 2, tps: 15, prefillTps: 0 }, 80_000, 500, 78_000)
+
+      const stats = metrics.buildStats(
+        { providerId: 'p', providerName: 'vLLM', backend: 'vllm', model: 'm' },
+        'builder',
+      )
+
+      expect(stats.prefillTokens).toBe(80_000)
+      expect(stats.llmCalls?.[0]?.prefTokenIncrement).toBe(2_000)
+      // Old inflated: 80000 / 0.5 = 160000 tok/s
+      // Correct: 2000 / 0.5 = 4000 tok/s
+      expect(stats.prefillSpeed).toBe(4_000)
+      expect(stats.llmCalls?.[0]?.prefillSpeed).toBe(4_000)
+    })
+
+    it('aggregates prefTokenIncrement across multiple calls with caching', () => {
+      const metrics = new TurnMetrics()
+      // Call 1: 78k prev -> 80k new = 2k increment
+      metrics.addLLMCall({ ttft: 0.5, completionTime: 2, tps: 15, prefillTps: 0 }, 80_000, 500, 78_000)
+      // Call 2: 80k prev -> 83k new = 3k increment
+      metrics.addLLMCall({ ttft: 0.4, completionTime: 1.5, tps: 20, prefillTps: 0 }, 83_000, 400, 80_000)
+
+      const stats = metrics.buildStats(
+        { providerId: 'p', providerName: 'vLLM', backend: 'vllm', model: 'm' },
+        'builder',
+      )
+
+      expect(stats.prefillTokens).toBe(163_000)
+      expect(stats.llmCalls?.[0]?.prefTokenIncrement).toBe(2_000)
+      expect(stats.llmCalls?.[1]?.prefTokenIncrement).toBe(3_000)
+      // Total increment: 5000 tokens over 0.9s total ttft = ~5556 tok/s
+      expect(stats.prefTokenIncrement).toBe(5_000)
+      expect(stats.prefillSpeed).toBe(5_555.6) // rounded to 1 decimal: 5000/0.9 = 5555.6
+    })
+
+    it('falls back to total tokens when previousContextTokens is undefined', () => {
+      const metrics = new TurnMetrics()
+      metrics.addLLMCall({ ttft: 2, completionTime: 4, tps: 8, prefillTps: 25 }, 50, 32, undefined)
+
+      const stats = metrics.buildStats(
+        { providerId: 'p', providerName: 'vLLM', backend: 'vllm', model: 'm' },
+        'builder',
+      )
+
+      expect(stats.llmCalls?.[0]?.prefTokenIncrement).toBeUndefined()
+      expect(stats.prefillSpeed).toBe(25) // 50 / 2 = 25
+    })
+
+    it('handles context shrinking (negative increment clamped to 0)', () => {
+      const metrics = new TurnMetrics()
+      // Edge case: compaction reduced context, so new total is smaller
+      metrics.addLLMCall({ ttft: 1, completionTime: 2, tps: 10, prefillTps: 0 }, 60_000, 300, 75_000)
+
+      const stats = metrics.buildStats(
+        { providerId: 'p', providerName: 'vLLM', backend: 'vllm', model: 'm' },
+        'builder',
+      )
+
+      expect(stats.llmCalls?.[0]?.prefTokenIncrement).toBe(0) // max(0, 60000 - 75000)
+    })
+  })
+
   it('aggregates turn metrics across llm calls and tool time', () => {
     const nowSpy = vi.spyOn(performance, 'now')
     nowSpy.mockReturnValueOnce(1_000).mockReturnValueOnce(7_000)
 
     const metrics = new TurnMetrics()
-    metrics.addLLMCall({ ttft: 2, completionTime: 4, tps: 8, prefillTps: 25 }, 50, 32)
-    metrics.addLLMCall({ ttft: 1, completionTime: 3, tps: 7, prefillTps: 20 }, 25, 18)
+    metrics.addLLMCall({ ttft: 2, completionTime: 4, tps: 8, prefillTps: 25 }, 50, 32, undefined)
+    metrics.addLLMCall({ ttft: 1, completionTime: 3, tps: 7, prefillTps: 20 }, 25, 18, undefined)
     metrics.addToolTime(500)
 
     expect(

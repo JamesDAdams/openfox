@@ -417,6 +417,8 @@ export async function runTopLevelAgentLoop(
       )
     }
 
+    const previousContextTokens = sessionManager.getContextState(sessionId).currentTokens
+
     const modelSettings =
       currentMaxTokensOverride !== undefined
         ? { ...sessionManager.getCurrentModelSettings(), maxTokens: currentMaxTokensOverride }
@@ -466,7 +468,13 @@ export async function runTopLevelAgentLoop(
       throw new Error('Aborted')
     }
 
-    turnMetrics.addLLMCall(result.timing, result.usage.promptTokens, result.usage.completionTokens, result.modelParams)
+    turnMetrics.addLLMCall(
+      result.timing,
+      result.usage.promptTokens,
+      result.usage.completionTokens,
+      previousContextTokens,
+      result.modelParams,
+    )
     sessionManager.setCurrentContextSize(sessionId, result.usage.promptTokens)
 
     if (result.finishReason === 'length' && result.toolCalls.length === 0) {

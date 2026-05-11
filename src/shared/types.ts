@@ -112,7 +112,8 @@ export interface MessageStats {
   totalTime: number // wall clock time (seconds)
   toolTime: number // time spent in tool execution (seconds)
   prefillTokens: number // total prompt tokens across all LLM calls
-  prefillSpeed: number // aggregate tokens/second
+  prefTokenIncrement?: number // sum of new (non-cached) tokens across all calls; used for accurate prefillSpeed
+  prefillSpeed: number // aggregate tok/s (computed from prefTokenIncrement if available)
   generationTokens: number // total completion tokens
   generationSpeed: number // aggregate tokens/second
   llmCalls?: LLMCallStats[] // optional per-call breakdown for this response
@@ -124,11 +125,12 @@ export interface LLMCallStats {
   backend: ProviderBackend
   model: string
   callIndex: number // 1-based call order within the response
-  promptTokens: number // prompt tokens for this specific LLM call
+  promptTokens: number // prompt tokens for this specific LLM call (total, including cached)
   completionTokens: number // completion tokens for this specific LLM call
+  prefTokenIncrement?: number // new (non-cached) tokens that required actual processing; used for accurate prefillSpeed
   ttft: number // seconds to first token
   completionTime: number // seconds spent generating tokens after TTFT
-  prefillSpeed: number // tok/s for prompt processing
+  prefillSpeed: number // tok/s for prompt processing (computed from prefTokenIncrement if available, else promptTokens)
   generationSpeed: number // tok/s for token generation
   totalTime: number // ttft + completionTime
   timestamp?: string // optional completion timestamp for ordering/display

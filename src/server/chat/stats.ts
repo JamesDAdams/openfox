@@ -20,18 +20,22 @@ function buildCallStats(input: {
   timing: StreamTiming
   promptTokens: number
   completionTokens: number
+  prefTokenIncrement?: number
   timestamp?: string
   modelParams?: ModelParams
 }): LLMCallStats {
-  const { identity, callIndex, timing, promptTokens, completionTokens, timestamp, modelParams } = input
+  const { identity, callIndex, timing, promptTokens, completionTokens, prefTokenIncrement, timestamp, modelParams } =
+    input
+  const prefillSource = prefTokenIncrement ?? promptTokens
   return {
     ...identity,
     callIndex,
     promptTokens,
     completionTokens,
+    ...(prefTokenIncrement !== undefined && { prefTokenIncrement }),
     ttft: timing.ttft,
     completionTime: timing.completionTime,
-    prefillSpeed: timing.ttft > 0 ? roundTo1(promptTokens / timing.ttft) : 0,
+    prefillSpeed: timing.ttft > 0 ? roundTo1(prefillSource / timing.ttft) : 0,
     generationSpeed: timing.completionTime > 0 ? roundTo1(completionTokens / timing.completionTime) : 0,
     totalTime: roundTo1(timing.ttft + timing.completionTime),
     ...(timestamp ? { timestamp } : {}),
@@ -47,6 +51,8 @@ export interface StatsInput {
   mode: ToolMode
   timing: StreamTiming
   usage: { promptTokens: number; completionTokens: number }
+  /** New (non-cached) tokens that required actual prompt processing */
+  prefTokenIncrement?: number
   /** Tool execution time in seconds (default: 0) */
   toolTime?: number
   /** Override totalTime instead of computing from timing + toolTime */
@@ -62,9 +68,20 @@ export interface StatsInput {
  * For multi-call flows: pass totalTimeOverride with wall clock time
  */
 export function computeMessageStats(input: StatsInput): MessageStats {
-  const { identity, mode, timing, usage, toolTime = 0, totalTimeOverride, timestamp, modelParams } = input
+  const {
+    identity,
+    mode,
+    timing,
+    usage,
+    prefTokenIncrement,
+    toolTime = 0,
+    totalTimeOverride,
+    timestamp,
+    modelParams,
+  } = input
 
   const totalTime = totalTimeOverride ?? timing.ttft + timing.completionTime + toolTime
+  const prefillSource = prefTokenIncrement ?? usage.promptTokens
 
   return {
     ...identity,
@@ -72,7 +89,8 @@ export function computeMessageStats(input: StatsInput): MessageStats {
     totalTime,
     toolTime,
     prefillTokens: usage.promptTokens,
-    prefillSpeed: timing.ttft > 0 ? roundTo1(usage.promptTokens / timing.ttft) : 0,
+    ...(prefTokenIncrement !== undefined && { prefTokenIncrement }),
+    prefillSpeed: timing.ttft > 0 ? roundTo1(prefillSource / timing.ttft) : 0,
     generationTokens: usage.completionTokens,
     generationSpeed: timing.completionTime > 0 ? roundTo1(usage.completionTokens / timing.completionTime) : 0,
     llmCalls: [
@@ -82,6 +100,7 @@ export function computeMessageStats(input: StatsInput): MessageStats {
         timing,
         promptTokens: usage.promptTokens,
         completionTokens: usage.completionTokens,
+        ...(prefTokenIncrement !== undefined && { prefTokenIncrement }),
         ...(timestamp ? { timestamp } : {}),
         ...(modelParams && { modelParams }),
       }),
@@ -97,6 +116,7 @@ export function computeAggregatedStats(input: {
   identity: StatsIdentity
   mode: ToolMode
   totalPrefillTokens: number
+  totalPrefillIncrement?: number // sum of prefTokenIncrement across all calls; used for accurate prefillSpeed
   totalGenTokens: number
   totalPrefillTime: number // sum of ttft across all calls
   totalGenTime: number // sum of completionTime across all calls
@@ -108,6 +128,7 @@ export function computeAggregatedStats(input: {
     identity,
     mode,
     totalPrefillTokens,
+    totalPrefillIncrement,
     totalGenTokens,
     totalPrefillTime,
     totalGenTime,
@@ -116,13 +137,16 @@ export function computeAggregatedStats(input: {
     llmCalls,
   } = input
 
+  const prefillSource = totalPrefillIncrement ?? totalPrefillTokens
+
   return {
     ...identity,
     mode,
     totalTime,
     toolTime: totalToolTime,
     prefillTokens: totalPrefillTokens,
-    prefillSpeed: totalPrefillTime > 0 ? roundTo1(totalPrefillTokens / totalPrefillTime) : 0,
+    ...(totalPrefillIncrement !== undefined && { prefTokenIncrement: totalPrefillIncrement }),
+    prefillSpeed: totalPrefillTime > 0 ? roundTo1(prefillSource / totalPrefillTime) : 0,
     generationTokens: totalGenTokens,
     generationSpeed: totalGenTime > 0 ? roundTo1(totalGenTokens / totalGenTime) : 0,
     ...(llmCalls ? { llmCalls } : {}),

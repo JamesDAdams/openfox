@@ -263,6 +263,8 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
     // Append return_value instruction to system prompt (sub-agent specific)
     const effectiveSystemPrompt = assembledRequest.systemPrompt + RETURN_VALUE_INSTRUCTION
 
+    const previousContextTokens = sessionManager.getContextState(sessionId).currentTokens
+
     // Stream LLM response
     const streamGen = streamLLMPure({
       messageId: assistantMsgId,
@@ -294,7 +296,13 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
     }
 
     // Track metrics
-    turnMetrics.addLLMCall(result.timing, result.usage.promptTokens, result.usage.completionTokens, result.modelParams)
+    turnMetrics.addLLMCall(
+      result.timing,
+      result.usage.promptTokens,
+      result.usage.completionTokens,
+      previousContextTokens,
+      result.modelParams,
+    )
 
     finalContent = result.content
 
