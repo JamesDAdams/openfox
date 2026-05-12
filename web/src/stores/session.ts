@@ -13,6 +13,7 @@ import type {
 import type {
   ServerMessage,
   SessionStatePayload,
+  GitDiffFile,
   SessionListPayload,
   SessionRunningPayload,
   ChatDeltaPayload,
@@ -215,6 +216,12 @@ interface SessionState {
 
   // Pending path confirmation (outside-workdir access request)
   pendingPathConfirmation: PendingPathConfirmation | null
+
+  // Git status (branch + diff, pushed via WS)
+  gitStatus: {
+    branch: string | null
+    diff: { files: { path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number }[] }
+  } | null
 
   // Pending ask_user question
   pendingQuestion: PendingQuestion | null
@@ -475,6 +482,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
     pendingPathConfirmation: null,
     pendingQuestion: null,
     visionFallbackByMessage: {},
+    gitStatus: null,
     queuedMessages: [],
     abortInProgress: false,
     error: null,
@@ -1711,6 +1719,12 @@ export const useSessionStore = create<SessionState>((set, get) => {
         case 'queue.state': {
           const payload = message.payload as QueueStatePayload
           set({ queuedMessages: payload.messages ?? [] })
+          break
+        }
+
+        case 'git.status': {
+          const payload = message.payload as { branch: string | null; diff: { files: GitDiffFile[] } }
+          set({ gitStatus: { branch: payload.branch, diff: payload.diff } })
           break
         }
 

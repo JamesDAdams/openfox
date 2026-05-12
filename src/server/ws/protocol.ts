@@ -36,6 +36,7 @@ import type {
   QueueStatePayload,
   QueuedMessage,
 } from '../../shared/protocol.js'
+import type { GitStatusPayload } from '../../shared/protocol.js'
 import { isClientMessage, createServerMessage } from '../../shared/protocol.js'
 import type {
   Project,
@@ -116,13 +117,14 @@ export function createSessionStateMessage(
   session: Session,
   messages: Message[],
   pendingConfirmations: PendingPathConfirmationPayload[] = [],
+  gitStatus?: GitStatusPayload,
   correlationId?: string,
 ): ServerMessage<SessionStatePayload> {
   // Enrich messages so toolCalls have their results attached
   const enrichedMessages = enrichMessagesWithToolResults(messages)
   return createServerMessage(
     'session.state',
-    { session, messages: enrichedMessages, pendingConfirmations },
+    { session, messages: enrichedMessages, pendingConfirmations, ...(gitStatus ? { gitStatus } : {}) },
     correlationId,
   )
 }
@@ -154,6 +156,15 @@ export function createProjectListMessage(
   correlationId?: string,
 ): ServerMessage<ProjectListPayload> {
   return createServerMessage('project.list', { projects }, correlationId)
+}
+
+// Git status message
+export function createGitStatusMessage(
+  branch: string | null,
+  diffFiles: import('../../shared/protocol.js').GitDiffFile[],
+  correlationId?: string,
+): ServerMessage<import('../../shared/protocol.js').GitStatusPayload> {
+  return createServerMessage('git.status', { branch, diff: { files: diffFiles } }, correlationId)
 }
 
 // Chat messages - all include messageId to identify which message to update

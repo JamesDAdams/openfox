@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSessionStats } from '../../hooks/useSessionStats'
-import { useCurrentBranch } from '../../hooks/useCurrentBranch'
+import { useGitStatus } from '../../hooks/useGitStatus'
 import { useConfigStore } from '../../stores/config'
 import { useSessionStore } from '../../stores/session'
 import { formatTime, formatSpeed } from '../../lib/format-stats'
@@ -9,6 +9,7 @@ import { CriteriaProgressSummary } from '../shared/CriteriaProgressSummary'
 import { DevServerFooter } from './DevServerFooter'
 import { BackgroundProcesses } from './BackgroundProcesses'
 import { BranchIcon } from '../shared/icons'
+import { DiffViewer } from './DiffViewer'
 import type { Message } from '@shared/types.js'
 
 interface SummaryDisplayProps {
@@ -20,7 +21,7 @@ interface SummaryDisplayProps {
 export function SummaryDisplay({ summary, messages, workdir }: SummaryDisplayProps) {
   const [showStatsModal, setShowStatsModal] = useState(false)
   const stats = useSessionStats(messages)
-  const { branch } = useCurrentBranch(workdir)
+  const { branch } = useGitStatus()
   const version = useConfigStore((state) => state.version)
   const session = useSessionStore((state) => state.currentSession)
 
@@ -78,6 +79,9 @@ export function SummaryDisplay({ summary, messages, workdir }: SummaryDisplayPro
           </span>
         </div>
       )}
+
+      {/* Diff viewer — between branch and dev server */}
+      <DiffViewer />
 
       {/* Dev Server — below separator */}
       <DevServerFooter workdir={workdir} />

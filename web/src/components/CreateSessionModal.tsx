@@ -5,6 +5,7 @@ import { Modal } from './shared/Modal'
 import { Button } from './shared/Button'
 import { FolderIcon, TrashIcon } from './shared/icons'
 import { authFetch } from '../lib/api'
+import { truncateMiddle } from '../lib/path'
 import { DeleteProjectConfirmationModal } from './DeleteProjectConfirmationModal.js'
 import { CreateProjectModal } from './CreateProjectModal.js'
 import { DirectoryBrowser } from './shared/DirectoryBrowser.js'
@@ -28,20 +29,6 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null)
   const [creatingPath, setCreatingPath] = useState<string | null>(null)
   const [permissionDeniedPath, setPermissionDeniedPath] = useState<string | null>(null)
-
-  const truncateMiddle = (path: string, maxLen = 32) => {
-    if (path.length <= maxLen) return path
-    const parts = path.split('/').filter(Boolean)
-    if (parts.length <= 2) return path
-    const first = parts[0]!
-    const last = parts[parts.length - 1]!
-    const middle = parts.slice(1, -1).join('/')
-    const space = maxLen - first.length - last.length - 3
-    if (space < 0) return path
-    const lchars = middle.slice(0, Math.floor(space / 2))
-    const rchars = middle.slice(-Math.ceil(space / 2))
-    return `/${first}/${lchars}...${rchars}/${last}`
-  }
 
   useEffect(() => {
     authFetch('/api/config')
@@ -167,7 +154,7 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
                       <FolderIcon className="w-5 h-5 text-accent-primary" />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{project.name}</div>
-                        <div className="text-xs text-text-muted truncate">{truncateMiddle(project.workdir)}</div>
+                        <div className="text-xs text-text-muted truncate">{truncateMiddle(project.workdir, 32)}</div>
                       </div>
                     </button>
                     <button

@@ -119,6 +119,8 @@ export type ServerMessageType =
   | 'backgroundProcess.output' // Streaming log chunk from background process
   | 'backgroundProcess.exited' // Process exited
   | 'backgroundProcess.removed' // Process removed from list
+  // Git status events
+  | 'git.status' // Branch and diff info, pushed on interval or session load
   // Other
   | 'lsp.diagnostics'
   | 'error'
@@ -152,6 +154,7 @@ export interface SessionStatePayload {
   session: Session
   messages: Message[] // All messages for this session
   pendingConfirmations: PendingPathConfirmationPayload[]
+  gitStatus?: GitStatusPayload // Current branch and diff, embedded on session load
 }
 
 export interface PendingPathConfirmationPayload {
@@ -388,6 +391,21 @@ export interface BackgroundProcessExitedPayload {
 
 export interface BackgroundProcessRemovedPayload {
   processId: string
+}
+
+// Git status payloads
+export interface GitStatusPayload {
+  branch: string | null
+  diff: {
+    files: GitDiffFile[]
+  }
+}
+
+export interface GitDiffFile {
+  path: string
+  status: 'modified' | 'added' | 'deleted'
+  additions: number
+  deletions: number
 }
 
 // Shared background process types

@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws'
+import { spawn } from 'node:child_process'
 import type { Server } from 'node:http'
-import type { ServerMessage } from '../../shared/protocol.js'
+import type { ServerMessage, GitDiffFile } from '../../shared/protocol.js'
 import { createServerMessage } from '../../shared/protocol.js'
 import { handleTerminalMessage, unsubscribeAllFromTerminal } from './terminal.js'
 import type { Config } from '../config.js'
@@ -34,7 +35,121 @@ import {
   isAskAnswerPayload,
   storedEventToServerMessage,
   createQueueStateMessage,
+  createGitStatusMessage,
 } from './protocol.js'
+
+function moduleGitBranch(cwd: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const proc = spawn('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    let stdout = ''
+    proc.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString()
+    })
+    proc.on('close', (code) => {
+      if (code === 0 && stdout.trim()) {
+        resolve(stdout.trim())
+      } else {
+        resolve(null)
+      }
+    })
+    proc.on('error', () => resolve(null))
+  })
+}
+
+function moduleGitDiff(cwd: string): Promise<{ hash: string; files: GitDiffFile[] }> {
+  return new Promise((resolve) => {
+    const proc = spawn('git', ['diff', '--stat', '--numstat', '--format=', 'HEAD'], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    proc.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString()
+    })
+    proc.on('close', (code) => {
+      if (code === 0) {
+        const hashProc = spawn('git', ['rev-parse', 'HEAD'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] })
+        let hash = ''
+        hashProc.stdout.on('data', (data: Buffer) => {
+          hash += data.toString()
+        })
+        hashProc.on('close', (hCode) => {
+          if (hCode !== 0) hash = ''
+        })
+        hashProc.on('error', () => {
+          hash = ''
+        })
+        const files: GitDiffFile[] = []
+        for (const line of stdout.split('\n')) {
+          if (!line) continue
+          const parts = line.split('\t')
+          if (parts.length < 3) continue
+          const statusChar = parts[1]?.[0]
+          const status = statusChar === 'A' ? 'added' : statusChar === 'd' ? 'deleted' : 'modified'
+          files.push({
+            path: parts[2] ?? parts[1] ?? parts[0] ?? '',
+            status,
+            additions: parseInt(parts[0] ?? '') || 0,
+            deletions: parseInt(parts[1] ?? '') || 0,
+          })
+        }
+        resolve({ hash: hash.trim(), files })
+      } else {
+        resolve({ hash: '', files: [] })
+      }
+    })
+    proc.on('error', () => resolve({ hash: '', files: [] }))
+  })
+}
+
+const moduleWorkdirLastHash = new Map<string, string>()
+const moduleWorkdirInterval = new Map<string, ReturnType<typeof setInterval>>()
+const gitPollInterval = 10_000
+let moduleClients: Map<WebSocket, ClientConnection> | null = null
+let moduleEnqueueSend: ((client: ClientConnection, data: string, seq: number) => void) | null = null
+
+function moduleGitPoll(workdir: string) {
+  ;(async () => {
+    try {
+      const branch = await moduleGitBranch(workdir)
+      const { hash, files } = await moduleGitDiff(workdir)
+      const lastHash = moduleWorkdirLastHash.get(workdir)
+      if (hash !== lastHash) {
+        moduleWorkdirLastHash.set(workdir, hash)
+        const msg = createGitStatusMessage(branch, files)
+        const activeClients = moduleClients
+        const sendFn = moduleEnqueueSend
+        if (!activeClients || !sendFn) return
+        for (const [ws, client] of activeClients) {
+          if (client.activeWorkdir === workdir && ws.readyState === WebSocket.OPEN) {
+            const seq = client.lastSentSeq + 1
+            sendFn(client, serializeServerMessage({ ...msg, sessionId: client.activeSessionId ?? '' }), seq)
+          }
+        }
+      }
+    } catch {
+      /* skip */
+    }
+  })()
+}
+
+function moduleStartGitPolling(workdir: string) {
+  if (moduleWorkdirInterval.has(workdir)) return
+  const interval = setInterval(() => moduleGitPoll(workdir), gitPollInterval)
+  moduleWorkdirInterval.set(workdir, interval)
+}
+
+function moduleStopGitPolling(workdir: string) {
+  const interval = moduleWorkdirInterval.get(workdir)
+  if (interval !== undefined) {
+    clearInterval(interval)
+    moduleWorkdirInterval.delete(workdir)
+    moduleWorkdirLastHash.delete(workdir)
+  }
+}
 
 function resolveStatsIdentity(
   llmClient: LLMClientWithModel,
@@ -127,11 +242,12 @@ const activeAgents = new Map<string, AbortController>()
 
 interface ClientConnection {
   ws: WebSocket
-  activeSessionId: string | null // Currently viewing session
-  globalSubscription: (() => void) | null // Global all-session subscription unsubscribe
-  sendQueue: Array<{ data: string; seq: number }> // FIFO queue for ordered sends
-  isSending: boolean // True while a send is in progress
-  lastSentSeq: number // Last sequence number sent
+  activeSessionId: string | null
+  activeWorkdir: string | null
+  globalSubscription: (() => void) | null
+  sendQueue: Array<{ data: string; seq: number }>
+  isSending: boolean
+  lastSentSeq: number
 }
 
 const MAX_SEND_QUEUE_SIZE = 1000 // Maximum messages to queue before dropping
@@ -175,6 +291,7 @@ export function createWebSocketServer(
 ): WebSocketServerExports {
   const wss = new WebSocketServer({ server: httpServer })
   const clients = new Map<WebSocket, ClientConnection>()
+  moduleClients = clients
 
   // Per-session LLM client cache: sessionId -> { cacheKey, client }
   const sessionLLMClients = new Map<string, { key: string; client: LLMClientWithModel }>()
@@ -267,6 +384,7 @@ export function createWebSocketServer(
     client.sendQueue.push({ data, seq })
     processSendQueue(client)
   }
+  moduleEnqueueSend = enqueueSend
 
   function processSendQueue(client: ClientConnection): void {
     if (client.isSending || client.sendQueue.length === 0) {
@@ -431,6 +549,7 @@ export function createWebSocketServer(
     clients.set(ws, {
       ws,
       activeSessionId: null,
+      activeWorkdir: null,
       globalSubscription: null,
       sendQueue: [],
       isSending: false,
@@ -519,18 +638,21 @@ export function createWebSocketServer(
     ws.on('close', () => {
       logger.debug('WebSocket client disconnected')
       const client = clients.get(ws)
+      const disconnectedWorkdir = client?.activeWorkdir ?? null
       // Unsubscribe from global all-session subscription
       if (client?.globalSubscription) {
         client.globalSubscription()
       }
       // Unsubscribe from all terminal sessions
       unsubscribeAllFromTerminal(ws)
-      // Clear send queue
-      if (client) {
-        client.sendQueue = []
-        client.isSending = false
-      }
       clients.delete(ws)
+      // Stop polling if no remaining clients for this workdir
+      if (disconnectedWorkdir) {
+        const hasRemaining = [...clients.values()].some((c) => c.activeWorkdir === disconnectedWorkdir)
+        if (!hasRemaining) {
+          moduleStopGitPolling(disconnectedWorkdir)
+        }
+      }
     })
 
     ws.on('error', (error) => {
@@ -647,6 +769,8 @@ async function handleClientMessage(
 
       // Tab model: set active session and subscribe if not already subscribed
       client.activeSessionId = session.id
+      client.activeWorkdir = session.workdir
+      if (session.workdir) moduleStartGitPolling(session.workdir)
       ensureEventStoreSubscription(session.id)
 
       // Fetch messages from EventStore
@@ -661,7 +785,18 @@ async function handleClientMessage(
         pendingConfirmationsCount: pendingConfirmations.length,
       })
 
-      sendForSession(session.id, createSessionStateMessage(session, messages, pendingConfirmations, message.id))
+      const initialGitStatus = (async () => {
+        if (!session.workdir) return undefined
+        const branch = await moduleGitBranch(session.workdir)
+        const { files } = await moduleGitDiff(session.workdir)
+        return { branch, diff: { files } }
+      })()
+      const gitStatusPayload = await initialGitStatus
+
+      sendForSession(
+        session.id,
+        createSessionStateMessage(session, messages, pendingConfirmations, gitStatusPayload, message.id),
+      )
 
       // Send context state
       const contextState = sessionManager.getContextState(session.id)
