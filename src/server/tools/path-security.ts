@@ -446,15 +446,15 @@ export function extractDangerousPatterns(command: string): string[] {
 }
 
 export function extractGitNoVerify(command: string): boolean {
-  const parts = command.split(/\s+/)
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (parts[i] === 'git') {
-      const sub = parts[i + 1]
-      if (sub && !sub.startsWith('-')) {
-        const args = parts.slice(i + 2)
-        if (args.includes('--no-verify') || args.includes('-n')) {
-          return true
-        }
+  const subCommands = command.split(/\s*(?:&&|\|\||\||;)\s*/)
+  for (const sub of subCommands) {
+    const parts = sub.trim().split(/\s+/)
+    const gitIndex = parts.indexOf('git')
+    const subCmd = parts[gitIndex + 1]
+    if (gitIndex >= 0 && subCmd && !subCmd.startsWith('-')) {
+      const gitArgs = parts.slice(gitIndex + 2)
+      if (gitArgs.some((a) => a === '--no-verify' || a === '-n')) {
+        return true
       }
     }
   }

@@ -277,8 +277,10 @@ describe('Builder Mode', () => {
       })
       await client.waitForChatDone()
 
-      // Session should not be running
       const session = client.getSession()!
+      if (session.isRunning) {
+        await client.waitFor('session.running', (p) => !(p as { isRunning: boolean }).isRunning)
+      }
       expect(session.isRunning).toBe(false)
 
       // Continue should work via REST API

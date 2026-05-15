@@ -1074,6 +1074,15 @@ describe('path-security', () => {
     it('does not detect --no-verify when git is not followed by a subcommand', () => {
       expect(extractGitNoVerify('git --no-verify something')).toBe(false)
     })
+
+    it('does not detect -n flag from subsequent commands in a chain', () => {
+      expect(extractGitNoVerify('git status; echo -n test')).toBe(false)
+      expect(extractGitNoVerify('git status && echo -n test')).toBe(false)
+    })
+
+    it('detects -n flag in env-prefixed git commands', () => {
+      expect(extractGitNoVerify("ENV=true git commit -n 'lol'")).toBe(true)
+    })
   })
 
   // ===========================================================================
