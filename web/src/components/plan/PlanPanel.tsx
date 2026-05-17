@@ -20,6 +20,7 @@ import { CloseButton } from '../shared/CloseButton'
 import { SearchIcon, ChevronDownIcon, StopIcon } from '../shared/icons'
 import { useAgentsStore } from '../../stores/agents'
 import { useCommandsStore } from '../../stores/commands'
+import { useWorkflowsStore } from '../../stores/workflows'
 import { processImageFile } from '../../lib/image-processing.js'
 import { CHAT_TEXTAREA_ID, focusChatTextarea } from '../../lib/focusChatTextarea'
 import { ProviderSelector } from '../settings/ProviderSelector'
@@ -97,6 +98,10 @@ export function PlanPanel({
     }
     window.addEventListener('open-turn-stats', handler)
     return () => window.removeEventListener('open-turn-stats', handler)
+  }, [])
+
+  useEffect(() => {
+    useWorkflowsStore.getState().fetchWorkflows()
   }, [])
 
   // Merge streamingMessage into the messages array for rendering.
