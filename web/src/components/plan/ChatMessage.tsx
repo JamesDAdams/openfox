@@ -8,6 +8,7 @@ import { WorkflowStartedCard } from './WorkflowStartedCard'
 import { MessageAttachments } from '../shared/MessageAttachments.js'
 import { MessageOptionsMenu } from './MessageOptionsMenu'
 import { AutoPromptCard } from './AutoPromptCard'
+import { SETTINGS_KEYS, useSettingsStore } from '../../stores/settings.js'
 
 interface ChatMessageProps {
   message: Message
@@ -73,6 +74,28 @@ function UserMessage({ message, promptContext, messageIndex, sessionId }: UserMe
         {message.attachments && message.attachments.length > 0 && (
           <MessageAttachments attachments={message.attachments} messageId={message.id} />
         )}
+      </div>
+    </div>
+  )
+}
+
+function CorrectionCard({ message }: { message: Message }) {
+  const protectionEnabled = useSettingsStore((s) => s.settings[SETTINGS_KEYS.LLM_DISABLE_XML_PROTECTION]) !== 'true'
+
+  const handleToggle = async () => {
+    await useSettingsStore
+      .getState()
+      .setSetting(SETTINGS_KEYS.LLM_DISABLE_XML_PROTECTION, protectionEnabled ? 'true' : 'false')
+  }
+
+  return (
+    <div className="flex justify-end feed-item">
+      <div className="max-w-[75%] rounded p-2 bg-amber-500/10 border border-amber-500/30">
+        <span className="text-[10px] block mb-0.5 text-amber-400">System</span>
+        <div className="whitespace-pre-wrap text-sm text-amber-200 italic">{message.content}</div>
+        <button onClick={handleToggle} className="mt-2 text-xs text-amber-400 hover:text-amber-300 underline">
+          {protectionEnabled ? 'Disable XML protection' : 'Enable XML protection'}
+        </button>
       </div>
     </div>
   )
@@ -152,6 +175,11 @@ export const ChatMessage = memo(function ChatMessage({
   // Auto-prompt message - show compact card instead of full content
   if (message.messageKind === 'auto-prompt' && message.isSystemGenerated) {
     return <AutoPromptCard message={message} />
+  }
+
+  // Correction message (XML format retry) - show with disable button when protection is still active
+  if (message.messageKind === 'correction' && message.isSystemGenerated) {
+    return <CorrectionCard message={message} />
   }
 
   // User message
