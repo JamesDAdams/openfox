@@ -81,7 +81,25 @@ if [ -z "$DISPLAY" ] || [ -z "$WAYLAND_DISPLAY" ]; then
   done
 fi
 
-exec openfox
+# Find openfox - respect user's PATH, fallback to nvm search for non-interactive cases
+if ! openfox_bin=$(which openfox 2>/dev/null); then
+  openfox_bindir=""
+  for NVMVER in "$HOME"'/versions/node/'*'/bin/'; do
+    [ -f "$NVMVER"'openfox' ] && openfox_bindir="$NVMVER" && break
+    [ -L "$NVMVER"'openfox' ] && openfox_bindir="$NVMVER" && break
+  done
+  if [ -n "$openfox_bindir" ]; then
+    export PATH="$openfox_bindir:$PATH"
+    openfox_bin=$(readlink -f "$openfox_bindir"'openfox')
+  fi
+fi
+
+if [ -z "$openfox_bin" ]; then
+  echo "openfox not found in PATH and no nvm install detected" >&2
+  exit 1
+fi
+
+exec "$openfox_bin" "$@"
 `
   await writeFile(scriptPath, scriptContent, { encoding: 'utf-8' })
 
