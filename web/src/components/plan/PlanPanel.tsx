@@ -53,7 +53,6 @@ export function PlanPanel({
   const [showWorkflowsModal, setShowWorkflowsModal] = useState(false)
   const [showQuickAction, setShowQuickAction] = useState(false)
   const [showMessageSearch, setShowMessageSearch] = useState(false)
-  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
   const [turnStatsModal, setTurnStatsModal] = useState<TurnStats | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -79,17 +78,6 @@ export function PlanPanel({
   // Prompt history navigation
   const { history, selectedIndex, showHistory, openHistory, closeHistory, navigateUp, navigateDown, selectCurrent } =
     usePromptHistory(rawMessages, sessions, session?.id)
-
-  // Listen for open-turn-stats event from stats bar
-  const handleSelectSearchMessage = useCallback((messageId: string) => {
-    setHighlightedMessageId(messageId)
-    setAutoScroll(false)
-    const element = document.querySelector(`[data-message-id="${messageId}"]`)
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-    setTimeout(() => setHighlightedMessageId(null), 3000)
-  }, [])
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -133,6 +121,18 @@ export function PlanPanel({
   }, [])*/
 
   const { force_scroll_to_bottom, isAutoScrollActive, setAutoScroll } = useAutoScroll(scrollContainerRef, session)
+
+  const handleTimelineNavigate = useCallback(
+    (index: number) => {
+      setAutoScroll(false)
+      const element = document.querySelector(`[data-item-index="${index}"]`)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        element.closest('[data-testid="chat-scroll-container"]')?.scrollBy(0, -80)
+      }
+    },
+    [setAutoScroll],
+  )
 
   const prevLenRef = useRef(0)
 
@@ -415,11 +415,7 @@ export function PlanPanel({
         {turnStatsModal && <TurnStatsModal stats={turnStatsModal} onClose={() => setTurnStatsModal(null)} />}
         <ConnectionStatusBar />
 
-        <MessageList
-          displayItems={displayItems}
-          scrollContainerRef={scrollContainerRef}
-          highlightedMessageId={highlightedMessageId}
-        />
+        <MessageList displayItems={displayItems} scrollContainerRef={scrollContainerRef} highlightedMessageId={null} />
 
         <form onSubmit={handleSubmit} className="relative p-2 md:p-4 bg-secondary">
           {isRunning && (
@@ -649,8 +645,8 @@ export function PlanPanel({
         <MessageSearchModal
           isOpen={showMessageSearch}
           onClose={() => setShowMessageSearch(false)}
-          messages={rawMessages}
-          onSelectMessage={handleSelectSearchMessage}
+          displayItems={displayItems}
+          onNavigate={handleTimelineNavigate}
         />
       )}
     </>

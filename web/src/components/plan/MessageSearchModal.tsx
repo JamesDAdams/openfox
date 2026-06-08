@@ -1,15 +1,15 @@
-import { useEffect, useState, useRef } from 'react'
+import type { ReactNode } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { SearchIcon } from '../shared/icons'
-import { XCloseIcon } from '../shared/icons'
+import { SearchIcon, XCloseIcon, UserIcon, ThinkingIcon, AgentIcon } from '../shared/icons'
 import { fuzzyMatch, handleModalNavigation } from '../../lib/modal-utils'
-import type { Message } from '@shared/types.js'
+import type { DisplayItem } from './groupMessages'
 
 interface MessageSearchModalProps {
   isOpen: boolean
   onClose: () => void
-  messages: Message[]
-  onSelectMessage: (messageId: string) => void
+  displayItems: DisplayItem[]
+  onNavigate: (index: number) => void
 }
 
 export function formatTimestamp(iso: string): string {
@@ -29,23 +29,97 @@ export function formatTimestamp(iso: string): string {
   return `${yyyy}/${mm}/${dd} ${HH}:${mm2}`
 }
 
-export function MessageSearchModal({ isOpen, onClose, messages, onSelectMessage }: MessageSearchModalProps) {
+function getTimestamp(item: DisplayItem): string | undefined {
+  if (item.type === 'message') return item.message.timestamp
+  if (item.type === 'subagent') return item.messages[0]?.timestamp
+  return undefined
+}
+
+export function getItemStyle(item: DisplayItem): string {
+  if (item.type === 'message') {
+    const msg = item.message
+    if (msg.role === 'assistant') {
+      const hasContent = msg.content?.trim()
+      const hasThinking = msg.thinkingContent?.trim()
+      if (hasThinking && !hasContent) return 'italic text-text-muted'
+      return ''
+    }
+    if (msg.role === 'user') return 'font-bold'
+  }
+  return ''
+}
+
+export function getItemIcon(item: DisplayItem): ReactNode {
+  if (item.type !== 'message') return <AgentIcon className="w-3.5 h-3.5" />
+  const msg = item.message
+  if (msg.role === 'assistant') {
+    if (msg.thinkingContent?.trim() && !msg.content?.trim()) return <ThinkingIcon className="w-3.5 h-3.5" />
+    return <AgentIcon className="w-3.5 h-3.5" />
+  }
+  return <UserIcon className="w-3.5 h-3.5" />
+}
+
+export function getItemLabel(item: DisplayItem): string {
+  if (item.type === 'message') {
+    const msg = item.message
+    const rawContent = msg.content || ''
+    const cleanContent = rawContent
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (msg.messageKind === 'workflow-started') {
+      try {
+        const data = JSON.parse(rawContent) as { workflowName: string }
+        return `Workflow: ${data.workflowName}`
+      } catch {
+        return 'Workflow started'
+      }
+    }
+    if (msg.messageKind === 'task-completed') return 'Task completed'
+    if (msg.messageKind === 'auto-prompt') return 'Auto-prompt'
+    if (msg.messageKind === 'correction') return 'Correction'
+    if (msg.messageKind === 'context-reset') return 'Context reset'
+    if (msg.messageKind === 'command') return 'Command executed'
+
+    if (msg.role === 'assistant') {
+      if (cleanContent) return cleanContent.slice(0, 200)
+      if (msg.thinkingContent?.trim()) return msg.thinkingContent.slice(0, 200)
+      return ''
+    }
+    const preview = cleanContent.slice(0, 200)
+    return preview.length < cleanContent.length ? `${preview}...` : preview
+  }
+  if (item.type === 'subagent') return `Sub-agent: ${item.subAgentType}`
+  if (item.type === 'criteria-batch') return 'Acceptance Criteria'
+  return ''
+}
+
+export function MessageSearchModal({ isOpen, onClose, displayItems, onNavigate }: MessageSearchModalProps) {
   const [search, setSearch] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
-  const wasOpenRef = useRef(false)
+  const listRef = useRef<HTMLDivElement>(null)
 
-  const userMessages = messages.filter(
-    (msg) =>
-      msg.role === 'user' &&
-      !msg.isSystemGenerated &&
-      msg.messageKind !== 'auto-prompt' &&
-      msg.messageKind !== 'command',
-  )
+  const visibleItems = useMemo(() => {
+    return displayItems.filter((item) => {
+      if (item.type === 'context-divider') return false
+      if (item.type === 'message' && item.message.role === 'assistant') {
+        if (!item.message.content?.trim() && !item.message.thinkingContent?.trim()) return false
+      }
+      return true
+    })
+  }, [displayItems])
 
-  useEffect(() => {
-    if (isOpen) wasOpenRef.current = true
-  }, [isOpen])
+  const filteredItems = useMemo(() => {
+    if (!search) return visibleItems
+    return visibleItems.filter((item) => {
+      const label = getItemLabel(item)
+      return fuzzyMatch(label, search)
+    })
+  }, [visibleItems, search])
+
+  const maxIndex = filteredItems.length - 1
 
   useEffect(() => {
     if (isOpen) {
@@ -56,8 +130,11 @@ export function MessageSearchModal({ isOpen, onClose, messages, onSelectMessage 
     }
   }, [isOpen])
 
-  const filteredMessages = userMessages.filter((msg) => fuzzyMatch(msg.content, search))
-  const maxIndex = filteredMessages.length - 1
+  useEffect(() => {
+    if (isOpen && listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
+    }
+  }, [isOpen])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     handleModalNavigation(
@@ -65,8 +142,10 @@ export function MessageSearchModal({ isOpen, onClose, messages, onSelectMessage 
       maxIndex,
       setSelectedIndex,
       () => {
-        if (filteredMessages[selectedIndex]) {
-          onSelectMessage(filteredMessages[selectedIndex].id)
+        const item = filteredItems[selectedIndex]
+        if (item) {
+          const realIndex = displayItems.indexOf(item)
+          if (realIndex >= 0) onNavigate(realIndex)
           onClose()
         }
       },
@@ -74,16 +153,19 @@ export function MessageSearchModal({ isOpen, onClose, messages, onSelectMessage 
     )
   }
 
-  const handleSelect = (messageId: string) => {
-    onSelectMessage(messageId)
+  const handleSelect = (item: DisplayItem) => {
+    const realIndex = displayItems.indexOf(item)
+    if (realIndex >= 0) onNavigate(realIndex)
     onClose()
   }
+
+  const getRealIndex = (item: DisplayItem): number => displayItems.indexOf(item)
 
   return isOpen
     ? createPortal(
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-          <div className="relative w-full max-w-md bg-bg-secondary border border-border rounded shadow-xl">
+          <div className="relative w-full max-w-lg bg-bg-secondary border border-border rounded shadow-xl">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
               <SearchIcon />
               <input
@@ -95,7 +177,7 @@ export function MessageSearchModal({ isOpen, onClose, messages, onSelectMessage 
                   setSelectedIndex(0)
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder="Search messages..."
+                placeholder="Search timeline..."
                 className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-text-muted"
               />
               <button
@@ -107,29 +189,45 @@ export function MessageSearchModal({ isOpen, onClose, messages, onSelectMessage 
                 <XCloseIcon className="w-4 h-4" />
               </button>
             </div>
-            <div className="overflow-y-auto max-h-[60vh] p-2">
-              {filteredMessages.length === 0 ? (
+            <div ref={listRef} className="overflow-y-auto max-h-[60vh] p-2">
+              {filteredItems.length === 0 ? (
                 <div className="px-3 py-4 text-center text-text-muted text-sm">
-                  {userMessages.length > 0 ? 'No matches' : 'No messages yet'}
+                  {visibleItems.length > 0 ? 'No matches' : 'No messages yet'}
                 </div>
               ) : (
-                filteredMessages.map((msg, index) => (
-                  <button
-                    key={msg.id}
-                    type="button"
-                    onClick={() => handleSelect(msg.id)}
-                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                      index === selectedIndex
-                        ? 'bg-accent-primary/20 text-text-primary'
-                        : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="truncate flex-1">{msg.content}</span>
-                      <span className="text-text-muted text-xs shrink-0">{formatTimestamp(msg.timestamp)}</span>
-                    </div>
-                  </button>
-                ))
+                filteredItems.map((item, index) => {
+                  const realIndex = getRealIndex(item)
+                  const icon = getItemIcon(item)
+                  const label = getItemLabel(item)
+                  const style = getItemStyle(item)
+                  const timestamp = getTimestamp(item)
+                  const isUser = item.type === 'message' && item.message.role === 'user'
+
+                  return (
+                    <button
+                      key={`${realIndex}-${item.type}`}
+                      type="button"
+                      onClick={() => handleSelect(item)}
+                      className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                        index === selectedIndex
+                          ? 'bg-accent-primary/20 text-text-primary'
+                          : isUser
+                            ? 'bg-accent-primary/5 text-text-secondary hover:bg-accent-primary/10 hover:text-text-primary'
+                            : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span className="flex-shrink-0">{icon}</span>
+                          <span className={`truncate flex-1 ${style}`}>{label}</span>
+                        </div>
+                        {timestamp && (
+                          <span className="text-text-muted text-xs shrink-0">{formatTimestamp(timestamp)}</span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })
               )}
             </div>
           </div>
