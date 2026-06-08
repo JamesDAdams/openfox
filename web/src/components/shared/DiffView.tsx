@@ -18,13 +18,27 @@ interface EditContextViewProps {
   filePath?: string
 }
 
+interface DiffSectionProps {
+  type: 'removed' | 'added'
+  children: React.ReactNode
+}
+
+const DiffSection = memo(function DiffSection({ type, children }: DiffSectionProps) {
+  const bgClass = type === 'removed' ? 'diff-removed-bg diff-removed-border' : 'diff-added-bg diff-added-border'
+  const lineClass = type === 'removed' ? 'line-through decoration-red-400/30' : ''
+
+  return (
+    <div className={`border-l-[3px] ${bgClass}`}>
+      <div className={`min-w-0 py-1 ${lineClass}`}>
+        <div className="shiki-compact shiki-transparent-bg">{children}</div>
+      </div>
+    </div>
+  )
+})
+
 export const DiffView = memo(function DiffView({ oldString, newString, filePath }: DiffViewProps) {
   const language = useMemo(() => getLanguageFromPath(filePath), [filePath])
 
-  const oldLines = oldString.split('\n')
-  const newLines = newString.split('\n')
-
-  // Handle empty strings
   const hasOld = oldString.length > 0
   const hasNew = newString.length > 0
 
@@ -33,39 +47,16 @@ export const DiffView = memo(function DiffView({ oldString, newString, filePath 
   }
 
   return (
-    <div className="rounded overflow-hidden border border-border grid grid-cols-[3px_1.5rem_1fr]">
-      {/* Removed content */}
+    <div className="rounded overflow-hidden border border-border">
       {hasOld && (
-        <>
-          <div className="bg-red-400/60" />
-          <div className="bg-red-950/30 text-red-400/70 text-sm font-mono text-center">
-            {oldLines.map((_, i) => (
-              <div key={i} className="leading-[0.9]">
-                -
-              </div>
-            ))}
-          </div>
-          <div className="bg-red-950/30 pr-2 line-through decoration-red-400/30 overflow-x-auto min-w-0">
-            <CodeHighlight code={oldString} language={language} variant="block-nowrap" />
-          </div>
-        </>
+        <DiffSection type="removed">
+          <CodeHighlight code={oldString} language={language} variant="block" showLineNumbers />
+        </DiffSection>
       )}
-
-      {/* Added content */}
       {hasNew && (
-        <>
-          <div className="bg-green-400/60" />
-          <div className="bg-green-950/30 text-green-400/70 text-sm font-mono text-center">
-            {newLines.map((_, i) => (
-              <div key={i} className="leading-[0.9]">
-                +
-              </div>
-            ))}
-          </div>
-          <div className="bg-green-950/30 pr-2 overflow-x-auto min-w-0">
-            <CodeHighlight code={newString} language={language} variant="block-nowrap" />
-          </div>
-        </>
+        <DiffSection type="added">
+          <CodeHighlight code={newString} language={language} variant="block" showLineNumbers />
+        </DiffSection>
       )}
     </div>
   )
@@ -82,19 +73,9 @@ export const FilePreview = memo(function FilePreview({ content, filePath }: File
 
   return (
     <div className="rounded overflow-hidden border border-border max-h-[45vh] overflow-y-auto">
-      <div className="grid grid-cols-[3px_1.5rem_1fr]">
-        <div className="bg-green-400/60" />
-        <div className="bg-green-950/30 text-green-400/70 text-sm font-mono text-center">
-          {content.split('\n').map((_, i) => (
-            <div key={i} className="leading-[0.9]">
-              +
-            </div>
-          ))}
-        </div>
-        <div className="bg-green-950/30 pr-2 min-w-0 overflow-x-hidden">
-          <CodeHighlight code={content} language={language} variant="block" />
-        </div>
-      </div>
+      <DiffSection type="added">
+        <CodeHighlight code={content} language={language} variant="block" showLineNumbers />
+      </DiffSection>
     </div>
   )
 })
@@ -191,18 +172,28 @@ interface SectionViewProps {
 const SectionView = memo(function SectionView({ section, language }: SectionViewProps) {
   const content = section.lines.join('\n')
 
-  const bgClass = section.type === 'context' ? '' : section.type === 'removed' ? 'diff-removed-bg' : 'diff-added-bg'
-  const borderClass = section.type === 'context' ? 'border-transparent' : section.type === 'removed' ? 'diff-removed-border' : 'diff-added-border'
-  const lineClass = section.type === 'removed' ? 'line-through decoration-red-400/30' : ''
-
-  return (
-    <div className={`border-l-[3px] ${borderClass} ${bgClass}`}>
-      <div className={`min-w-0 py-1 ${lineClass}`}>
-        <div className="shiki-compact shiki-transparent-bg">
-          <CodeHighlight code={content} language={language} variant="block" showLineNumbers startLine={section.startLine} />
+  if (section.type === 'context') {
+    return (
+      <div>
+        <div className="min-w-0 py-1">
+          <div className="shiki-compact shiki-transparent-bg">
+            <CodeHighlight
+              code={content}
+              language={language}
+              variant="block"
+              showLineNumbers
+              startLine={section.startLine}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    )
+  }
+
+  return (
+    <DiffSection type={section.type}>
+      <CodeHighlight code={content} language={language} variant="block" showLineNumbers startLine={section.startLine} />
+    </DiffSection>
   )
 })
 
