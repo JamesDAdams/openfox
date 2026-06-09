@@ -87,6 +87,17 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const config = statusConfig[status]
   const showEditorLink = useSettingsStore((s) => s.settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR]) === 'true'
 
+  const editorLine =
+    tool === 'edit_file'
+      ? editContext?.regions[0]?.startLine
+      : tool === 'read_file'
+        ? (() => {
+            const firstLine = result?.split('\n')[0]
+            const m = firstLine?.match(/^(\d+): /)
+            return m ? parseInt(m[1]!, 10) : undefined
+          })()
+        : undefined
+
   // Check if there's a pending path confirmation matching this tool call
   const pendingPathConfirmations = useSessionStore((state) => state.pendingPathConfirmations)
   const pendingConfirmation: PendingPathConfirmation | null =
@@ -228,7 +239,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
                   (tool === 'read_file' || tool === 'write_file' || tool === 'edit_file') &&
                   String(args.path ?? '') && (
                     <a
-                      href={`vscode://file/${String(args.path)}`}
+                      href={`vscode://file/${String(args.path)}${editorLine ? `:${editorLine}` : ''}`}
                       className="text-accent-primary hover:underline ml-auto"
                     >
                       Open in VSCode
