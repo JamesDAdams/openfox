@@ -108,11 +108,13 @@ describe('Read Tools', () => {
       const response = await client.waitForChatDone()
 
       const toolCalls = response.toolCalls.filter((tc) => tc.tool === 'read_file')
-      if (toolCalls.length > 0 && toolCalls[0]!.result?.success) {
-        const output = toolCalls[0]!.result!.output!
-        expect(output).toContain('index.ts')
-        expect(output).toContain('math.ts')
-      }
+      expect(toolCalls.length).toBeGreaterThan(0)
+
+      const readResult = toolCalls[0]!.result
+      expect(readResult).toBeDefined()
+      expect(readResult!.success).toBe(true)
+      expect(readResult!.output).toContain('index.ts')
+      expect(readResult!.output).toContain('math.ts')
     })
 
     it('returns error for non-existent file', async () => {

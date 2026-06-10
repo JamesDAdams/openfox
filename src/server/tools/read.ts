@@ -1,5 +1,5 @@
-import { readFile, stat } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { readFile, stat, readdir } from 'node:fs/promises'
+import { extname, join } from 'node:path'
 import { OUTPUT_LIMITS } from './types.js'
 import { createTool } from './tool-helpers.js'
 import { computeFileHash } from './file-tracker.js'
@@ -88,6 +88,51 @@ function detectImageType(buffer: Buffer, filePath: string): string | null {
   return null
 }
 
+/**
+ * Format bytes into a human-readable string (B, KB, MB).
+ */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/**
+ * List directory contents in a scannable tree format.
+ */
+async function listDirectory(dirPath: string, relativePath: string): Promise<string> {
+  const entries = await readdir(dirPath, { withFileTypes: true })
+
+  const sorted = [...entries].sort((a, b) => {
+    if (a.isDirectory() !== b.isDirectory()) {
+      return a.isDirectory() ? -1 : 1
+    }
+    return a.name.localeCompare(b.name)
+  })
+
+  const lines: string[] = [`${relativePath}/`]
+  for (let i = 0; i < sorted.length; i++) {
+    const entry = sorted[i]!
+    const isLast = i === sorted.length - 1
+    const prefix = isLast ? '└── ' : '├── '
+    const suffix = entry.isDirectory() ? '/' : ''
+
+    let sizeStr = ''
+    if (!entry.isDirectory()) {
+      try {
+        const entryStat = await stat(join(dirPath, entry.name))
+        sizeStr = `  ${formatSize(entryStat.size).padStart(7)}`
+      } catch {
+        /* ignore */
+      }
+    }
+
+    lines.push(`${prefix}${entry.name}${suffix}${sizeStr}`)
+  }
+
+  return lines.join('\n')
+}
+
 export const readFileTool = createTool<ReadFileArgs>(
   'read_file',
   {
@@ -95,7 +140,7 @@ export const readFileTool = createTool<ReadFileArgs>(
     function: {
       name: 'read_file',
       description:
-        'Read the contents of a file. For text files: returns line-numbered content. For images (PNG, JPEG, GIF, WebP, BMP, SVG): returns base64-encoded data with MIME type metadata.',
+        'Read the contents of a file or list directory contents. For text files: returns line-numbered content. For images (PNG, JPEG, GIF, WebP, BMP, SVG): returns base64-encoded data with MIME type metadata. For directories: returns a tree-formatted listing of entries with file sizes.',
       parameters: {
         type: 'object',
         properties: {
@@ -123,11 +168,12 @@ export const readFileTool = createTool<ReadFileArgs>(
     const fullPath = helpers.resolvePath(args.path)
     await helpers.checkPathAccess([fullPath])
 
-    // Check if file exists and is not a directory
+    // Check if path exists
     try {
       const stats = await stat(fullPath)
       if (stats.isDirectory()) {
-        return helpers.error(`Path is a directory, not a file: ${args.path}`)
+        const listing = await listDirectory(fullPath, args.path)
+        return helpers.success(listing)
       }
 
       // Check image size limit before reading

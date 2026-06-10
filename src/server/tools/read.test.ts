@@ -14,6 +14,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...actual,
     readFile: vi.fn(),
     stat: vi.fn(),
+    readdir: vi.fn(),
   }
 })
 
@@ -22,7 +23,7 @@ vi.mock('./file-tracker.js', () => ({
   computeFileHash: vi.fn().mockResolvedValue('test-hash'),
 }))
 
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, stat, readdir } from 'node:fs/promises'
 
 // Mock sessionManager for test context
 const mockSessionManager = {
@@ -263,15 +264,26 @@ describe('readFileTool - Image Support', () => {
       expect(result.error).toContain('File not found')
     })
 
-    it('should return error for directory', async () => {
-      vi.mocked(stat).mockResolvedValue({
-        isDirectory: () => true,
-      } as any)
+    it('should list directory contents', async () => {
+      vi.mocked(stat).mockImplementation(async (path: unknown) => {
+        const p = path as string
+        if (p.endsWith('somedir')) {
+          return { isDirectory: () => true } as any
+        }
+        return { isDirectory: () => false, size: 123 } as any
+      })
+      vi.mocked(readdir).mockResolvedValue([
+        { name: 'subdir', isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false } as any,
+        { name: 'file.ts', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false } as any,
+      ])
 
       const result = await readFileTool.execute({ path: 'somedir' }, mockContext)
 
-      expect(result.success).toBe(false)
-      expect(result.error).toContain('directory')
+      expect(result.success).toBe(true)
+      expect(result.output).toContain('somedir/')
+      expect(result.output).toContain('├── subdir/')
+      expect(result.output).toContain('└── file.ts')
+      expect(result.output).toContain('123 B')
     })
 
     it('should return error for unsupported image format', async () => {
