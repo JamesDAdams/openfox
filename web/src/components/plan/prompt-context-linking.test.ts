@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import type { Message, PromptContext } from '@shared/types.js'
 import { buildPromptContextByUserMessageId } from './prompt-context-linking.js'

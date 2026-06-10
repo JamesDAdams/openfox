@@ -1,12 +1,20 @@
+// @vitest-environment happy-dom
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, it, vi, expect, beforeEach } from 'vitest'
+import { createRoot } from 'react-dom/client'
+import { flushSync } from 'react-dom'
+import { describe, it, vi, expect, beforeEach, afterEach } from 'vitest'
 import { Modal } from './SelfContainedModal'
 
 describe('Modal', () => {
+  let container: HTMLDivElement
+
   beforeEach(() => {
-    if (typeof document !== 'undefined') {
-      document.body.innerHTML = ''
-    }
+    container = document.createElement('div')
+    document.body.appendChild(container)
+  })
+
+  afterEach(() => {
+    document.body.removeChild(container)
   })
 
   it('renders label as button', () => {
@@ -28,48 +36,41 @@ describe('Modal', () => {
     expect(html).toContain('Click here')
   })
 
-  it('should call close when Escape key is pressed', async () => {
-    if (typeof document === 'undefined') {
-      return
-    }
-
+  it('should call close when Escape key is pressed', () => {
     const onClose = vi.fn()
-
-    const { render, screen, fireEvent } = await import('@testing-library/react')
-
-    render(
-      <Modal isOpen onClose={onClose} closeOnEscape>
-        Content
-      </Modal>,
-    )
-
-    const modal = screen.getByText('Content')
-    fireEvent.keyDown(modal, { key: 'Escape' })
-
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('should stop propagation of Escape key event', async () => {
-    if (typeof document === 'undefined') {
-      return
-    }
-
-    const { render, screen, fireEvent } = await import('@testing-library/react')
-    const onClose = vi.fn()
-    const parentHandler = vi.fn()
-
-    render(
-      <div onKeyDown={parentHandler}>
+    const root = createRoot(container)
+    flushSync(() => {
+      root.render(
         <Modal isOpen onClose={onClose} closeOnEscape>
           Content
-        </Modal>
-      </div>,
-    )
+        </Modal>,
+      )
+    })
 
-    const modal = screen.getByText('Content')
-    fireEvent.keyDown(modal, { key: 'Escape', bubbles: true })
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    root.unmount()
+  })
+
+  it('should stop propagation of Escape key event', () => {
+    const onClose = vi.fn()
+    const parentHandler = vi.fn()
+    const root = createRoot(container)
+
+    flushSync(() => {
+      root.render(
+        <div onKeyDown={parentHandler}>
+          <Modal isOpen onClose={onClose} closeOnEscape>
+            Content
+          </Modal>
+        </div>,
+      )
+    })
+
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(parentHandler).not.toHaveBeenCalled()
+    root.unmount()
   })
 })

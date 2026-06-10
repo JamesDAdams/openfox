@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest'
 import { formatDateHeader, formatTime, extractDateKey, groupSessionsByDate } from './format-date.js'
 import type { SessionSummary } from '@shared/types.js'

@@ -14,12 +14,14 @@ export default defineConfig({
     env: {
       NODE_OPTIONS: '--localstorage-file=/tmp/openfox-test-localstorage.json',
     },
+    // environment set per-file via @vitest-environment docblock
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary'],
-      include: ['src/server/**/*.ts', 'src/shared/**/*.ts'],
+      include: ['src/server/**/*.ts', 'src/shared/**/*.ts', 'web/src/**/*.ts', 'web/src/**/*.tsx'],
       exclude: [
         '**/*.test.ts',
+        '**/*.test.tsx',
         '**/*.d.ts',
         'src/shared/index.ts',
         'src/shared/types.ts',
@@ -36,6 +38,11 @@ export default defineConfig({
         'src/server/runner/index.ts',
         'src/server/session/index.ts',
         'src/server/ws/index.ts',
+        'web/src/main.tsx',
+        'web/src/components/shared/icons/index.ts',
+        'web/src/stores/session/types.ts',
+        'web/src/lib/types.ts',
+        'web/src/components/onboarding/types.ts',
       ],
     },
   },

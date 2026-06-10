@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest'
 import { Markdown } from './Markdown'
 import { renderToString } from 'react-dom/server'

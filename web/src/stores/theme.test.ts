@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { THEME_TOKENS, THEME_PRESETS, migrateLegacyThemeSetting, getPresetFromJson, useThemeStore } from './theme'
 
