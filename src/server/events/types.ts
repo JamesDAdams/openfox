@@ -82,6 +82,7 @@ export type TurnEvent =
       data: {
         messageId: string
         content: string // Incremental content chunk
+        subAgentType?: string // Set when this delta is from a sub-agent
       }
     }
   | {
@@ -286,6 +287,7 @@ export type TurnEvent =
         messageId: string
         reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
         stats?: MessageStats
+        agentType?: 'sub-agent' // Set when this completion is from a sub-agent
       }
     }
   | {

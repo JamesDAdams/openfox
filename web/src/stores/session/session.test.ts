@@ -1207,6 +1207,31 @@ describe('useSessionStore session isolation', () => {
     expect(playNewMessageMock).toHaveBeenCalledTimes(2)
   })
 
+  it('uses subAgentType from chat.delta payload to attribute new_message sound', async () => {
+    const useSessionStore = await loadSessionStore()
+
+    useSessionStore.setState({
+      currentSession: {
+        id: 'session-1',
+        projectId: 'project-1',
+        workdir: '/tmp/project-1',
+        mode: 'builder',
+        phase: 'build',
+        isRunning: true,
+        criteria: [],
+        summary: null,
+      } as any,
+    })
+
+    useSessionStore.getState().handleServerMessage({
+      type: 'chat.delta',
+      sessionId: 'session-1',
+      payload: { messageId: 'msg-1', content: 'Hello', subAgentType: 'verifier' },
+    })
+
+    expect(playNewMessageMock).toHaveBeenCalledWith('sub-agent')
+  })
+
   it('sends ask.answer WebSocket message when answerQuestion is called', async () => {
     const useSessionStore = await loadSessionStore()
 

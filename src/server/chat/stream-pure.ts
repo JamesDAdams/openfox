@@ -595,6 +595,7 @@ export function createChatDoneEvent(
   messageId: string,
   reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated',
   stats?: MessageStats,
+  agentType?: 'sub-agent',
 ): TurnEvent {
   return {
     type: 'chat.done',
@@ -602,6 +603,7 @@ export function createChatDoneEvent(
       messageId,
       reason,
       ...(stats && { stats }),
+      ...(agentType && { agentType }),
     },
   }
 }

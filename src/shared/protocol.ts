@@ -181,6 +181,7 @@ export interface SessionNameGeneratedPayload {
 export interface ChatDeltaPayload {
   messageId: string
   content: string
+  subAgentType?: string // Set when this delta is from a sub-agent
 }
 
 export interface ChatThinkingPayload {

@@ -30,6 +30,7 @@ import { useDevServerStore } from '../dev-server'
 import { useConfigStore } from '../config'
 import { useBackgroundProcessesStore } from '../background-processes'
 import { playNewMessage } from '../../lib/sound'
+import type { AgentType } from '../notifications'
 import type { SessionState } from './types'
 import { handleGlobalSoundEffects, resolveAgentType } from './sounds'
 import { getBuffer, scheduleStreamingFlush, cancelStreamingFlush } from './streamingBuffer'
@@ -286,7 +287,9 @@ export function handleServerMessage(
       const payload = message.payload as ChatDeltaPayload
       if (!triggeredNewMessageSound.has(payload.messageId)) {
         triggeredNewMessageSound.add(payload.messageId)
-        const agent = resolveAgentType(get(), message.sessionId)
+        const agent: AgentType | undefined = payload.subAgentType
+          ? 'sub-agent'
+          : resolveAgentType(get(), message.sessionId)
         playNewMessage(agent)
       }
       const buf = getBuffer()

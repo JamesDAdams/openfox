@@ -167,8 +167,16 @@ export function createGitStatusMessage(
 }
 
 // Chat messages - all include messageId to identify which message to update
-export function createChatDeltaMessage(messageId: string, content: string): ServerMessage<ChatDeltaPayload> {
-  return createServerMessage('chat.delta', { messageId, content })
+export function createChatDeltaMessage(
+  messageId: string,
+  content: string,
+  subAgentType?: string,
+): ServerMessage<ChatDeltaPayload> {
+  return createServerMessage('chat.delta', {
+    messageId,
+    content,
+    ...(subAgentType ? { subAgentType } : {}),
+  })
 }
 
 export function createChatThinkingMessage(messageId: string, content: string): ServerMessage<ChatThinkingPayload> {
@@ -402,7 +410,7 @@ export function storedEventToServerMessage(event: StoredEvent): ServerMessage | 
 
     case 'message.delta': {
       const data = event.data as Extract<TurnEvent, { type: 'message.delta' }>['data']
-      return createChatDeltaMessage(data.messageId, data.content)
+      return createChatDeltaMessage(data.messageId, data.content, data.subAgentType)
     }
 
     case 'message.thinking': {
@@ -515,7 +523,7 @@ export function storedEventToServerMessage(event: StoredEvent): ServerMessage | 
 
     case 'chat.done': {
       const data = event.data as Extract<TurnEvent, { type: 'chat.done' }>['data']
-      return createChatDoneMessage(data.messageId, data.reason, data.stats)
+      return createChatDoneMessage(data.messageId, data.reason, data.stats, data.agentType)
     }
 
     case 'chat.error': {

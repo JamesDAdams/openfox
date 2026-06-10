@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   createChatDoneMessage,
+  createChatDeltaMessage,
   createChatErrorMessage,
   createChatFormatRetryMessage,
   createChatMessageMessage,
@@ -223,6 +224,25 @@ describe('ws/protocol', () => {
 
       expect(msg.payload.messageId).toBe('msg-123')
       expect(msg.payload.callId).toBe('call-456')
+    })
+  })
+
+  describe('createChatDeltaMessage', () => {
+    it('includes subAgentType when provided', () => {
+      const msg = createChatDeltaMessage('m1', 'hello', 'verifier')
+      expect(msg.payload).toEqual({
+        messageId: 'm1',
+        content: 'hello',
+        subAgentType: 'verifier',
+      })
+    })
+
+    it('omits subAgentType when not provided', () => {
+      const msg = createChatDeltaMessage('m1', 'hello')
+      expect(msg.payload).toEqual({
+        messageId: 'm1',
+        content: 'hello',
+      })
     })
   })
 
@@ -622,6 +642,45 @@ describe('ws/protocol', () => {
       expect(converted[18]).toBeNull()
       expect(converted[19]).toBeNull()
       expect(converted[20]).toBeNull()
+    })
+
+    it('passes subAgentType from message.delta to chat.delta payload', () => {
+      const event: StoredEvent = {
+        ...baseEvent,
+        type: 'message.delta',
+        data: { messageId: 'm1', content: ' world', subAgentType: 'verifier' },
+      }
+      const result = storedEventToServerMessage(event)
+      expect(result).toEqual({
+        type: 'chat.delta',
+        payload: { messageId: 'm1', content: ' world', subAgentType: 'verifier' },
+      })
+    })
+
+    it('passes agentType from chat.done to chat.done payload', () => {
+      const event: StoredEvent = {
+        ...baseEvent,
+        type: 'chat.done',
+        data: { messageId: 'm1', reason: 'complete', agentType: 'sub-agent' },
+      }
+      const result = storedEventToServerMessage(event)
+      expect(result).toEqual({
+        type: 'chat.done',
+        payload: { messageId: 'm1', reason: 'complete', agentType: 'sub-agent' },
+      })
+    })
+
+    it('omits agentType from chat.done when not set', () => {
+      const event: StoredEvent = {
+        ...baseEvent,
+        type: 'chat.done',
+        data: { messageId: 'm1', reason: 'complete' },
+      }
+      const result = storedEventToServerMessage(event)
+      expect(result).toEqual({
+        type: 'chat.done',
+        payload: { messageId: 'm1', reason: 'complete' },
+      })
     })
   })
 })

@@ -279,7 +279,15 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
     })
 
     const result = await consumeStreamGenerator(streamGen, (event) => {
-      eventStore.append(sessionId, event)
+      // Tag delta events with sub-agent type so frontend can correctly attribute notifications
+      if (event.type === 'message.delta') {
+        eventStore.append(sessionId, {
+          ...event,
+          data: { ...event.data, subAgentType },
+        })
+      } else {
+        eventStore.append(sessionId, event)
+      }
     })
 
     if (result.aborted) {
@@ -292,7 +300,7 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
           promptContext,
         }),
       )
-      eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'stopped', stats))
+      eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'stopped', stats, 'sub-agent'))
       throw new Error('Aborted')
     }
 
@@ -376,7 +384,7 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
           promptContext,
         }),
       )
-      eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'complete', stats))
+      eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'complete', stats, 'sub-agent'))
       break
     }
 
@@ -418,7 +426,7 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
       if (onMessage) {
         onMessage(createChatMessageUpdatedMessage(assistantMsgId, { isStreaming: false, stats, promptContext }))
       }
-      eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'complete', stats))
+      eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'complete', stats, 'sub-agent'))
       if (onMessage) {
         onMessage(createChatDoneMessage(assistantMsgId, 'complete', stats, 'sub-agent'))
       }
