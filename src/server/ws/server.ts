@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import type { Server } from 'node:http'
 import type { ServerMessage } from '../../shared/protocol.js'
 import type { GitDiffFile } from '../../shared/protocol.js'
@@ -60,6 +61,10 @@ function moduleGitBranch(cwd: string): Promise<string | null> {
   })
 }
 
+function hashContent(content: string): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
 function moduleGitDiff(cwd: string): Promise<{ hash: string; files: GitDiffFile[] }> {
   return new Promise((resolve) => {
     const proc = spawn('git', ['diff', '--stat', '--numstat', '--format=', 'HEAD'], {
@@ -88,17 +93,7 @@ function moduleGitDiff(cwd: string): Promise<{ hash: string; files: GitDiffFile[
         resolve({ hash: '', files: [] })
         return
       }
-      const hashProc = spawn('git', ['rev-parse', 'HEAD'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] })
-      let hash = ''
-      hashProc.stdout.on('data', (data: Buffer) => {
-        hash += data.toString()
-      })
-      hashProc.on('close', (hCode) => {
-        if (hCode !== 0) hash = ''
-      })
-      hashProc.on('error', () => {
-        hash = ''
-      })
+      const hash = hashContent(diffStdout + statusStdout)
       const files: GitDiffFile[] = []
       for (const line of diffStdout.split('\n')) {
         if (!line) continue
@@ -125,7 +120,7 @@ function moduleGitDiff(cwd: string): Promise<{ hash: string; files: GitDiffFile[
           deletions: 0,
         })
       }
-      resolve({ hash: hash.trim(), files })
+      resolve({ hash, files })
     }
 
     proc.on('close', (code) => {

@@ -13,7 +13,9 @@ async function waitForServer(url: string, maxAttempts = 40): Promise<void> {
     try {
       const res = await fetch(`${url}/api/health`)
       if (res.ok) return
-    } catch { /* retry */ }
+    } catch {
+      /* retry */
+    }
     await new Promise((r) => setTimeout(r, 250))
   }
   throw new Error('Server not ready')
@@ -25,7 +27,7 @@ async function getAuthToken(): Promise<string> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password: 'password' }),
   })
-  const data = await res.json() as { token: string }
+  const data = (await res.json()) as { token: string }
   return data.token
 }
 
@@ -80,23 +82,27 @@ test.describe('Git Status Watcher', () => {
     execSync('git add -A', { cwd: workdir, stdio: 'ignore' })
     execSync('git commit -m "initial"', { cwd: workdir, stdio: 'ignore' })
 
-    const projectData = await api('/api/projects', {
+    const projectData = (await api('/api/projects', {
       method: 'POST',
       body: JSON.stringify({ name: 'git-test', workdir }),
-    }) as { project: { id: string } }
+    })) as { project: { id: string } }
     projectId = projectData.project.id
 
-    const sessionData = await api('/api/sessions', {
+    const sessionData = (await api('/api/sessions', {
       method: 'POST',
       body: JSON.stringify({ projectId }),
-    }) as { session: { id: string } }
+    })) as { session: { id: string } }
     sessionId = sessionData.session.id
   })
 
   test.afterAll(async () => {
     await rm(workdir, { recursive: true, force: true })
     if (serverProcess?.pid) {
-      try { process.kill(-serverProcess.pid, 'SIGKILL') } catch { serverProcess.kill('SIGKILL') }
+      try {
+        process.kill(-serverProcess.pid, 'SIGKILL')
+      } catch {
+        serverProcess.kill('SIGKILL')
+      }
     }
   })
 
@@ -119,9 +125,13 @@ test.describe('Git Status Watcher', () => {
 
     await expect(page.getByText('No changes').first()).toBeVisible({ timeout: 5000 })
 
+    // Wait for first poll to complete and store the hash
+    await page.waitForTimeout(1_500)
+
     await writeFile(join(workdir, 'src', 'index.ts'), '// Modified content\n')
 
-    await page.waitForTimeout(3_000)
+    // Wait for next poll cycle to detect the change
+    await page.waitForTimeout(1_500)
 
     const sidebarContent = page.getByText('src/index.ts').first()
     await expect(sidebarContent).toBeVisible({ timeout: 3000 })

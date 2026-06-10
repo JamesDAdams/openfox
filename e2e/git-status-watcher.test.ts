@@ -49,12 +49,16 @@ describe('Git Status Watcher', () => {
     const initialPayload = initialMsg.payload as GitStatusPayload
     expect(initialPayload.diff.files).toHaveLength(0)
 
+    // Wait for the first poll to complete and store the hash
+    await sleep(1_500)
+
     client.clearEvents()
 
     const testFilePath = join(project.path, 'src', 'index.ts')
     await writeFile(testFilePath, '// Modified by test\n')
 
-    await sleep(2_500)
+    // Wait for the next poll cycle to detect the change
+    await sleep(1_500)
 
     const events = client.allEvents()
     const gitStatusEvents = events.filter((e) => e.type === 'git.status')
