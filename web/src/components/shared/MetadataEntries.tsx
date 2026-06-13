@@ -4,6 +4,7 @@ import type { MetadataEntry } from '@shared/types.js'
 interface MetadataEntriesProps {
   entries: MetadataEntry[]
   title?: string
+  compact?: boolean
 }
 
 const statusColors: Record<string, string> = {
@@ -26,13 +27,19 @@ const statusIcons: Record<string, string> = {
   in_progress: '◌',
 }
 
-export const MetadataEntries = memo(function MetadataEntries({ entries, title }: MetadataEntriesProps) {
+export const MetadataEntries = memo(function MetadataEntries({ entries, title, compact }: MetadataEntriesProps) {
   if (entries.length === 0) return null
+
+  const textSize = compact ? 'text-xs' : 'text-sm'
+  const px = compact ? 'px-1.5' : 'px-2'
+  const py = compact ? 'py-1' : 'py-1.5'
+  const gap = compact ? 'gap-1' : 'gap-2'
+  const titlePy = compact ? 'py-1' : 'py-1.5'
 
   return (
     <div className="my-1 rounded border border-border bg-secondary overflow-hidden">
       {title && (
-        <div className="px-2 py-1.5 border-b border-border bg-secondary">
+        <div className={`${px} ${titlePy} border-b border-border bg-secondary`}>
           <span className="text-xs font-medium text-text-muted">{title}</span>
         </div>
       )}
@@ -43,10 +50,10 @@ export const MetadataEntries = memo(function MetadataEntries({ entries, title }:
           return (
             <div
               key={entry.id ?? idx}
-              className={`flex items-start gap-2 px-2 py-1.5 ${idx > 0 ? 'border-t border-border' : ''}`}
+              className={`flex items-start ${gap} ${px} ${py} ${idx > 0 ? 'border-t border-border' : ''}`}
             >
-              <span className={`${color} text-sm leading-tight flex-shrink-0`}>{icon}</span>
-              <div className="flex-1 min-w-0 text-sm">
+              <span className={`${color} ${textSize} leading-tight flex-shrink-0`}>{icon}</span>
+              <div className={`flex-1 min-w-0 ${textSize}`}>
                 <span className="text-text-muted">[{entry.id}] </span>
                 {entry.description}
               </div>

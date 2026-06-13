@@ -12,6 +12,45 @@ import { BranchIcon, ReloadIcon } from '../shared/icons'
 import { AutoUpdateModal } from '../AutoUpdateModal'
 import { DiffViewer } from './DiffViewer'
 import type { Message } from '@shared/types.js'
+import type { MetadataEntry } from '@shared/types.js'
+
+const statusConfig: Record<string, { icon: string; color: string }> = {
+  pending: { icon: '○', color: 'text-text-muted' },
+  in_progress: { icon: '◌', color: 'text-accent-warning' },
+  completed: { icon: '◉', color: 'text-purple-400' },
+  failed: { icon: '✗', color: 'text-accent-error' },
+  passed: { icon: '✓', color: 'text-accent-success' },
+}
+
+const statusOrder = ['pending', 'in_progress', 'completed', 'failed', 'passed']
+
+function CriteriaHeader({ entries }: { entries: MetadataEntry[] }) {
+  const counts = entries.reduce<Record<string, number>>((acc, e) => {
+    acc[e.status] = (acc[e.status] ?? 0) + 1
+    return acc
+  }, {})
+
+  return (
+    <h3 className="text-sm font-semibold text-text-primary mb-2 flex items-center justify-between">
+      <span>Criteria</span>
+      {Object.keys(counts).length > 0 && (
+        <span className="font-normal text-xs flex items-center gap-1.5">
+          {statusOrder.map((status) => {
+            const count = counts[status]
+            if (!count) return null
+            const cfg = statusConfig[status] ?? { icon: '○', color: 'text-text-muted' }
+            return (
+              <span key={status} className={`${cfg.color} flex items-center gap-0.5`}>
+                <span>{cfg.icon}</span>
+                <span>{count}</span>
+              </span>
+            )
+          })}
+        </span>
+      )}
+    </h3>
+  )
+}
 
 interface SessionSidebarProps {
   messages: Message[]
@@ -84,11 +123,11 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
         </div>
       )}
 
-      {/* Progress section */}
+      {/* Criteria section */}
       <div className="flex flex-col flex-1 overflow-y-auto">
         <div className="mt-4">
-          <h3 className="text-sm font-semibold text-text-primary mb-2">Progress</h3>
-          <MetadataEntries entries={session?.metadataEntries?.['criteria'] ?? []} title="Criteria" />
+          <CriteriaHeader entries={session?.metadataEntries?.['criteria'] ?? []} />
+          <MetadataEntries entries={session?.metadataEntries?.['criteria'] ?? []} compact />
           <MetadataEntries entries={session?.metadataEntries?.['review_findings'] ?? []} title="Review Findings" />
         </div>
       </div>

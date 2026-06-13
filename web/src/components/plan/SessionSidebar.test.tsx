@@ -10,15 +10,15 @@ vi.mock('../../stores/session', () => ({
 }))
 
 describe('SessionSidebar', () => {
-  it('shows Progress section header', () => {
+  it('shows Criteria section header', () => {
     const html = renderToStaticMarkup(<SessionSidebar messages={[]} />)
 
-    expect(html).toContain('Progress')
+    expect(html).toContain('Criteria')
   })
 
-  it('shows Progress section in sidebar', () => {
+  it('shows Criteria section in sidebar', () => {
     const html = renderToStaticMarkup(<SessionSidebar messages={[]} />)
 
-    expect(html).toContain('Progress')
+    expect(html).toContain('Criteria')
   })
 })
