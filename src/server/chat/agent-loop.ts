@@ -548,7 +548,16 @@ export async function runTopLevelAgentLoop(
         data: { closedWindowId, newWindowId, beforeTokens: tokenCountAtClose, afterTokens: 0, summary },
       })
 
-      append(createMessageStartEvent(assistantMsgId, 'assistant', summary, currentWindowMessageOptions))
+      append({
+        type: 'message.start',
+        data: {
+          messageId: assistantMsgId,
+          role: 'assistant',
+          content: summary,
+          contextWindowId: closedWindowId,
+          isCompactionSummary: true,
+        },
+      })
       append(createMessageDoneEvent(assistantMsgId, { stats: turnMetrics.buildStats(statsIdentity, mode) }))
       append(createChatDoneEvent(assistantMsgId, 'complete'))
 

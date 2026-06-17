@@ -84,8 +84,8 @@ describe('Auto-Compaction Trigger', () => {
       if (event.type !== 'chat.message') {
         return false
       }
-      const message = event.payload as { message: { content: string } }
-      return message.message.content.includes('Previous context summary:')
+      const message = event.payload as { message: { isCompactionSummary?: boolean } }
+      return message.message.isCompactionSummary === true
     })
     expect(summaryMessages.length).toBeGreaterThan(0)
 
