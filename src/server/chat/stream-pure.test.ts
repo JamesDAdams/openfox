@@ -4,7 +4,6 @@ import {
   TurnMetrics,
   consumeStreamGenerator,
   createChatDoneEvent,
-  createFormatRetryEvent,
   createMessageDoneEvent,
   createMessageStartEvent,
   createToolCallEvent,
@@ -91,7 +90,6 @@ describe('stream-pure', () => {
       usage: { promptTokens: 120, completionTokens: 30 },
       timing: expect.objectContaining({ ttft: expect.any(Number), completionTime: expect.any(Number) }),
       aborted: false,
-      xmlFormatError: false,
       modelParams: expect.objectContaining({
         temperature: expect.any(Number),
         topP: expect.any(Number),
@@ -138,39 +136,6 @@ describe('stream-pure', () => {
     expect(preparingEvents[2]!).toMatchObject({ data: { name: 'run_command', arguments: '{"command":"echo hello"}' } })
   })
 
-  it('marks XML tool output as a format error and returns an empty result', async () => {
-    const client = createMockClient([{ type: 'text_delta', content: '<tool_call><function=' }])
-
-    const gen = streamLLMPure({
-      messageId: 'msg-2',
-      systemPrompt: 'system',
-      llmClient: client,
-      messages: [{ role: 'user', content: 'hello' }],
-    })
-
-    const events: Array<{ type: string; data: unknown }> = []
-    const result = await consumeStreamGenerator(gen, (event) => {
-      events.push(event)
-    })
-
-    expect(events).toEqual([])
-    expect(result).toEqual({
-      content: '',
-      toolCalls: [],
-      segments: [],
-      usage: { promptTokens: 0, completionTokens: 0 },
-      timing: { ttft: 0, completionTime: 0, tps: 0, prefillTps: 0 },
-      aborted: false,
-      xmlFormatError: true,
-      modelParams: expect.objectContaining({
-        temperature: expect.any(Number),
-        topP: expect.any(Number),
-        maxTokens: expect.any(Number),
-      }),
-      finishReason: 'stop',
-    })
-  })
-
   it('treats AbortError as an aborted result', async () => {
     const controller = new AbortController()
     controller.abort()
@@ -187,7 +152,6 @@ describe('stream-pure', () => {
     const result = await consumeStreamGenerator(gen, () => {})
 
     expect(result.aborted).toBe(true)
-    expect(result.xmlFormatError).toBe(false)
     expect(result.content).toBe('')
   })
 
@@ -384,11 +348,6 @@ describe('stream-pure', () => {
       type: 'chat.done',
       data: { messageId: 'msg-5', reason: 'complete' },
     })
-
-    expect(createFormatRetryEvent(2, 10)).toEqual({
-      type: 'format.retry',
-      data: { attempt: 2, maxAttempts: 10 },
-    })
   })
 
   describe('MiniMax empty response regression', () => {
@@ -453,6 +412,127 @@ describe('stream-pure', () => {
 
       expect(result.content).toBe('')
       expect(result.thinkingContent).toBe('This is the thinking summary that should be used')
+    })
+  })
+
+  describe('retry pattern matching mid-stream', () => {
+    it('aborts stream and returns patternMatch when content matches', async () => {
+      const client = createMockClient([
+        { type: 'text_delta', content: 'hello ' },
+        { type: 'text_delta', content: 'error occurred' },
+        { type: 'text_delta', content: ' more text' },
+        { type: 'done', response: mockResponse },
+      ])
+
+      const gen = streamLLMPure({
+        messageId: 'msg-retry',
+        systemPrompt: 'system',
+        llmClient: client,
+        messages: [{ role: 'user', content: 'hello' }],
+        retryPatterns: [{ field: 'content', pattern: 'error', action: 'retry', active: true }],
+      })
+
+      const events: Array<{ type: string; data: unknown }> = []
+      const result = await consumeStreamGenerator(gen, (event) => {
+        events.push(event)
+      })
+
+      // Should have streamed the content up to the match point
+      expect(events.map((e) => e.type)).toEqual(['message.delta', 'message.delta'])
+      expect(result.patternMatch).toBeDefined()
+      expect(result.patternMatch!.pattern).toBe('error')
+      expect(result.patternMatch!.field).toBe('content')
+      expect(result.patternMatch!.matchedContent).toContain('error')
+      expect(result.content).toBe('')
+    })
+
+    it('aborts stream when thinking matches', async () => {
+      const client = createMockClient([
+        { type: 'thinking_delta', content: 'I am ' },
+        { type: 'thinking_delta', content: 'unsure about' },
+        { type: 'text_delta', content: 'some text' },
+        { type: 'done', response: mockResponse },
+      ])
+
+      const gen = streamLLMPure({
+        messageId: 'msg-retry-thinking',
+        systemPrompt: 'system',
+        llmClient: client,
+        messages: [{ role: 'user', content: 'hello' }],
+        retryPatterns: [{ field: 'thinking', pattern: 'unsure', action: 'retry', active: true }],
+      })
+
+      const events: Array<{ type: string; data: unknown }> = []
+      const result = await consumeStreamGenerator(gen, (event) => {
+        events.push(event)
+      })
+
+      expect(result.patternMatch).toBeDefined()
+      expect(result.patternMatch!.field).toBe('thinking')
+      expect(result.patternMatch!.matchedContent).toContain('unsure')
+    })
+
+    it('completes normally when no pattern matches', async () => {
+      const client = createMockClient([
+        { type: 'text_delta', content: 'everything is fine' },
+        { type: 'done', response: mockResponse },
+      ])
+
+      const gen = streamLLMPure({
+        messageId: 'msg-no-match',
+        systemPrompt: 'system',
+        llmClient: client,
+        messages: [{ role: 'user', content: 'hello' }],
+        retryPatterns: [{ field: 'content', pattern: 'error', action: 'retry', active: true }],
+      })
+
+      const result = await consumeStreamGenerator(gen, () => {})
+
+      expect(result.patternMatch).toBeUndefined()
+      expect(result.content).toBe('everything is fine')
+    })
+
+    it('ignores inactive patterns', async () => {
+      const client = createMockClient([
+        { type: 'text_delta', content: 'error occurred' },
+        { type: 'done', response: mockResponse },
+      ])
+
+      const gen = streamLLMPure({
+        messageId: 'msg-inactive',
+        systemPrompt: 'system',
+        llmClient: client,
+        messages: [{ role: 'user', content: 'hello' }],
+        retryPatterns: [{ field: 'content', pattern: 'error', action: 'retry', active: false }],
+      })
+
+      const result = await consumeStreamGenerator(gen, () => {})
+
+      expect(result.patternMatch).toBeUndefined()
+      expect(result.content).toBe('error occurred')
+    })
+
+    it('returns first match when multiple patterns match', async () => {
+      const client = createMockClient([
+        { type: 'text_delta', content: 'error and warning' },
+        { type: 'done', response: mockResponse },
+      ])
+
+      const gen = streamLLMPure({
+        messageId: 'msg-multi',
+        systemPrompt: 'system',
+        llmClient: client,
+        messages: [{ role: 'user', content: 'hello' }],
+        retryPatterns: [
+          { field: 'content', pattern: 'warning', action: 'retry', active: true },
+          { field: 'content', pattern: 'error', action: 'retry', active: true },
+        ],
+      })
+
+      const result = await consumeStreamGenerator(gen, () => {})
+
+      // Should match the first pattern that triggers (the one that appears first in content)
+      expect(result.patternMatch).toBeDefined()
     })
   })
 })

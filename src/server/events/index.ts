@@ -94,7 +94,7 @@ export {
   emitContextState,
   emitChatDone,
   emitChatError,
-  emitFormatRetry,
+  emitPatternRetry,
   emitTurnSnapshot,
   emitMetadataSet,
   truncateSessionMessages,

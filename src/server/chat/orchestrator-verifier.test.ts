@@ -149,7 +149,6 @@ describe('runVerifierTurn - Agent Registry Integration', () => {
         usage: { promptTokens: 10, completionTokens: 5 },
         timing: { ttft: 1, completionTime: 1, tps: 5, prefillTps: 10 },
         aborted: false,
-        xmlFormatError: false,
       })
     }
 

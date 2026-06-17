@@ -204,6 +204,10 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
           }
         }, 100) // Check every 100ms
 
+        // Clear timer immediately if external abort fires (e.g. pattern match)
+        const onAbort = () => clearInterval(idleTimer)
+        request.signal?.addEventListener('abort', onAbort, { once: true })
+
         try {
           for await (const chunk of stream) {
             // Check if idle timeout was triggered
@@ -359,6 +363,7 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
           }
         } finally {
           clearInterval(idleTimer)
+          request.signal?.removeEventListener('abort', onAbort)
         }
 
         // Flush any remaining tag buffer content

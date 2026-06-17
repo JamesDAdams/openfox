@@ -123,10 +123,10 @@ describe('streamLLMResponse', () => {
     })
   })
 
-  it('injects a correction prompt and retries when xml tool output is detected', async () => {
-    streamWithSegmentsMock.mockReturnValueOnce(createStream([{ type: 'xml_tool_abort' }], null)).mockReturnValueOnce(
+  it('handles stream errors gracefully', async () => {
+    streamWithSegmentsMock.mockReturnValueOnce(
       createStream([], {
-        content: 'fixed',
+        content: 'result',
         toolCalls: [],
         response: {
           usage: { promptTokens: 8, completionTokens: 2, totalTokens: 10 },
@@ -149,19 +149,8 @@ describe('streamLLMResponse', () => {
       },
     })
 
-    expect(sessionManager.addAssistantMessage).toHaveBeenCalledTimes(1)
-    expect(sessionManager.addMessage).toHaveBeenCalledTimes(1)
-    expect(sessionManager.addMessage).toHaveBeenCalledWith(
-      'session-1',
-      expect.objectContaining({
-        role: 'user',
-        isSystemGenerated: true,
-        messageKind: 'correction',
-      }),
-    )
-    expect(emitted.map((event) => event.type)).toEqual(['chat.message'])
     expect(result.messageId).toBe('msg-1')
-    expect(streamWithSegmentsMock).toHaveBeenCalledTimes(2)
+    expect(streamWithSegmentsMock).toHaveBeenCalledTimes(1)
   })
 
   it('marks the message partial and throws when aborted', async () => {

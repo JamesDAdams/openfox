@@ -177,25 +177,6 @@ describe('streamWithSegments', () => {
     }
   })
 
-  it('aborts immediately on xml tool syntax and returns null', async () => {
-    const client = createMockClient([{ type: 'text_delta', content: '<tool_call>' }])
-
-    const events: StreamEvent[] = []
-    const gen = streamWithSegments(client, { messages: [] })
-    let returnValue: unknown = undefined
-    while (true) {
-      const { value, done } = await gen.next()
-      if (done) {
-        returnValue = value
-        break
-      }
-      events.push(value)
-    }
-
-    expect(events).toEqual([{ type: 'xml_tool_abort' }])
-    expect(returnValue).toBeNull()
-  })
-
   it('returns null on explicit error events and abort errors', async () => {
     const errorClient = createMockClient([{ type: 'error', error: 'backend failed' }])
     const errorEvents: StreamEvent[] = []
@@ -222,10 +203,19 @@ describe('streamWithSegments', () => {
         throw error
       },
     }
+    const abortEvents: StreamEvent[] = []
     const abortGen = streamWithSegments(abortClient, { messages: [] })
-    const abortDone = await abortGen.next()
-    expect(abortDone.done).toBe(true)
-    expect(abortDone.value).toBeNull()
+    let abortResult: unknown = undefined
+    while (true) {
+      const { value, done } = await abortGen.next()
+      if (done) {
+        abortResult = value
+        break
+      }
+      abortEvents.push(value)
+    }
+    expect(abortEvents).toEqual([{ type: 'error', error: 'aborted' }])
+    expect(abortResult).toBeNull()
   })
 
   it('returns null if the stream ends without a done response', async () => {

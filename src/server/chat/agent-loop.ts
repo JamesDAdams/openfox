@@ -15,6 +15,7 @@ import type { LLMToolDefinition } from '../llm/types.js'
 import type { SessionManager } from '../session/index.js'
 import type { ToolRegistry } from '../tools/types.js'
 import type { RequestContextMessage, MinimalMessage, AssemblyResult } from './request-context.js'
+import type { RetryPatternConfig } from './auto-patterns.js'
 import { createAssemblyResult } from './request-context.js'
 import {
   streamLLMPure,
@@ -23,7 +24,6 @@ import {
   createMessageStartEvent,
   createMessageDoneEvent,
   createChatDoneEvent,
-  createFormatRetryEvent,
 } from './stream-pure.js'
 import { getSetting, SETTINGS_KEYS } from '../db/settings.js'
 import { getCurrentContextWindowId } from '../events/index.js'
@@ -43,7 +43,7 @@ import { getEventStore } from '../events/index.js'
 import { processContextImages } from '../context/image-processor.js'
 import { modelSupportsVision } from '../llm/profiles.js'
 import { executeTools, type ToolBatchContext } from './execute-tools.js'
-import { matchAutoPatterns, type AutoPattern } from './auto-patterns.js'
+import { createRetryLimiter, type RetryLimiter } from './retry-limiter.js'
 
 async function loadVisionModelFromGlobalConfig(): Promise<
   { baseUrl: string; model: string; timeout: number } | undefined
@@ -90,7 +90,8 @@ function emitPartialDoneEvents(
 export interface TopLevelLoopConfig {
   mode: ToolMode
   loopMode?: 'normal' | 'compaction'
-  autoPatterns?: AutoPattern[]
+  retryPatterns?: RetryPatternConfig[]
+  maxRetriesPerTurn?: number
   /** Function to append events (provided by orchestrator) */
   append: (event: import('../events/types.js').TurnEvent) => void
   /** If provided, use this cached system prompt instead of assembling fresh */
@@ -132,9 +133,8 @@ function getCurrentWindowMessageOptions(sessionId: string): { contextWindowId: s
 // Top-Level Agent Loop (replaces runPlannerTurn / runBuilderTurn)
 // ============================================================================
 
-const MAX_FORMAT_RETRIES = 10
 const MAX_TRUNCATION_RETRIES = 3
-const FORMAT_CORRECTION_PROMPT = `IMPORTANT: You MUST use the JSON function calling API. Do NOT output XML tags like <function=>, <parameter=>, or <invoke=>. Your previous attempt was stopped because you used the wrong format. Use the proper tool_calls format.`
+const CONTINUE_PROMPT = 'Continue your previous response. Do NOT repeat what you already wrote.'
 
 export async function runTopLevelAgentLoop(
   config: TopLevelLoopConfig,
@@ -143,11 +143,12 @@ export async function runTopLevelAgentLoop(
   const { mode, sessionManager, sessionId, llmClient, signal, onMessage, statsIdentity } = config
   const append = config.append
 
-  let formatRetryCount = 0
+  const retryLimiter: RetryLimiter = createRetryLimiter(config.maxRetriesPerTurn ?? 10)
   let truncationRetryCount = 0
   let returnValueContent: string | undefined
   let returnValueResult: string | undefined
   let currentMaxTokensOverride: number | undefined
+  let lastPatternMatch: { pattern: string; field: string; matchedContent: string } | undefined
 
   for (;;) {
     if (config.loopMode !== 'compaction') {
@@ -165,7 +166,7 @@ export async function runTopLevelAgentLoop(
     const session = sessionManager.requireSession(sessionId)
 
     // Inject kickoff prompt (e.g., builder kickoff) on first iteration
-    if (formatRetryCount === 0) {
+    if (retryLimiter.count() === 0) {
       config.injectKickoff?.()
     }
 
@@ -199,19 +200,20 @@ export async function runTopLevelAgentLoop(
 
     const requestMessages = getConversationMessages({ type: 'toplevel', sessionId }, { events: processedEvents })
 
-    if (formatRetryCount > 0) {
-      const correctionMsgId = crypto.randomUUID()
+    if (retryLimiter.count() > 0) {
+      const continueMsgId = crypto.randomUUID()
+      const continueContent = lastPatternMatch
+        ? `Your previous response was interrupted because it matched pattern "${lastPatternMatch.pattern}" in ${lastPatternMatch.field}.\nMatched content:\n${lastPatternMatch.matchedContent}\n\n${CONTINUE_PROMPT}`
+        : CONTINUE_PROMPT
       append(
-        createMessageStartEvent(correctionMsgId, 'user', FORMAT_CORRECTION_PROMPT, {
+        createMessageStartEvent(continueMsgId, 'user', continueContent, {
           ...(currentWindowMessageOptions ?? {}),
           isSystemGenerated: true,
           messageKind: 'correction',
         }),
       )
-      append(createFormatRetryEvent(formatRetryCount, MAX_FORMAT_RETRIES))
-      // Add correction directly so the LLM sees it this iteration.
-      // It's also emitted to the event store, so it appears in history on subsequent iterations.
-      requestMessages.push({ role: 'user', content: FORMAT_CORRECTION_PROMPT, source: 'history' })
+      append({ type: 'message.done', data: { messageId: continueMsgId } })
+      requestMessages.push({ role: 'user', content: continueContent, source: 'history' })
     }
 
     const configDir = getGlobalConfigDir(runtimeConfig.mode ?? 'production')
@@ -256,8 +258,6 @@ export async function runTopLevelAgentLoop(
         ? { ...sessionManager.getCurrentModelSettings(), maxTokens: currentMaxTokensOverride }
         : sessionManager.getCurrentModelSettings()
 
-    const disableXmlProtection = getSetting('llm.disableXmlProtection') === 'true'
-
     const streamGen = streamLLMPure({
       messageId: assistantMsgId,
       systemPrompt: assembledRequest.systemPrompt,
@@ -266,7 +266,7 @@ export async function runTopLevelAgentLoop(
       tools: toolRegistry.definitions,
       toolChoice: 'auto',
       signal,
-      disableXmlProtection,
+      ...(config.retryPatterns ? { retryPatterns: config.retryPatterns } : {}),
       ...(modelSettings && { modelSettings }),
     })
 
@@ -274,45 +274,48 @@ export async function runTopLevelAgentLoop(
       append(event)
     })
 
-    // Check auto-loop patterns (configurable + default XML format protection)
-    const autoPatterns: AutoPattern[] = [
-      // Default XML format protection
-      {
-        match: (_content: string, _thinking?: string, context?: { xmlFormatError?: boolean }) =>
-          context?.xmlFormatError === true,
-        response: FORMAT_CORRECTION_PROMPT,
-      },
-      ...(config.autoPatterns ?? []),
-    ]
-    const matches = matchAutoPatterns(result.content, result.thinkingContent, autoPatterns, {
-      xmlFormatError: result.xmlFormatError,
-    })
-    if (matches.length > 0) {
-      if (result.xmlFormatError) {
-        if (formatRetryCount >= MAX_FORMAT_RETRIES) {
-          append({
-            type: 'chat.error',
-            data: { error: 'Model repeatedly used XML tool format after 10 retries', recoverable: false },
-          })
-          append(createChatDoneEvent(assistantMsgId, 'error'))
-          throw new Error('XML tool format retry limit exceeded')
-        }
-        formatRetryCount += 1
-        append(createFormatRetryEvent(formatRetryCount, MAX_FORMAT_RETRIES))
-      } else {
-        formatRetryCount = 0
+    // Check if a retry pattern matched mid-stream
+    if (result.patternMatch) {
+      if (!retryLimiter.canRetry()) {
+        append({
+          type: 'chat.error',
+          data: { error: `Auto-retry limit exceeded after ${retryLimiter.maxRetries()} retries`, recoverable: false },
+        })
+        append(createChatDoneEvent(assistantMsgId, 'error'))
+        throw new Error('Auto-retry limit exceeded')
       }
-      for (const match of matches) {
-        const autoMsgId = crypto.randomUUID()
-        append(
-          createMessageStartEvent(autoMsgId, 'user', match.response, {
-            ...(currentWindowMessageOptions ?? {}),
-            isSystemGenerated: true,
-            messageKind: 'correction',
-          }),
-        )
-        append({ type: 'message.done', data: { messageId: autoMsgId } })
+      retryLimiter.increment()
+      lastPatternMatch = {
+        pattern: result.patternMatch.pattern,
+        field: result.patternMatch.field,
+        matchedContent: result.patternMatch.matchedContent,
       }
+
+      // Emit pattern.retry event
+      append({
+        type: 'pattern.retry',
+        data: {
+          messageId: assistantMsgId,
+          pattern: result.patternMatch.pattern,
+          field: result.patternMatch.field,
+          attempt: retryLimiter.count(),
+          maxAttempts: retryLimiter.maxRetries(),
+          matchedContent: result.patternMatch.matchedContent,
+        },
+      })
+
+      // Emit system message showing what matched
+      const matchMsgId = crypto.randomUUID()
+      const matchMessage = `Pattern "${result.patternMatch.pattern}" matched — auto-retry #${retryLimiter.count()}`
+      append(
+        createMessageStartEvent(matchMsgId, 'user', matchMessage, {
+          ...(currentWindowMessageOptions ?? {}),
+          isSystemGenerated: true,
+          messageKind: 'correction',
+        }),
+      )
+      append({ type: 'message.done', data: { messageId: matchMsgId } })
+
       continue
     }
 
@@ -424,7 +427,7 @@ export async function runTopLevelAgentLoop(
           ),
         )
         append({ type: 'message.done', data: { messageId: rejectionMsgId } })
-        formatRetryCount = 0
+        retryLimiter.reset()
         continue
       }
 
@@ -515,7 +518,7 @@ export async function runTopLevelAgentLoop(
         onMessage?.(createQueueStateMessage(sessionManager.getQueueState(sessionId)))
       }
 
-      formatRetryCount = 0
+      retryLimiter.reset()
       continue
     }
 

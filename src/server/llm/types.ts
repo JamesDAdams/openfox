@@ -30,7 +30,6 @@ export interface LLMCompletionRequest {
   disableThinking?: boolean
   // User-configured model settings override
   modelSettings?: { temperature?: number; topP?: number; topK?: number; maxTokens?: number; supportsVision?: boolean }
-  disableXmlProtection?: boolean
 }
 
 export interface LLMCompletionResponse {
@@ -53,7 +52,6 @@ export type LLMStreamEvent =
   | { type: 'tool_call_delta'; index: number; id?: string; name?: string; arguments?: string }
   | { type: 'done'; response: LLMCompletionResponse }
   | { type: 'error'; error: string }
-  | { type: 'xml_tool_abort' }
 
 export type StreamEvent = LLMStreamEvent
 

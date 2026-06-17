@@ -1,44 +1,56 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useLocation } from 'wouter'
 import { Button } from '../../shared/Button'
 import { Toggle } from '../../shared/Toggle'
 import { SETTINGS_KEYS } from '../../../stores/settings'
 import { useSettingsStoreState } from '../useSettingsStore'
+import { RetryPatternsEditor, type RetryPatternsValue } from '../RetryPatternsEditor'
 
 export function AdvancedTab({ onClose }: { onClose: () => void }) {
   const [, navigate] = useLocation()
-  const { settings, loading, getSetting, setSetting } = useSettingsStoreState()
+  const { settings, getSetting, setSetting } = useSettingsStoreState()
 
-  const disableXmlProtection = settings[SETTINGS_KEYS.LLM_DISABLE_XML_PROTECTION] === 'true'
   const showOpenInEditor = settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR] === 'true'
   const dynamicSystemPrompt = settings[SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT] === 'true'
-  const isLoading = loading[SETTINGS_KEYS.LLM_DISABLE_XML_PROTECTION] ?? false
 
   const [localToggles, setLocalToggles] = useState({
-    xmlProtection: disableXmlProtection,
     openInEditor: showOpenInEditor,
     dynamicPrompt: dynamicSystemPrompt,
   })
 
+  const [retryPatterns, setRetryPatterns] = useState<RetryPatternsValue>({ patterns: [], maxRetriesPerTurn: 10 })
+
   useEffect(() => {
     setLocalToggles({
-      xmlProtection: disableXmlProtection,
       openInEditor: showOpenInEditor,
       dynamicPrompt: dynamicSystemPrompt,
     })
-  }, [disableXmlProtection, showOpenInEditor, dynamicSystemPrompt])
+  }, [showOpenInEditor, dynamicSystemPrompt])
 
   useEffect(() => {
-    getSetting(SETTINGS_KEYS.LLM_DISABLE_XML_PROTECTION)
     getSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR)
     getSetting(SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT)
+    getSetting(SETTINGS_KEYS.RETRY_PATTERNS)
   }, [getSetting])
 
-  const handleToggleXmlProtection = () => {
-    const newValue = !localToggles.xmlProtection
-    setLocalToggles((prev) => ({ ...prev, xmlProtection: newValue }))
-    setSetting(SETTINGS_KEYS.LLM_DISABLE_XML_PROTECTION, String(newValue))
-  }
+  useEffect(() => {
+    const raw = settings[SETTINGS_KEYS.RETRY_PATTERNS]
+    if (raw) {
+      try {
+        setRetryPatterns(JSON.parse(raw))
+      } catch {
+        // ignore parse errors
+      }
+    }
+  }, [settings])
+
+  const handleRetryPatternsChange = useCallback(
+    (value: RetryPatternsValue) => {
+      setRetryPatterns(value)
+      setSetting(SETTINGS_KEYS.RETRY_PATTERNS, JSON.stringify(value))
+    },
+    [setSetting],
+  )
 
   const handleToggleOpenInEditor = () => {
     const newValue = !localToggles.openInEditor
@@ -57,10 +69,6 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     navigate('/onboarding')
   }
 
-  if (isLoading) {
-    return <div className="text-sm text-text-muted">Loading...</div>
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -77,16 +85,12 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
       </div>
       <hr className="border-border" />
       <div>
-        <label className="flex items-center justify-between cursor-pointer">
-          <div>
-            <div className="text-sm font-medium text-text-primary">Disable XML Tool Call Protection</div>
-            <div className="text-xs text-text-muted mt-0.5">
-              Allow the model to output XML tool call format instead of JSON function calls. Some third-party providers
-              may require this.
-            </div>
-          </div>
-          <Toggle enabled={localToggles.xmlProtection} onClick={handleToggleXmlProtection} />
-        </label>
+        <h3 className="text-sm font-medium text-text-primary mb-3">Auto-Retry Patterns</h3>
+        <p className="text-xs text-text-muted mb-3">
+          Define regex patterns that, when matched against LLM responses mid-stream, trigger an automatic retry with a
+          "continue" prompt. The content that triggered the match is preserved in the chat feed.
+        </p>
+        <RetryPatternsEditor value={retryPatterns} onChange={handleRetryPatternsChange} />
       </div>
       <hr className="border-border" />
       <div>

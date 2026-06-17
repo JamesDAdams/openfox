@@ -1,91 +1,123 @@
 import { describe, it, expect } from 'vitest'
-import { matchAutoPatterns, type AutoPattern } from './auto-patterns.js'
+import { matchRetryPatterns, validateRetryPatterns, type RetryPatternConfig } from './auto-patterns.js'
 
-describe('matchAutoPatterns', () => {
+describe('matchRetryPatterns', () => {
+  const patterns: RetryPatternConfig[] = [
+    { field: 'content', pattern: 'error occurred', action: 'retry', active: true },
+    { field: 'thinking', pattern: 'I am unsure', action: 'retry', active: true },
+    { field: 'both', pattern: 'cannot complete', action: 'retry', active: true },
+  ]
+
   it('returns empty array when no patterns match', () => {
-    const patterns: AutoPattern[] = [{ match: /hello/, response: 'Hi there!' }]
-
-    const result = matchAutoPatterns('goodbye', undefined, patterns)
-
+    const result = matchRetryPatterns('everything is fine', undefined, patterns)
     expect(result).toEqual([])
   })
 
-  it('returns match when pattern matches content', () => {
-    const patterns: AutoPattern[] = [{ match: /hello/, response: 'Hi there!' }]
-
-    const result = matchAutoPatterns('hello world', undefined, patterns)
-
+  it('matches on content field only', () => {
+    const result = matchRetryPatterns('an error occurred', undefined, patterns)
     expect(result).toHaveLength(1)
-    expect(result[0]?.response).toBe('Hi there!')
+    expect(result[0]!.pattern).toBe('error occurred')
+    expect(result[0]!.field).toBe('content')
   })
 
-  it('returns match when pattern matches thinking', () => {
-    const patterns: AutoPattern[] = [{ match: /think/, response: 'Stop thinking' }]
-
-    const result = matchAutoPatterns('content', 'I think therefore', patterns)
-
+  it('matches on thinking field only', () => {
+    const result = matchRetryPatterns('some content', 'I am unsure about this', patterns)
     expect(result).toHaveLength(1)
+    expect(result[0]!.pattern).toBe('I am unsure')
+    expect(result[0]!.field).toBe('thinking')
   })
 
-  it('returns all matching patterns', () => {
-    const patterns: AutoPattern[] = [
-      { match: /hello/, response: 'Hi' },
-      { match: /world/, response: 'Earth' },
-      { match: /foo/, response: 'Bar' },
-    ]
-
-    const result = matchAutoPatterns('hello world', undefined, patterns)
-
+  it('matches on both fields', () => {
+    const result = matchRetryPatterns('I cannot complete this', 'I cannot complete', patterns)
     expect(result).toHaveLength(2)
-    expect(result[0]?.response).toBe('Hi')
-    expect(result[1]?.response).toBe('Earth')
+    expect(result[0]!.pattern).toBe('cannot complete')
+    expect(result[0]!.field).toBe('both')
   })
 
-  it('supports function-based matchers', () => {
-    const patterns: AutoPattern[] = [
-      { match: (content: string) => content.includes('error'), response: 'Fix the error' },
-    ]
-
-    const result = matchAutoPatterns('something error happened', undefined, patterns)
-
+  it('matches on both when content matches', () => {
+    const result = matchRetryPatterns('I cannot complete this', undefined, patterns)
     expect(result).toHaveLength(1)
-    expect(result[0]?.response).toBe('Fix the error')
   })
 
-  it('returns empty for function matcher that returns false', () => {
-    const patterns: AutoPattern[] = [{ match: (content: string) => content.includes('xyz'), response: 'Nope' }]
+  it('matches on both when thinking matches', () => {
+    const result = matchRetryPatterns('something else', 'I cannot complete this', patterns)
+    expect(result).toHaveLength(1)
+  })
 
-    const result = matchAutoPatterns('hello', undefined, patterns)
-
+  it('ignores inactive patterns', () => {
+    const inactivePatterns: RetryPatternConfig[] = [
+      { field: 'content', pattern: 'error', action: 'retry', active: false },
+    ]
+    const result = matchRetryPatterns('an error occurred', undefined, inactivePatterns)
     expect(result).toEqual([])
   })
 
-  it('supports context-based matchers', () => {
-    const patterns: AutoPattern[] = [
-      {
-        match: (_content: string, _thinking?: string, context?: { xmlFormatError?: boolean }) =>
-          context?.xmlFormatError === true,
-        response: 'Use JSON format',
-      },
+  it('returns multiple matches when multiple patterns match', () => {
+    const multiPatterns: RetryPatternConfig[] = [
+      { field: 'content', pattern: 'error', action: 'retry', active: true },
+      { field: 'content', pattern: 'failed', action: 'retry', active: true },
+      { field: 'thinking', pattern: 'error', action: 'retry', active: true },
     ]
-
-    const result = matchAutoPatterns('some content', undefined, patterns, { xmlFormatError: true })
-
-    expect(result).toHaveLength(1)
-    expect(result[0]?.response).toBe('Use JSON format')
+    const result = matchRetryPatterns('error: task failed', 'error in thinking', multiPatterns)
+    expect(result).toHaveLength(3)
   })
 
-  it('does not match context-based pattern when context is absent', () => {
-    const patterns: AutoPattern[] = [
-      {
-        match: (_content: string, _thinking?: string, context?: { xmlFormatError?: boolean }) =>
-          context?.xmlFormatError === true,
-        response: 'Use JSON format',
-      },
+  it('supports regex patterns', () => {
+    const regexPatterns: RetryPatternConfig[] = [
+      { field: 'content', pattern: 'err(or|ror)', action: 'retry', active: true },
     ]
+    const result = matchRetryPatterns('there was an error', undefined, regexPatterns)
+    expect(result).toHaveLength(1)
+  })
 
-    const result = matchAutoPatterns('some content', undefined, patterns)
+  it('returns matched content in result', () => {
+    const result = matchRetryPatterns('an error occurred', undefined, patterns)
+    expect(result[0]!.matchedContent).toBe('an error occurred')
+  })
 
-    expect(result).toEqual([])
+  it('returns matched thinking in result', () => {
+    const result = matchRetryPatterns('content', 'I am unsure about this', patterns)
+    expect(result[0]!.matchedContent).toBe('I am unsure about this')
+  })
+})
+
+describe('validateRetryPatterns', () => {
+  it('returns no errors for valid patterns', () => {
+    const patterns: RetryPatternConfig[] = [{ field: 'content', pattern: 'hello', action: 'retry', active: true }]
+    const errors = validateRetryPatterns(patterns)
+    expect(errors).toEqual([])
+  })
+
+  it('catches invalid regex pattern', () => {
+    const patterns: RetryPatternConfig[] = [{ field: 'content', pattern: '[invalid', action: 'retry', active: true }]
+    const errors = validateRetryPatterns(patterns)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('Invalid regex')
+  })
+
+  it('catches unknown field value', () => {
+    const patterns = [
+      { field: 'unknown', pattern: 'hello', action: 'retry', active: true },
+    ] as unknown as RetryPatternConfig[]
+    const errors = validateRetryPatterns(patterns)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('field')
+  })
+
+  it('catches missing pattern', () => {
+    const patterns = [
+      { field: 'content', pattern: '', action: 'retry', active: true },
+    ] as unknown as RetryPatternConfig[]
+    const errors = validateRetryPatterns(patterns)
+    expect(errors).toHaveLength(1)
+  })
+
+  it('returns multiple errors for multiple invalid patterns', () => {
+    const patterns = [
+      { field: 'content', pattern: '[invalid', action: 'retry', active: true },
+      { field: 'nope', pattern: 'hello', action: 'retry', active: true },
+    ] as unknown as RetryPatternConfig[]
+    const errors = validateRetryPatterns(patterns)
+    expect(errors).toHaveLength(2)
   })
 })

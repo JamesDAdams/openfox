@@ -39,7 +39,7 @@ import { getEnabledSkillMetadata } from '../skills/registry.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
 import { logger } from '../utils/logger.js'
-import type { AutoPattern } from './auto-patterns.js'
+import type { RetryPatternConfig } from './auto-patterns.js'
 
 // Re-export for runner orchestrator
 export {
@@ -56,14 +56,33 @@ function getCurrentWindowMessageOptions(sessionId: string): { contextWindowId: s
   return contextWindowId ? { contextWindowId } : undefined
 }
 
-function buildAutoPatterns(): AutoPattern[] {
-  const config = getRuntimeConfig()
-  const rawPatterns = config.agent?.autoPatterns ?? []
-  const patterns: AutoPattern[] = rawPatterns.map((rp) => ({
-    match: new RegExp(rp.pattern),
-    response: rp.response,
-  }))
-  return patterns
+async function buildRetryPatterns(): Promise<{ retryPatterns: RetryPatternConfig[]; maxRetriesPerTurn: number }> {
+  const { getSetting, SETTINGS_KEYS } = await import('../db/settings.js')
+  const raw = getSetting(SETTINGS_KEYS.RETRY_PATTERNS)
+  if (!raw) {
+    // Migration: check old llm.disableXmlProtection setting
+    const oldXmlProtection = getSetting('llm.disableXmlProtection')
+    if (oldXmlProtection !== null) {
+      // User had the old setting — migrate to retry patterns
+      const disabled = oldXmlProtection === 'true'
+      return {
+        retryPatterns: disabled
+          ? []
+          : [{ field: 'both', pattern: '<(tool_call|function=|/tool_call|parameter=)', action: 'retry', active: true }],
+        maxRetriesPerTurn: 10,
+      }
+    }
+    return { retryPatterns: [], maxRetriesPerTurn: 10 }
+  }
+  try {
+    const parsed = JSON.parse(raw)
+    return {
+      retryPatterns: Array.isArray(parsed.patterns) ? parsed.patterns : [],
+      maxRetriesPerTurn: typeof parsed.maxRetriesPerTurn === 'number' ? parsed.maxRetriesPerTurn : 10,
+    }
+  } catch {
+    return { retryPatterns: [], maxRetriesPerTurn: 10 }
+  }
 }
 
 // ============================================================================
@@ -326,7 +345,7 @@ async function runGenericAgentTurn(
     {
       mode: agentId,
       append,
-      autoPatterns: buildAutoPatterns(),
+      ...(await buildRetryPatterns()),
       cachedSystemPrompt: cachedResult.systemPrompt,
       sessionManager: options.sessionManager,
       sessionId: options.sessionId,
@@ -385,7 +404,7 @@ export async function runBuilderTurn(
       {
         mode: 'builder',
         append,
-        autoPatterns: buildAutoPatterns(),
+        ...(await buildRetryPatterns()),
         sessionManager,
         sessionId,
         llmClient: options.llmClient,

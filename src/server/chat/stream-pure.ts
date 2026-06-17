@@ -25,6 +25,8 @@ import type { LLMToolDefinition } from '../llm/types.js'
 import { buildModelParams } from '../llm/client-pure.js'
 import type { StreamTiming } from '../llm/streaming.js'
 import type { TurnEvent } from '../events/types.js'
+import type { RetryPatternConfig, RetryPatternMatch } from './auto-patterns.js'
+import { matchRetryPatterns } from './auto-patterns.js'
 import { buildStreamRequest } from './stream-utils.js'
 import { computeAggregatedStats } from './stats.js'
 import { getModelProfile } from '../llm/profiles.js'
@@ -53,7 +55,8 @@ export interface PureStreamOptions {
   disableThinking?: boolean
   /** User-configured model settings (temperature, topP, topK, maxTokens, supportsVision) */
   modelSettings?: ModelParams & { supportsVision?: boolean }
-  disableXmlProtection?: boolean
+  /** Retry patterns to check mid-stream */
+  retryPatterns?: RetryPatternConfig[]
 }
 
 export interface PureStreamResult {
@@ -64,9 +67,10 @@ export interface PureStreamResult {
   usage: { promptTokens: number; completionTokens: number }
   timing: StreamTiming
   aborted: boolean
-  xmlFormatError: boolean
   modelParams?: ModelParams
   finishReason: 'stop' | 'tool_calls' | 'length' | 'content_filter'
+  /** Set when a retry pattern matched mid-stream */
+  patternMatch?: RetryPatternMatch
 }
 
 type StreamMessageInput = {
@@ -111,8 +115,8 @@ export function createAssistantMessage(
 
 function createEmptyStreamResult(
   aborted: boolean,
-  xmlFormatError: boolean,
   modelParams: ModelParams,
+  patternMatch?: RetryPatternMatch,
 ): PureStreamResult {
   return {
     content: '',
@@ -121,9 +125,9 @@ function createEmptyStreamResult(
     usage: { promptTokens: 0, completionTokens: 0 },
     timing: { ttft: 0, completionTime: 0, tps: 0, prefillTps: 0 },
     aborted,
-    xmlFormatError,
     modelParams,
     finishReason: 'stop',
+    ...(patternMatch ? { patternMatch } : {}),
   }
 }
 
@@ -141,29 +145,12 @@ function createEmptyStreamResult(
  *
  * DOES:
  * - Yield events for message deltas, thinking, tool preparation
+ * - Check retry patterns mid-stream and abort on match
  * - Return the final result with content, tool calls, usage stats
- *
- * @example
- * ```typescript
- * const gen = streamLLMPure(options)
- * for await (const event of gen) {
- *   eventStore.append(sessionId, event)
- * }
- * const result = gen.value // Available after iteration completes
- * ```
  */
 export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator<TurnEvent, PureStreamResult> {
-  const {
-    messageId,
-    systemPrompt,
-    llmClient,
-    messages,
-    tools,
-    toolChoice,
-    signal,
-    disableThinking,
-    disableXmlProtection,
-  } = options
+  const { messageId, systemPrompt, llmClient, messages, tools, toolChoice, signal, disableThinking, retryPatterns } =
+    options
 
   // Build LLM messages
   const llmMessages = [{ role: 'system' as const, content: systemPrompt }, ...messages]
@@ -198,15 +185,20 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
     },
   })
 
+  // Create abort controller for pattern-based abort
+  const patternAbortController = new AbortController()
+  const combinedSignal = signal
+    ? AbortSignal.any([signal, patternAbortController.signal])
+    : patternAbortController.signal
+
   // Start streaming
   const stream = buildStreamRequest(llmClient, {
     messages: llmMessages,
     tools,
     toolChoice,
     disableThinking: disableThinking ?? false,
-    signal,
+    signal: combinedSignal,
     modelSettings: options.modelSettings,
-    ...(disableXmlProtection !== undefined && { disableXmlProtection }),
   })
 
   // Track tool call indices we've emitted preparing events for
@@ -220,7 +212,11 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
 
   let result: Awaited<ReturnType<typeof stream.next>>['value'] = null
   let aborted = false
-  let xmlFormatError = false
+  let accumulatedContent = ''
+  let accumulatedThinking = ''
+  let patternMatch: RetryPatternMatch | undefined
+
+  const activePatterns = retryPatterns?.filter((p) => p.active) ?? []
 
   try {
     while (true) {
@@ -239,6 +235,7 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
       // Transform streaming events to TurnEvents
       switch (value.type) {
         case 'text_delta':
+          accumulatedContent += value.content
           yield {
             type: 'message.delta',
             data: { messageId, content: value.content },
@@ -246,6 +243,7 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
           break
 
         case 'thinking_delta':
+          accumulatedThinking += value.content
           yield {
             type: 'message.thinking',
             data: { messageId, content: value.content },
@@ -339,10 +337,6 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
           break
         }
 
-        case 'xml_tool_abort':
-          xmlFormatError = true
-          break
-
         case 'error':
           yield {
             type: 'chat.error',
@@ -351,9 +345,14 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
           break
       }
 
-      // If XML format error, break out
-      if (xmlFormatError) {
-        break
+      // Check retry patterns mid-stream — abort and let cleanup happen naturally
+      if (activePatterns.length > 0 && (accumulatedContent || accumulatedThinking)) {
+        const matches = matchRetryPatterns(accumulatedContent, accumulatedThinking || undefined, activePatterns)
+        if (matches.length > 0) {
+          patternMatch = matches[0]!
+          patternAbortController.abort()
+          break
+        }
       }
     }
   } catch (error) {
@@ -364,9 +363,14 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
     }
   }
 
+  // Pattern match took precedence over normal result
+  if (patternMatch) {
+    return createEmptyStreamResult(false, modelParams, patternMatch)
+  }
+
   // Return result (available via generator.value after iteration)
   if (!result) {
-    return createEmptyStreamResult(aborted, xmlFormatError, modelParams)
+    return createEmptyStreamResult(aborted, modelParams)
   }
 
   const baseResult: PureStreamResult = {
@@ -379,7 +383,6 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
     },
     timing: result.timing,
     aborted,
-    xmlFormatError,
     modelParams,
     finishReason: result.response.finishReason,
   }
@@ -597,16 +600,6 @@ export function createChatDoneEvent(
       ...(stats && { stats }),
       ...(agentType && { agentType }),
     },
-  }
-}
-
-/**
- * Create a format.retry event
- */
-export function createFormatRetryEvent(attempt: number, maxAttempts: number): TurnEvent {
-  return {
-    type: 'format.retry',
-    data: { attempt, maxAttempts },
   }
 }
 

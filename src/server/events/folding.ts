@@ -825,8 +825,14 @@ export function foldSessionState(
         }
         break
       }
-      case 'format.retry': {
-        const data = event.data as { attempt: number; maxAttempts: number }
+      case 'pattern.retry': {
+        const data = event.data as {
+          pattern: string
+          field: string
+          attempt: number
+          maxAttempts: number
+          matchedContent: string
+        }
         formatRetries.push({
           attempt: data.attempt,
           maxAttempts: data.maxAttempts,

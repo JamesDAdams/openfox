@@ -840,7 +840,6 @@ describe('createWebSocketServer', () => {
       usage: { promptTokens: 190000, completionTokens: 100 },
       timing: { ttft: 1, completionTime: 1, tps: 100, prefillTps: 190000 },
       aborted: false,
-      xmlFormatError: false,
     })
     runChatTurnMock.mockResolvedValue(undefined)
 
@@ -909,7 +908,6 @@ describe('createWebSocketServer', () => {
         usage: { promptTokens: 10, completionTokens: 4 },
         timing: { ttft: 1, completionTime: 1, tps: 4, prefillTps: 10 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'Orchestrator summary',
@@ -918,7 +916,6 @@ describe('createWebSocketServer', () => {
         usage: { promptTokens: 15, completionTokens: 3 },
         timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 15 },
         aborted: false,
-        xmlFormatError: false,
       })
     runOrchestratorMock.mockResolvedValue({ success: true })
     providePathConfirmationMock.mockReturnValueOnce({ found: false }).mockReturnValueOnce({ found: true })

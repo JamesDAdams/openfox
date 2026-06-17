@@ -592,13 +592,21 @@ export function emitChatError(sessionId: string, error: string, recoverable: boo
 }
 
 /**
- * Emit format retry
+ * Emit pattern retry
  */
-export function emitFormatRetry(sessionId: string, attempt: number, maxAttempts: number): void {
+export function emitPatternRetry(
+  sessionId: string,
+  messageId: string,
+  pattern: string,
+  field: string,
+  attempt: number,
+  maxAttempts: number,
+  matchedContent: string,
+): void {
   const eventStore = getEventStore()
   eventStore.append(sessionId, {
-    type: 'format.retry',
-    data: { attempt, maxAttempts },
+    type: 'pattern.retry',
+    data: { messageId, pattern, field, attempt, maxAttempts, matchedContent },
   })
 }
 

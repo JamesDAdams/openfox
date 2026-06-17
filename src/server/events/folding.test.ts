@@ -65,13 +65,35 @@ describe('apply-events.ts new handlers', () => {
     })
   })
 
-  describe('format.retry events', () => {
+  describe('pattern.retry events', () => {
     it('populates formatRetries on assistant messages', () => {
       const events: StoredEvent[] = [
         { ...baseEvent, type: 'message.start', data: { messageId: 'm1', role: 'assistant' } },
-        { ...baseEvent, type: 'format.retry', data: { attempt: 1, maxAttempts: 3 } },
+        {
+          ...baseEvent,
+          type: 'pattern.retry',
+          data: {
+            messageId: 'm1',
+            pattern: 'test',
+            field: 'content',
+            attempt: 1,
+            maxAttempts: 3,
+            matchedContent: 'test content',
+          },
+        },
         { ...baseEvent, type: 'message.delta', data: { messageId: 'm1', content: 'Attempt 1 failed' } },
-        { ...baseEvent, type: 'format.retry', data: { attempt: 2, maxAttempts: 3 } },
+        {
+          ...baseEvent,
+          type: 'pattern.retry',
+          data: {
+            messageId: 'm1',
+            pattern: 'test',
+            field: 'content',
+            attempt: 2,
+            maxAttempts: 3,
+            matchedContent: 'test content',
+          },
+        },
       ]
 
       const messages = buildMessagesFromStoredEvents(events)

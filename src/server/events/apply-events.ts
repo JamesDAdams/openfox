@@ -257,9 +257,10 @@ export function applyEvents<
         }
         break
       }
-      case 'format.retry': {
-        const data = event.data as Extract<TurnEvent, { type: 'format.retry' }>['data']
-        for (const msg of messages.values()) {
+      case 'pattern.retry': {
+        const data = event.data as Extract<TurnEvent, { type: 'pattern.retry' }>['data']
+        const msg = messages.get(data.messageId)
+        if (msg) {
           const retries = (msg as T & { formatRetries?: FormatRetry[] }).formatRetries ?? []
           retries.push({ attempt: data.attempt, maxAttempts: data.maxAttempts, timestamp: event.timestamp })
           ;(msg as T & { formatRetries: FormatRetry[] }).formatRetries = retries

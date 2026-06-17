@@ -316,10 +316,14 @@ export type TurnEvent =
       }
     }
   | {
-      type: 'format.retry'
+      type: 'pattern.retry'
       data: {
+        messageId: string
+        pattern: string
+        field: string
         attempt: number
         maxAttempts: number
+        matchedContent: string
       }
     }
 

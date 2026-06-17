@@ -20,18 +20,10 @@ vi.mock('./stream-pure.js', () => ({
     type: 'chat.done',
     data: { messageId, reason },
   })),
-  createFormatRetryEvent: vi.fn((attempt: number, maxAttempts: number) => ({
-    type: 'format.retry',
-    data: { attempt, maxAttempts },
-  })),
 }))
 
 vi.mock('./execute-tools.js', () => ({
   executeTools: vi.fn(),
-}))
-
-vi.mock('./auto-patterns.js', () => ({
-  matchAutoPatterns: vi.fn().mockReturnValue([]),
 }))
 
 vi.mock('../context/auto-compaction.js', () => ({
@@ -87,7 +79,6 @@ vi.mock('../events/index.js', () => ({
 import { runTopLevelAgentLoop } from './agent-loop.js'
 import { consumeStreamGenerator } from './stream-pure.js'
 import { executeTools } from './execute-tools.js'
-import { matchAutoPatterns } from './auto-patterns.js'
 
 function createMockSessionManager(overrides?: Record<string, any>): SessionManager {
   return {
@@ -157,7 +148,6 @@ function makeStreamResult(overrides?: Record<string, any>) {
     usage: { promptTokens: 100, completionTokens: 50 },
     timing: {} as any,
     aborted: false,
-    xmlFormatError: false,
     modelParams: {},
     finishReason: 'stop' as const,
     ...overrides,
@@ -236,24 +226,26 @@ describe('agentLoop integration', () => {
     expect(startEvents.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('continues loop when auto-patterns match', async () => {
+  it('continues loop when retry pattern matches', async () => {
     const append = vi.fn()
 
-    ;(matchAutoPatterns as any).mockReturnValueOnce([{ response: 'Auto response' }]).mockReturnValueOnce([])
     ;(consumeStreamGenerator as any)
-      .mockResolvedValueOnce(makeStreamResult({ content: 'bad format', finishReason: 'stop' }))
+      .mockResolvedValueOnce(
+        makeStreamResult({
+          content: 'bad format',
+          finishReason: 'stop',
+          patternMatch: { pattern: 'bad', field: 'content', matchedContent: 'bad format' },
+        }),
+      )
       .mockResolvedValueOnce(makeStreamResult({ content: 'good format', finishReason: 'stop' }))
 
     await runTopLevelAgentLoop(makeConfig({ append }), turnMetrics)
 
     // Should have called streamLLM twice
     expect(consumeStreamGenerator).toHaveBeenCalledTimes(2)
-    // Should have appended auto-response message
-    const startEvents = append.mock.calls.filter(
-      (args: unknown[]) =>
-        (args[0] as any).type === 'message.start' && (args[0] as any).data?.content === 'Auto response',
-    )
-    expect(startEvents.length).toBeGreaterThanOrEqual(1)
+    // Should have appended pattern.retry event
+    const retryEvents = append.mock.calls.filter((args: unknown[]) => (args[0] as any).type === 'pattern.retry')
+    expect(retryEvents.length).toBeGreaterThanOrEqual(1)
   })
 
   it('retries on truncation (finishReason=length) up to MAX_TRUNCATION_RETRIES', async () => {

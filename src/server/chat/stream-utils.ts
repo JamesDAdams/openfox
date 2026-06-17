@@ -11,9 +11,8 @@ function buildStreamRequestObject(params: {
   modelSettings?:
     | { temperature?: number; topP?: number; topK?: number; maxTokens?: number; supportsVision?: boolean }
     | undefined
-  disableXmlProtection?: boolean
 }): LLMCompletionRequest {
-  const { messages, tools, toolChoice, disableThinking, signal, modelSettings, disableXmlProtection } = params
+  const { messages, tools, toolChoice, disableThinking, signal, modelSettings } = params
   return {
     messages,
     ...(tools && { tools }),
@@ -21,7 +20,6 @@ function buildStreamRequestObject(params: {
     disableThinking: disableThinking ?? false,
     ...(signal && { signal }),
     ...(modelSettings && { modelSettings }),
-    ...(disableXmlProtection !== undefined && { disableXmlProtection }),
   }
 }
 

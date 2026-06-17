@@ -27,7 +27,6 @@ import {
   createChatMessageMessage,
   createChatProgressMessage,
 } from '../ws/protocol.js'
-import { FORMAT_CORRECTION_PROMPT, MAX_FORMAT_RETRIES } from './prompts.js'
 
 export interface StreamOptions {
   sessionManager: SessionManager
@@ -78,7 +77,7 @@ export async function streamLLMResponse(options: StreamOptions): Promise<StreamR
 
 async function streamLLMResponseInternal(
   options: StreamOptions,
-  formatRetryCount: number,
+  _formatRetryCount: number,
   existingMessageId?: string,
 ): Promise<StreamResult> {
   const {
@@ -95,18 +94,6 @@ async function streamLLMResponseInternal(
     subAgentType,
     disableThinking,
   } = options
-
-  // If retrying due to XML format error, inject correction prompt
-  if (formatRetryCount > 0) {
-    sessionManager.addMessage(sessionId, {
-      role: 'user',
-      content: FORMAT_CORRECTION_PROMPT,
-      isSystemGenerated: true,
-      messageKind: 'correction',
-      ...(subAgentId && { subAgentId }),
-      ...(subAgentType && { subAgentType }),
-    })
-  }
 
   // Build messages - use custom messages if provided, otherwise session's current window
   let llmMessages: Array<{
@@ -234,22 +221,6 @@ async function streamLLMResponseInternal(
           onEvent(createChatToolPreparingMessage(messageId, value.index, fullName))
         }
         break
-      }
-      case 'xml_tool_abort': {
-        // Model used XML tool format - retry with same message
-        const newRetryCount = formatRetryCount + 1
-        if (newRetryCount <= MAX_FORMAT_RETRIES) {
-          logger.warn('XML tool format detected, retrying', {
-            sessionId,
-            attempt: newRetryCount,
-          })
-          return streamLLMResponseInternal(options, newRetryCount, messageId)
-        } else {
-          sessionManager.updateMessage(sessionId, messageId, { isStreaming: false })
-          onEvent(createChatErrorMessage('Model repeatedly used XML tool format after 10 retries', false))
-          onEvent(createChatDoneMessage(messageId, 'error'))
-          throw new Error('XML tool format retry limit exceeded')
-        }
       }
       case 'error':
         onEvent(createChatErrorMessage(value.error, true))

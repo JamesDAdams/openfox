@@ -234,6 +234,9 @@ export interface ChatProgressPayload {
 export interface ChatFormatRetryPayload {
   attempt: number
   maxAttempts: number
+  pattern?: string
+  field?: string
+  matchedContent?: string
 }
 
 export interface ChatVisionFallbackPayload {

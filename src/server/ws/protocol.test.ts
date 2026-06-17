@@ -543,7 +543,18 @@ describe('ws/protocol', () => {
         { ...baseEvent, type: 'todo.updated', data: { todos: [{ content: 'write tests', status: 'pending' }] } },
         { ...baseEvent, type: 'chat.done', data: { messageId: 'm1', reason: 'complete' } },
         { ...baseEvent, type: 'chat.error', data: { error: 'boom', recoverable: false } },
-        { ...baseEvent, type: 'format.retry', data: { attempt: 2, maxAttempts: 10 } },
+        {
+          ...baseEvent,
+          type: 'pattern.retry',
+          data: {
+            messageId: 'm1',
+            pattern: 'test',
+            field: 'content',
+            attempt: 2,
+            maxAttempts: 10,
+            matchedContent: 'test',
+          },
+        },
         {
           ...baseEvent,
           type: 'turn.snapshot',
@@ -682,7 +693,10 @@ describe('ws/protocol', () => {
       })
       expect(converted[15]).toEqual({ type: 'chat.done', payload: { messageId: 'm1', reason: 'complete' } })
       expect(converted[16]).toEqual({ type: 'chat.error', payload: { error: 'boom', recoverable: false } })
-      expect(converted[17]).toEqual({ type: 'chat.format_retry', payload: { attempt: 2, maxAttempts: 10 } })
+      expect(converted[17]).toEqual({
+        type: 'chat.format_retry',
+        payload: { attempt: 2, maxAttempts: 10, pattern: 'test', field: 'content', matchedContent: 'test' },
+      })
       expect(converted[18]).toBeNull()
       expect(converted[19]).toBeNull()
       expect(converted[20]).toBeNull()

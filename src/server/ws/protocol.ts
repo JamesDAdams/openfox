@@ -234,8 +234,17 @@ export function createChatProgressMessage(
 export function createChatFormatRetryMessage(
   attempt: number,
   maxAttempts: number,
+  pattern?: string,
+  field?: string,
+  matchedContent?: string,
 ): ServerMessage<ChatFormatRetryPayload> {
-  return createServerMessage('chat.format_retry', { attempt, maxAttempts })
+  return createServerMessage('chat.format_retry', {
+    attempt,
+    maxAttempts,
+    ...(pattern !== undefined ? { pattern } : {}),
+    ...(field !== undefined ? { field } : {}),
+    ...(matchedContent !== undefined ? { matchedContent } : {}),
+  })
 }
 
 export function createChatMessageMessage(message: Message): ServerMessage<ChatMessagePayload> {
@@ -542,9 +551,9 @@ export function storedEventToServerMessage(event: StoredEvent): ServerMessage | 
       return createChatAskUserMessage(data.callId, data.question)
     }
 
-    case 'format.retry': {
-      const data = event.data as Extract<TurnEvent, { type: 'format.retry' }>['data']
-      return createChatFormatRetryMessage(data.attempt, data.maxAttempts)
+    case 'pattern.retry': {
+      const data = event.data as Extract<TurnEvent, { type: 'pattern.retry' }>['data']
+      return createChatFormatRetryMessage(data.attempt, data.maxAttempts, data.pattern, data.field, data.matchedContent)
     }
 
     case 'turn.snapshot':

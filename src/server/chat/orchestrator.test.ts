@@ -323,7 +323,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 30, completionTokens: 10 },
       timing: { ttft: 1, completionTime: 2, tps: 5, prefillTps: 30 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     const state: any = {
@@ -379,7 +378,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 190000, completionTokens: 100 },
         timing: { ttft: 1, completionTime: 1, tps: 100, prefillTps: 190000 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'Planned response',
@@ -388,7 +386,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 20000, completionTokens: 10 },
         timing: { ttft: 1, completionTime: 1, tps: 10, prefillTps: 20000 },
         aborted: false,
-        xmlFormatError: false,
       })
 
     const sessionManager = createSessionManager({
@@ -440,7 +437,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 30, completionTokens: 10 },
       timing: { ttft: 1, completionTime: 2, tps: 5, prefillTps: 30 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     const state: any = {
@@ -526,7 +522,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'Thanks for the answer',
@@ -535,7 +530,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 3 },
         timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
 
     const sessionManager = createSessionManager({
@@ -628,7 +622,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 4, completionTokens: 1 },
       timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 4 },
       aborted: true,
-      xmlFormatError: false,
     })
 
     const sessionManager = createSessionManager({
@@ -697,7 +690,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 10, completionTokens: 5 },
       timing: { ttft: 1, completionTime: 1, tps: 5, prefillTps: 10 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     const sessionManager = createSessionManager({
@@ -788,7 +780,7 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 0, completionTokens: 0 },
         timing: { ttft: 0, completionTime: 0, tps: 0, prefillTps: 0 },
         aborted: false,
-        xmlFormatError: true,
+        patternMatch: { pattern: 'XML tool format', field: 'both', matchedContent: '' },
       })
       .mockResolvedValueOnce({
         content: '',
@@ -797,7 +789,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 10, completionTokens: 4 },
         timing: { ttft: 1, completionTime: 1, tps: 4, prefillTps: 10 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'done',
@@ -806,7 +797,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 2 },
         timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
 
     const appendMock = vi.fn()
@@ -822,7 +812,7 @@ describe('chat orchestrator', () => {
     )
 
     const appendedTypes = appendMock.mock.calls.map(([event]) => event.type)
-    expect(appendedTypes).toContain('format.retry')
+    expect(appendedTypes).toContain('pattern.retry')
     expect(appendedTypes).toContain('tool.call')
     expect(appendedTypes).toContain('tool.result')
     expect(appendedTypes).toContain('chat.done')
@@ -876,7 +866,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 10, completionTokens: 4 },
         timing: { ttft: 1, completionTime: 1, tps: 4, prefillTps: 10 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'done',
@@ -885,7 +874,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 2 },
         timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
 
     const appendMock = vi.fn()
@@ -952,7 +940,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 10, completionTokens: 4 },
       timing: { ttft: 1, completionTime: 1, tps: 4, prefillTps: 10 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     await expect(
@@ -1006,7 +993,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 10, completionTokens: 3 },
         timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 10 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'Done',
@@ -1015,7 +1001,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 2 },
         timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
 
     const sessionManager = createSessionManager({
@@ -1100,7 +1085,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 10, completionTokens: 3 },
       timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 10 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     const sessionManager = createSessionManager({
@@ -1172,7 +1156,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 10, completionTokens: 3 },
       timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 10 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     const sessionManager = createSessionManager({
@@ -1222,7 +1205,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 10, completionTokens: 3 },
       timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 10 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     const sessionManager = createSessionManager({
@@ -1276,7 +1258,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 10, completionTokens: 3 },
       timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 10 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     const sessionManager = createSessionManager({
@@ -1391,7 +1372,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 8, completionTokens: 3 },
         timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 8 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'done',
@@ -1400,7 +1380,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
       // Extra response for return_value nudge
       .mockResolvedValueOnce({
@@ -1410,7 +1389,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
 
     const result = await runVerifierTurn(
@@ -1482,7 +1460,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 8, completionTokens: 3 },
         timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 8 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'marking failed',
@@ -1491,7 +1468,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 6, completionTokens: 2 },
         timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 6 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'done',
@@ -1500,7 +1476,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
       // Extra response for return_value nudge
       .mockResolvedValueOnce({
@@ -1510,7 +1485,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
 
     const result = await runVerifierTurn(
@@ -1608,7 +1582,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 8, completionTokens: 3 },
         timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 8 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'marking failed',
@@ -1617,7 +1590,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 6, completionTokens: 2 },
         timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 6 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'done',
@@ -1626,7 +1598,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
       // Extra response for return_value nudge
       .mockResolvedValueOnce({
@@ -1636,7 +1607,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
 
     const result = await runVerifierTurn(
@@ -1712,7 +1682,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 8, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
         aborted: false,
-        xmlFormatError: false,
       })
     }
 
@@ -1800,7 +1769,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 8, completionTokens: 1 },
       timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
       aborted: false,
-      xmlFormatError: false,
     })
     // Passes the criterion
     consumeStreamGeneratorMock.mockResolvedValueOnce({
@@ -1812,7 +1780,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 8, completionTokens: 1 },
       timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
       aborted: false,
-      xmlFormatError: false,
     })
     // Final response - no tool calls, all criteria terminalized
     consumeStreamGeneratorMock.mockResolvedValueOnce({
@@ -1822,7 +1789,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 8, completionTokens: 1 },
       timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
       aborted: false,
-      xmlFormatError: false,
     })
     // Extra response for return_value nudge
     consumeStreamGeneratorMock.mockResolvedValueOnce({
@@ -1832,7 +1798,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 5, completionTokens: 1 },
       timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     const result = await runVerifierTurn(
@@ -1925,7 +1890,6 @@ describe('chat orchestrator', () => {
           usage: { promptTokens: 8, completionTokens: 1 },
           timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
           aborted: false,
-          xmlFormatError: false,
         }
       }
 
@@ -1937,7 +1901,6 @@ describe('chat orchestrator', () => {
           usage: { promptTokens: 8, completionTokens: 1 },
           timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
           aborted: false,
-          xmlFormatError: false,
         }
       }
 
@@ -1955,7 +1918,6 @@ describe('chat orchestrator', () => {
           usage: { promptTokens: 8, completionTokens: 1 },
           timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
           aborted: false,
-          xmlFormatError: false,
         }
       }
 
@@ -1967,7 +1929,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 8, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
         aborted: false,
-        xmlFormatError: false,
       }
     })
 
@@ -2051,7 +2012,6 @@ describe('chat orchestrator', () => {
           usage: { promptTokens: 8, completionTokens: 1 },
           timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
           aborted: false,
-          xmlFormatError: false,
         }
       }
 
@@ -2062,7 +2022,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 8, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
         aborted: false,
-        xmlFormatError: false,
       }
     })
 
@@ -2139,7 +2098,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 8, completionTokens: 1 },
       timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     // 11 for verifier nudges/stall + 1 for return_value nudge = 12
@@ -2151,7 +2109,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 8, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
         aborted: false,
-        xmlFormatError: false,
       })
     }
 
@@ -2229,7 +2186,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 8, completionTokens: 3 },
         timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 8 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'done',
@@ -2238,7 +2194,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'passing criterion',
@@ -2253,7 +2208,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 6, completionTokens: 2 },
         timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 6 },
         aborted: false,
-        xmlFormatError: false,
       })
       .mockResolvedValueOnce({
         content: 'verified',
@@ -2262,7 +2216,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
       // Extra response for return_value nudge
       .mockResolvedValueOnce({
@@ -2272,7 +2225,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
 
     const result = await runVerifierTurn(
@@ -2403,7 +2355,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 4, completionTokens: 1 },
       timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 4 },
       aborted: true,
-      xmlFormatError: false,
     })
 
     await expect(
@@ -2458,7 +2409,6 @@ describe('chat orchestrator', () => {
       usage: { promptTokens: 8, completionTokens: 2 },
       timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 8 },
       aborted: false,
-      xmlFormatError: false,
     })
 
     await expect(
@@ -2497,7 +2447,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 10, completionTokens: 5 },
         timing: { ttft: 1, completionTime: 1, tps: 5, prefillTps: 10 },
         aborted: false,
-        xmlFormatError: false,
       })
 
       const sessionManager = createSessionManager({
@@ -2558,7 +2507,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 10, completionTokens: 5 },
         timing: { ttft: 1, completionTime: 1, tps: 5, prefillTps: 10 },
         aborted: false,
-        xmlFormatError: false,
       })
 
       const sessionManager = createSessionManager({
@@ -2625,7 +2573,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 10, completionTokens: 5 },
         timing: { ttft: 1, completionTime: 1, tps: 5, prefillTps: 10 },
         aborted: false,
-        xmlFormatError: false,
       })
 
       const sessionManager = createSessionManager({
@@ -2702,7 +2649,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 10, completionTokens: 5 },
         timing: { ttft: 1, completionTime: 1, tps: 5, prefillTps: 10 },
         aborted: false,
-        xmlFormatError: false,
       })
 
       const sessionManager = createSessionManager({
@@ -2764,7 +2710,6 @@ describe('chat orchestrator', () => {
           usage: { promptTokens: 190000, completionTokens: 100 },
           timing: { ttft: 1, completionTime: 1, tps: 100, prefillTps: 190000 },
           aborted: false,
-          xmlFormatError: false,
         })
         .mockResolvedValueOnce({
           content: 'Built',
@@ -2773,7 +2718,6 @@ describe('chat orchestrator', () => {
           usage: { promptTokens: 20000, completionTokens: 5 },
           timing: { ttft: 1, completionTime: 1, tps: 5, prefillTps: 20000 },
           aborted: false,
-          xmlFormatError: false,
         })
 
       const sessionManager = createSessionManager({
@@ -2833,7 +2777,6 @@ describe('chat orchestrator', () => {
         usage: { promptTokens: 5, completionTokens: 2 },
         timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 5 },
         aborted: false,
-        xmlFormatError: false,
       })
 
       const sessionManager = createSessionManager({

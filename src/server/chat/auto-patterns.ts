@@ -1,33 +1,66 @@
-export interface AutoPatternMatchContext {
-  xmlFormatError?: boolean
+export interface RetryPatternConfig {
+  field: 'thinking' | 'content' | 'both'
+  pattern: string
+  action: 'retry'
+  active: boolean
 }
 
-export interface AutoPattern {
-  match: RegExp | ((content: string, thinking?: string, context?: AutoPatternMatchContext) => boolean)
-  response: string
+export interface RetryPatternMatch {
+  pattern: string
+  field: string
+  matchedContent: string
 }
 
-export interface AutoMatch {
-  response: string
-}
+const VALID_FIELDS = ['thinking', 'content', 'both'] as const
 
-export function matchAutoPatterns(
+export function matchRetryPatterns(
   content: string,
   thinking: string | undefined,
-  patterns: AutoPattern[],
-  context?: AutoPatternMatchContext,
-): AutoMatch[] {
-  const matches: AutoMatch[] = []
+  patterns: RetryPatternConfig[],
+): RetryPatternMatch[] {
+  const matches: RetryPatternMatch[] = []
 
-  for (const pattern of patterns) {
-    const matched =
-      pattern.match instanceof RegExp
-        ? pattern.match.test(content) || (thinking !== undefined && pattern.match.test(thinking))
-        : pattern.match(content, thinking, context)
-    if (matched) {
-      matches.push({ response: pattern.response })
+  for (const config of patterns) {
+    if (!config.active) continue
+
+    let regex: RegExp
+    try {
+      regex = new RegExp(config.pattern)
+    } catch {
+      continue
+    }
+
+    const testContent = config.field === 'thinking' ? false : regex.test(content)
+    const testThinking = config.field === 'content' ? false : thinking !== undefined && regex.test(thinking)
+
+    if (testContent) {
+      matches.push({ pattern: config.pattern, field: config.field, matchedContent: content })
+    }
+    if (testThinking) {
+      matches.push({ pattern: config.pattern, field: config.field, matchedContent: thinking! })
     }
   }
 
   return matches
+}
+
+export function validateRetryPatterns(patterns: RetryPatternConfig[]): string[] {
+  const errors: string[] = []
+
+  for (const [i, p] of patterns.entries()) {
+    if (!VALID_FIELDS.includes(p.field as (typeof VALID_FIELDS)[number])) {
+      errors.push(`Pattern ${i}: Invalid field "${p.field}". Must be "thinking", "content", or "both".`)
+    }
+    if (!p.pattern || p.pattern.trim() === '') {
+      errors.push(`Pattern ${i}: Pattern is required.`)
+    } else {
+      try {
+        new RegExp(p.pattern)
+      } catch {
+        errors.push(`Pattern ${i}: Invalid regex "${p.pattern}".`)
+      }
+    }
+  }
+
+  return errors
 }

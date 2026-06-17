@@ -15,9 +15,9 @@ export const SETTINGS_KEYS = {
   DISPLAY_USER_PRESETS: 'display.userPresets',
   DISPLAY_FOLLOW_SYSTEM_THEME: 'display.followSystemTheme',
   DISPLAY_SHOW_OPEN_IN_EDITOR: 'display.showOpenInEditorLinks',
-  LLM_DISABLE_XML_PROTECTION: 'llm.disableXmlProtection',
   LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt',
   KEYBINDINGS: 'keybindings',
+  RETRY_PATTERNS: 'agent.retryPatterns',
 } as const
 
 interface SettingsState {
