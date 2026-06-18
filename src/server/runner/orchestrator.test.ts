@@ -93,7 +93,6 @@ describe('runOrchestrator', () => {
           id: 'build',
           name: 'Build',
           type: 'agent' as const,
-          toolMode: 'builder' as const,
           phase: 'build',
           transitions: [],
         },

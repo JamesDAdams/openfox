@@ -6,7 +6,7 @@
  * state ($done or $blocked) is reached.
  */
 
-import type { Session } from '../../shared/types.js'
+import type { Session, ToolCall, ToolResult } from '../../shared/types.js'
 import type { OrchestratorOptions, OrchestratorResult, NextAction } from '../runner/types.js'
 import type {
   WorkflowDefinition,
@@ -20,7 +20,12 @@ import type {
 import { TERMINAL_DONE, TERMINAL_BLOCKED } from './types.js'
 import { getEventStore, getCurrentContextWindowId } from '../events/index.js'
 import { createChatMessageMessage } from '../ws/protocol.js'
-import { runBuilderTurn, TurnMetrics, createMessageStartEvent, type BuilderTurnOptions } from '../chat/orchestrator.js'
+import {
+  runAgentTurn,
+  TurnMetrics,
+  createMessageStartEvent,
+  injectWorkflowKickoffIfNeeded,
+} from '../chat/orchestrator.js'
 import { executeSubAgent } from '../sub-agents/manager.js'
 import { loadAllAgentsDefault, findAgentById } from '../agents/registry.js'
 import { getToolRegistryForAgent } from '../tools/index.js'
@@ -389,26 +394,39 @@ export async function executeWorkflow(
         const turnMetrics = new TurnMetrics()
         const es = getEventStore()
         const append = (event: import('../events/types.js').TurnEvent) => es.append(sessionId, event)
-        const agentResult = await runBuilderTurn(
+
+        let stepDoneCalled = false
+
+        const agentResult = await runAgentTurn(
           {
             sessionManager,
             sessionId,
             llmClient,
-            injectStepDone: true,
             ...(options.statsIdentity ? { statsIdentity: options.statsIdentity } : {}),
-            ...(!firstEntryForStep.has(step.id) && !agentStep.prompt && options.injectBuilderKickoff === true
-              ? { injectBuilderKickoff: true }
-              : {}),
             ...(signal ? { signal } : {}),
             ...(onMessage ? { onMessage } : {}),
-          } as BuilderTurnOptions,
+          },
           turnMetrics,
+          'builder',
           append,
+          {
+            ...(!firstEntryForStep.has(step.id) && !agentStep.prompt && options.injectWorkflowKickoff === true
+              ? { injectKickoff: () => injectWorkflowKickoffIfNeeded(sessionManager, sessionId, es) }
+              : {}),
+            onToolExecuted: (toolCall: ToolCall, toolResult: ToolResult) => {
+              if (toolCall.name === 'step_done' && toolResult.success) {
+                stepDoneCalled = true
+              }
+              if (toolResult.success && ['write_file', 'edit_file'].includes(toolCall.name)) {
+                const path = toolCall.arguments['path'] as string
+                sessionManager.addModifiedFile(sessionId, path)
+              }
+            },
+          },
         )
 
         firstEntryForStep.add(step.id)
         const agentReturnValue = agentResult.returnValueResult ?? 'completed'
-        const stepDoneCalled = agentResult.stepDoneCalled ?? false
         lastStepOutput = {
           ...(agentResult.returnValueContent ? { content: agentResult.returnValueContent } : {}),
           ...(agentResult.returnValueResult ? { result: agentResult.returnValueResult } : {}),

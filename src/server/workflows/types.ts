@@ -53,11 +53,9 @@ interface StepBase {
   subGroup?: string
 }
 
-/** Full LLM call + tool execution loop (like the current builder turn) */
+/** Full LLM call + tool execution loop */
 export interface AgentStep extends StepBase {
   type: 'agent'
-  /** Which tool registry to use */
-  toolMode: 'builder' | 'planner'
   /** Injected as user message on first entry. Supports template variables. */
   prompt?: string
   /** Injected when re-entering after a failed verify. Supports template variables. */
@@ -73,8 +71,6 @@ export interface SubAgentStep extends StepBase {
   prompt?: string
   /** Injected when nudging the sub-agent. Supports template variables. */
   nudgePrompt?: string
-  /** Tool set override */
-  toolMode?: 'verifier' | 'builder'
 }
 
 /** Run a shell command, branch on exit code */

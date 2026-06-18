@@ -31,7 +31,7 @@ export interface OrchestratorOptions {
   llmClient: LLMClientWithModel
   statsIdentity?: StatsIdentity
   signal?: AbortSignal
-  injectBuilderKickoff?: boolean
+  injectWorkflowKickoff?: boolean
   /** Override the globally active workflow for this session */
   workflowId?: string
   /** Run only steps with this sub-group label */

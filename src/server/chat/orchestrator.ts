@@ -18,8 +18,8 @@ import type { AgentDefinition } from '../agents/types.js'
 import { getEventStore, getCurrentContextWindowId, getCurrentWindowMessageOptions } from '../events/index.js'
 import { buildSnapshotFromSessionState } from '../events/folding.js'
 import type { SessionManager } from '../session/index.js'
-import { getToolRegistryForAgent, PathAccessDeniedError, type ToolRegistry } from '../tools/index.js'
-import { BUILDER_KICKOFF_PROMPT, VERIFIER_KICKOFF_PROMPT, buildAgentReminder } from './prompts.js'
+import { getToolRegistryForAgent, PathAccessDeniedError } from '../tools/index.js'
+import { WORKFLOW_KICKOFF_PROMPT, VERIFIER_KICKOFF_PROMPT, buildAgentReminder } from './prompts.js'
 import {
   TurnMetrics,
   createMessageStartEvent,
@@ -102,7 +102,6 @@ export interface OrchestratorOptions {
   llmClient: LLMClientWithModel
   statsIdentity?: StatsIdentity
   signal?: AbortSignal
-  injectBuilderKickoff?: boolean
   /** Optional callback for WebSocket forwarding (temporary, until WS layer is refactored) */
   onMessage?: (msg: ServerMessage) => void
 }
@@ -153,12 +152,10 @@ export async function runChatTurn(options: OrchestratorOptions): Promise<void> {
   const turnMetrics = new TurnMetrics()
 
   try {
-    // Run the appropriate handler based on mode (agent ID)
-    if (mode === 'builder') {
-      await runBuilderTurn(options, turnMetrics, append)
-    } else {
-      await runGenericAgentTurn(options, turnMetrics, mode, append)
-    }
+    // Generic: use session mode as the agent ID. Workflow-specific callbacks
+    // (kickoff injection, step_done tracking) are handled by the workflow executor
+    // which calls runAgentTurn directly — not through runChatTurn.
+    await runAgentTurn(options, turnMetrics, mode, append)
 
     // Create end-of-turn snapshot
     const snapshot = buildSnapshot(sessionManager, sessionId, turnMetrics.buildStats(statsIdentity, mode))
@@ -326,12 +323,16 @@ function injectModeReminderIfNeeded(
   })
 }
 
-async function runGenericAgentTurn(
+export async function runAgentTurn(
   options: OrchestratorOptions,
   turnMetrics: TurnMetrics,
   agentId: string,
   append: (event: import('../events/types.js').TurnEvent) => void,
-): Promise<void> {
+  callbacks?: {
+    injectKickoff?: () => void
+    onToolExecuted?: (toolCall: ToolCall, toolResult: ToolResult) => void
+  },
+): Promise<{ returnValueContent?: string; returnValueResult?: string }> {
   const statsIdentity = resolveStatsIdentity(options)
   const allAgents = await loadAllAgentsDefault()
 
@@ -375,7 +376,7 @@ async function runGenericAgentTurn(
       }),
   })
 
-  await runTopLevelAgentLoop(
+  return runTopLevelAgentLoop(
     {
       mode: agentId,
       append,
@@ -393,123 +394,49 @@ async function runGenericAgentTurn(
       getConversationMessages: buildGetConversationMessages(options.sessionId, options.llmClient, append),
       injectModeReminder: () =>
         injectModeReminderIfNeeded(options.sessionManager, options.sessionId, agentId, allAgents, options.onMessage),
+      ...(callbacks?.injectKickoff ? { injectKickoff: callbacks.injectKickoff } : {}),
+      ...(callbacks?.onToolExecuted ? { onToolExecuted: callbacks.onToolExecuted } : {}),
     },
     turnMetrics,
   )
 }
 
 // ============================================================================
-// Builder Turn
+// Shared Helpers
 // ============================================================================
 
-export interface BuilderTurnOptions extends OrchestratorOptions {
-  injectBuilderKickoff?: boolean
-  injectStepDone?: boolean
-  stepDonePrompt?: string
-}
-
 /**
- * Return tool registry as-is.
- * The tools hash MUST remain stable regardless of injectStepDone.
- * All tools must ALWAYS be available to maintain LLM context caching.
+ * Inject a workflow kickoff prompt if one hasn't been injected yet.
+ * Used by both runChatTurn (workflow mode) and executeWorkflow (agent steps).
  */
-export function filterToolRegistryForStepDone(baseRegistry: ToolRegistry, _injectStepDone: boolean): ToolRegistry {
-  // Always return the base registry - do NOT filter tools
-  return baseRegistry
-}
-
-export async function runBuilderTurn(
-  options: BuilderTurnOptions,
-  turnMetrics: TurnMetrics,
-  append: (event: import('../events/types.js').TurnEvent) => void,
-): Promise<{ returnValueContent?: string; returnValueResult?: string; stepDoneCalled?: boolean }> {
-  const { sessionManager, sessionId } = options
-  const statsIdentity = resolveStatsIdentity(options)
-  const eventStore = getEventStore()
-  const allAgents = await loadAllAgentsDefault()
-
-  // Inject mode reminder only on mode switch
-  injectModeReminderIfNeeded(options.sessionManager, options.sessionId, 'builder', allAgents, options.onMessage)
-
-  const builderDef = findAgentById('builder', allAgents)!
-  const subAgentDefs = getSubAgents(allAgents)
-
-  let stepDoneCalled = false
-
-  return {
-    ...(await runTopLevelAgentLoop(
-      {
-        mode: 'builder',
-        append,
-        ...(await buildRetryPatterns()),
-        sessionManager,
-        sessionId,
-        llmClient: options.llmClient,
-        statsIdentity,
-        signal: options.signal,
-        onMessage: options.onMessage,
-        assembleRequest: (input) =>
-          assembleAgentRequest({
-            ...input,
-            agentDef: builderDef,
-            subAgentDefs,
-            modelName: options.llmClient.getModel(),
-          }),
-        getToolRegistry: () => {
-          const baseRegistry = getToolRegistryForAgent(builderDef)
-          return filterToolRegistryForStepDone(baseRegistry, options.injectStepDone === true)
-        },
-        getConversationMessages: buildGetConversationMessages(sessionId, options.llmClient, append),
-        injectModeReminder: () =>
-          injectModeReminderIfNeeded(
-            options.sessionManager,
-            options.sessionId,
-            'builder',
-            allAgents,
-            options.onMessage,
-          ),
-        onToolExecuted: (toolCall: ToolCall, toolResult: ToolResult) => {
-          if (toolCall.name === 'step_done' && toolResult.success) {
-            stepDoneCalled = true
-          }
-          if (toolResult.success && ['write_file', 'edit_file'].includes(toolCall.name)) {
-            const path = toolCall.arguments['path'] as string
-            sessionManager.addModifiedFile(sessionId, path)
-          }
-        },
-        injectKickoff: () => {
-          if (options.injectBuilderKickoff !== true) return
-          const session = sessionManager.requireSession(sessionId)
-          const currentWindowMessageOptions = getCurrentContextWindowId(sessionId)
-            ? { contextWindowId: getCurrentContextWindowId(sessionId)! }
-            : undefined
-          const events = eventStore.getEvents(sessionId)
-          const hasBuilderKickoff = events.some((e) => {
-            if (e.type !== 'message.start') return false
-            const data = e.data as { messageKind?: string; content?: string }
-            return data.messageKind === 'auto-prompt' && data.content?.includes('fulfil the')
-          })
-
-          if (!hasBuilderKickoff) {
-            const kickoffMsgId = crypto.randomUUID()
-            const kickoffContent = BUILDER_KICKOFF_PROMPT(session.criteria.length)
-            const msgMetadata = { type: 'workflow', name: 'Workflow', color: '#f59e0b' }
-            eventStore.append(
-              sessionId,
-              createMessageStartEvent(kickoffMsgId, 'user', kickoffContent, {
-                ...(currentWindowMessageOptions ?? {}),
-                isSystemGenerated: true,
-                messageKind: 'auto-prompt',
-                metadata: msgMetadata,
-              }),
-            )
-            eventStore.append(sessionId, { type: 'message.done', data: { messageId: kickoffMsgId } })
-          }
-        },
-      },
-      turnMetrics,
-    )),
-    stepDoneCalled,
+export function injectWorkflowKickoffIfNeeded(
+  sessionManager: SessionManager,
+  sessionId: string,
+  eventStore: ReturnType<typeof getEventStore>,
+): void {
+  const session = sessionManager.requireSession(sessionId)
+  const currentWindowMessageOptions = getCurrentContextWindowId(sessionId)
+    ? { contextWindowId: getCurrentContextWindowId(sessionId)! }
+    : undefined
+  const events = eventStore.getEvents(sessionId)
+  const hasKickoff = events.some((e) => {
+    if (e.type !== 'message.start') return false
+    const data = e.data as { messageKind?: string; content?: string }
+    return data.messageKind === 'auto-prompt' && data.content?.includes('fulfil the')
+  })
+  if (!hasKickoff) {
+    const kickoffMsgId = crypto.randomUUID()
+    const kickoffContent = WORKFLOW_KICKOFF_PROMPT(session.criteria.length)
+    eventStore.append(
+      sessionId,
+      createMessageStartEvent(kickoffMsgId, 'user', kickoffContent, {
+        ...(currentWindowMessageOptions ?? {}),
+        isSystemGenerated: true,
+        messageKind: 'auto-prompt',
+        metadata: { type: 'workflow', name: 'Workflow', color: '#f59e0b' },
+      }),
+    )
+    eventStore.append(sessionId, { type: 'message.done', data: { messageId: kickoffMsgId } })
   }
 }
 

@@ -35,7 +35,6 @@ function makeWorkflow(
         id: 'build',
         name: 'Build',
         type: 'agent' as const,
-        toolMode: 'builder' as const,
         phase: 'build',
         transitions: [{ when: { type: 'always' as const }, goto: '$done' }],
       },
@@ -81,7 +80,7 @@ describe('loadUserWorkflows', () => {
       join(workflowsDir, 'bad.workflow.json'),
       JSON.stringify({
         metadata: { name: 'No ID' },
-        steps: [{ id: 's', name: 's', type: 'agent', toolMode: 'builder', phase: 'build', transitions: [] }],
+        steps: [{ id: 's', name: 's', type: 'agent', phase: 'build', transitions: [] }],
       }),
     )
 

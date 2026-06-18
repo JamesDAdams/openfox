@@ -861,7 +861,7 @@ describe('createWebSocketServer', () => {
       id: 'session-1',
       projectId: 'project-1',
       workdir: '/tmp/project',
-      mode: 'builder',
+      mode: 'planner',
       phase: 'blocked',
       isRunning: false,
       criteria: [{ id: 'tests-pass', description: 'Tests pass', status: { type: 'pending' }, attempts: [] }],
@@ -1021,13 +1021,6 @@ describe('createWebSocketServer', () => {
 
     sessionState.isRunning = false
 
-    sessionState.mode = 'planner'
-    harness.send({ id: 'runner-invalid-mode', type: 'runner.launch', payload: {} })
-    expect(await harness.nextMessage((message) => message.id === 'runner-invalid-mode')).toMatchObject({
-      payload: { code: 'INVALID_MODE' },
-    })
-
-    sessionState.mode = 'builder'
     sessionState.criteria = [
       {
         id: 'tests-pass',

@@ -500,7 +500,9 @@ export function createWebSocketServer(
     }
 
     sessionManager.clearMessageQueue(sessionId)
-    // runChatTurn in startTurnWithCompletionChain already sets isRunning=false in finally
+    // runChatTurn in startTurnWithCompletionChain already sets isRunning=false in finally.
+    // For the runner orchestrator path (which bypasses runChatTurn), the caller's
+    // .finally() block handles setRunning(false) explicitly.
     const contextState = sessionManager.getContextState(sessionId)
     sendFn(sessionId, createContextStateMessage(contextState))
   }
@@ -1060,12 +1062,6 @@ async function handleClientMessage(
         return
       }
 
-      // Only allow launching from builder mode
-      if (session.mode !== 'builder') {
-        send(createErrorMessage('INVALID_MODE', 'Runner can only be launched in builder mode', message.id))
-        return
-      }
-
       // Check if there are pending criteria (skip when a specific workflow is
       // requested — the workflow's own startCondition handles validation)
       const launchPayloadEarly = message.payload as { workflowId?: string } | undefined
@@ -1121,7 +1117,7 @@ async function handleClientMessage(
         sessionId,
         llmClient: llmForSession(sessionId),
         statsIdentity: statsForSession(sessionId),
-        injectBuilderKickoff: !hasUserMessage,
+        injectWorkflowKickoff: !hasUserMessage,
         ...(launchPayload?.workflowId ? { workflowId: launchPayload.workflowId } : {}),
         ...(launchPayload?.subGroup ? { subGroup: launchPayload.subGroup } : {}),
         ...(hasUserMessage
@@ -1144,6 +1140,9 @@ async function handleClientMessage(
           // Error events are handled inside runOrchestrator and appended to EventStore
         })
         .finally(() => {
+          // Runner orchestrator bypasses runChatTurn, so isRunning must be cleared here
+          sessionManager.setRunning(sessionId, false)
+          sendForSession(sessionId, createSessionRunningMessage(false))
           cleanupAfterTurn(sessionId, controller, sendForSession, true)
         })
 

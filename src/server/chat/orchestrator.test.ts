@@ -199,7 +199,7 @@ vi.mock('../agents/registry.js', () => {
 })
 
 import { PathAccessDeniedError } from '../tools/path-security.js'
-import { TurnMetrics, runBuilderTurn, runChatTurn, runVerifierTurn } from './orchestrator.js'
+import { TurnMetrics, runAgentTurn, runChatTurn, runVerifierTurn } from './orchestrator.js'
 
 function createEventStore() {
   const eventsBySession = new Map<
@@ -808,7 +808,7 @@ describe('chat orchestrator', () => {
       })
 
     const appendMock = vi.fn()
-    await runBuilderTurn(
+    await runAgentTurn(
       {
         sessionManager: sessionManager as never,
         sessionId: 'session-1',
@@ -816,7 +816,16 @@ describe('chat orchestrator', () => {
         onMessage: vi.fn(),
       },
       new TurnMetrics(),
+      'builder',
       appendMock,
+      {
+        onToolExecuted: (toolCall, toolResult) => {
+          if (toolResult.success && ['write_file', 'edit_file'].includes(toolCall.name)) {
+            const path = toolCall.arguments['path'] as string
+            sessionManager.addModifiedFile('session-1', path)
+          }
+        },
+      },
     )
 
     const appendedTypes = appendMock.mock.calls.map(([event]) => event.type)
@@ -885,7 +894,7 @@ describe('chat orchestrator', () => {
       })
 
     const appendMock = vi.fn()
-    await runBuilderTurn(
+    await runAgentTurn(
       {
         sessionManager: deniedManager as never,
         sessionId: 'session-1',
@@ -893,6 +902,7 @@ describe('chat orchestrator', () => {
         onMessage: vi.fn(),
       },
       new TurnMetrics(),
+      'builder',
       appendMock,
     )
     expect(appendMock.mock.calls.find(([event]) => event.type === 'tool.result')?.[0]).toMatchObject({
@@ -951,7 +961,7 @@ describe('chat orchestrator', () => {
     })
 
     await expect(
-      runBuilderTurn(
+      runAgentTurn(
         {
           sessionManager: errorManager as never,
           sessionId: 'session-1',
@@ -959,6 +969,7 @@ describe('chat orchestrator', () => {
           onMessage: vi.fn(),
         },
         new TurnMetrics(),
+        'builder',
         vi.fn(),
       ),
     ).rejects.toThrow('unexpected builder failure')
@@ -1026,7 +1037,7 @@ describe('chat orchestrator', () => {
     })
 
     const appendMock = vi.fn()
-    await runBuilderTurn(
+    await runAgentTurn(
       {
         sessionManager: sessionManager as never,
         sessionId: 'session-1',
@@ -1034,6 +1045,7 @@ describe('chat orchestrator', () => {
         onMessage: vi.fn(),
       },
       new TurnMetrics(),
+      'builder',
       appendMock,
     )
 
@@ -1110,7 +1122,7 @@ describe('chat orchestrator', () => {
     })
 
     const appendMock = vi.fn()
-    await runBuilderTurn(
+    await runAgentTurn(
       {
         sessionManager: sessionManager as never,
         sessionId: 'session-1',
@@ -1118,6 +1130,7 @@ describe('chat orchestrator', () => {
         onMessage: vi.fn(),
       },
       new TurnMetrics(),
+      'builder',
       appendMock,
     )
 
@@ -1125,7 +1138,7 @@ describe('chat orchestrator', () => {
     expect(capturedTools).toContain('step_done')
   })
 
-  it('injects step_done tool when injectStepDone is true', async () => {
+  it('includes step_done tool for builder agent turns', async () => {
     const eventStore = createEventStore()
     getEventStoreMock.mockReturnValue(eventStore)
     getCurrentContextWindowIdMock.mockReturnValue('window-1')
@@ -1180,15 +1193,15 @@ describe('chat orchestrator', () => {
       },
     })
 
-    await runBuilderTurn(
+    await runAgentTurn(
       {
         sessionManager: sessionManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
         onMessage: vi.fn(),
-        injectStepDone: true,
       },
       new TurnMetrics(),
+      'builder',
       vi.fn(),
     )
 
@@ -1229,13 +1242,14 @@ describe('chat orchestrator', () => {
       },
     })
 
-    await runBuilderTurn(
+    await runAgentTurn(
       {
         sessionManager: sessionManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
       },
       new TurnMetrics(),
+      'builder',
       vi.fn(),
     )
 
@@ -1282,15 +1296,31 @@ describe('chat orchestrator', () => {
       },
     })
 
-    await runBuilderTurn(
+    await runAgentTurn(
       {
         sessionManager: sessionManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
-        injectBuilderKickoff: true,
       },
       new TurnMetrics(),
+      'builder',
       vi.fn(),
+      {
+        injectKickoff: () => {
+          eventStore.append('session-1', {
+            type: 'message.start',
+            data: {
+              messageId: 'kickoff-1',
+              role: 'user',
+              content: 'Implement the task and make sure you fulfil',
+              isSystemGenerated: true,
+              messageKind: 'auto-prompt',
+              metadata: { type: 'workflow', name: 'Workflow', color: '#f59e0b' },
+            },
+          })
+          eventStore.append('session-1', { type: 'message.done', data: { messageId: 'kickoff-1' } })
+        },
+      },
     )
 
     const kickoffEvent = eventStore.append.mock.calls.find(([, event]) => {
@@ -2048,13 +2078,14 @@ describe('chat orchestrator', () => {
         },
       })
 
-      await runBuilderTurn(
+      await runAgentTurn(
         {
           sessionManager: sessionManager as never,
           sessionId: 'session-1',
           llmClient: { getModel: () => 'qwen3-32b' } as never,
         },
         new TurnMetrics(),
+        'builder',
         vi.fn(),
       )
 
@@ -2114,13 +2145,14 @@ describe('chat orchestrator', () => {
         },
       })
 
-      await runBuilderTurn(
+      await runAgentTurn(
         {
           sessionManager: sessionManager as never,
           sessionId: 'session-1',
           llmClient: { getModel: () => 'qwen3-32b' } as never,
         },
         new TurnMetrics(),
+        'builder',
         vi.fn(),
       )
 
@@ -2138,7 +2170,7 @@ describe('chat orchestrator', () => {
       )
     })
 
-    it('injects step_done tool when injectStepDone is true', async () => {
+    it('includes step_done tool for builder agent turns', async () => {
       const eventStore = createEventStore()
       getEventStoreMock.mockReturnValue(eventStore)
 
@@ -2190,14 +2222,14 @@ describe('chat orchestrator', () => {
         },
       })
 
-      await runBuilderTurn(
+      await runAgentTurn(
         {
           sessionManager: sessionManager as never,
           sessionId: 'session-1',
           llmClient: { getModel: () => 'qwen3-32b' } as never,
-          injectStepDone: true,
         },
         new TurnMetrics(),
+        'builder',
         vi.fn(),
       )
 
@@ -2268,13 +2300,14 @@ describe('chat orchestrator', () => {
         },
       })
 
-      await runBuilderTurn(
+      await runAgentTurn(
         {
           sessionManager: sessionManager as never,
           sessionId: 'session-1',
           llmClient: { getModel: () => 'qwen3-32b' } as any,
         },
         new TurnMetrics(),
+        'builder',
         append,
       )
 

@@ -292,7 +292,7 @@ export function buildAgentReminder(agentDef: AgentDefinition): string {
 // Utility Prompts
 // ============================================================================
 
-export const BUILDER_KICKOFF_PROMPT = (criteriaCount: number) =>
+export const WORKFLOW_KICKOFF_PROMPT = (criteriaCount: number) =>
   `Implement the task and make sure you fulfil the ${criteriaCount} criteria.`
 
 export const VERIFIER_KICKOFF_PROMPT =

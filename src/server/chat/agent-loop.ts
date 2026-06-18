@@ -91,7 +91,7 @@ export interface TopLevelLoopConfig {
   }
   getToolRegistry: () => ToolRegistry
   onToolExecuted?: ((toolCall: ToolCall, result: ToolResult) => void) | undefined
-  injectKickoff?: (() => void) | undefined
+  injectKickoff?: (() => void | Promise<void>) | undefined
   /** Called after auto-compaction completes within the loop, before the next iteration.
    *  Reinjects the agent definition reminder into the new context window. */
   injectModeReminder?: (() => void) | undefined
@@ -140,7 +140,7 @@ export async function runTopLevelAgentLoop(
 
     // Inject kickoff prompt (e.g., builder kickoff) on first iteration
     if (retryLimiter.count() === 0) {
-      config.injectKickoff?.()
+      await config.injectKickoff?.()
     }
 
     const { content: instructionContent, files } = await getAllInstructions(session.workdir, session.projectId)
