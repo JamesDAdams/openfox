@@ -30,7 +30,7 @@ export async function startChatSession(
     isSystemGenerated?: boolean
   },
 ): Promise<void> {
-  const { sessionManager, llmClient, statsIdentity, broadcastForSession } = deps
+  const { sessionManager, llmClient, broadcastForSession } = deps
 
   const session = sessionManager.getSession(sessionId)
   if (!session) {
@@ -63,20 +63,6 @@ export async function startChatSession(
   broadcastForSession(sessionId, createSessionRunningMessage(true))
 
   try {
-    // Auto-compact context
-    const { maybeAutoCompactContext } = await import('../context/auto-compaction.js')
-    await maybeAutoCompactContext({
-      sessionManager,
-      sessionId,
-      llmClient,
-      statsIdentity,
-      signal: controller.signal,
-    })
-
-    if (controller.signal.aborted) {
-      return
-    }
-
     // Add user message
     const userMessage = sessionManager.addMessage(sessionId, {
       role: 'user',

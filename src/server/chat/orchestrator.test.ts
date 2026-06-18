@@ -2695,6 +2695,7 @@ describe('chat orchestrator', () => {
     it('auto-compacts builder context before the next LLM call when over threshold', async () => {
       const eventStore = createEventStore()
       getEventStoreMock.mockReturnValue(eventStore)
+      const append = vi.fn()
 
       getContextMessagesMock.mockReturnValue([{ role: 'user' as const, content: 'Build this' }])
       getConversationMessagesMock.mockReturnValue([
@@ -2753,14 +2754,16 @@ describe('chat orchestrator', () => {
         {
           sessionManager: sessionManager as never,
           sessionId: 'session-1',
-          llmClient: { getModel: () => 'qwen3-32b' } as never,
+          llmClient: { getModel: () => 'qwen3-32b' } as any,
         },
         new TurnMetrics(),
-        vi.fn(),
+        append,
       )
 
-      // Compaction now emits context.compacted event instead of calling compactContext
-      const compactEvents = eventStore.getEvents('session-1').filter((e: any) => e.type === 'context.compacted')
+      // Compaction emits context.compacted via the append function
+      const compactEvents = append.mock.calls
+        .map((args: unknown[]) => args[0] as any)
+        .filter((e: any) => e.type === 'context.compacted')
       expect(compactEvents.length).toBeGreaterThanOrEqual(1)
     })
 

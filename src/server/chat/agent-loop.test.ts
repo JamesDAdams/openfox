@@ -47,11 +47,6 @@ vi.mock('../../cli/paths.js', () => ({
   getGlobalConfigDir: vi.fn().mockReturnValue('/test/config'),
 }))
 
-// Mock auto-compaction
-vi.mock('../context/auto-compaction.js', () => ({
-  maybeAutoCompactContext: vi.fn(),
-}))
-
 // Mock conversation history
 vi.mock('./conversation-history.js', () => ({
   getConversationMessages: vi.fn().mockReturnValue([]),

@@ -17,7 +17,7 @@ import { createLLMClient } from '../llm/index.js'
 import { runChatTurn } from '../chat/orchestrator.js'
 
 import { runOrchestrator } from '../runner/index.js'
-import { performManualContextCompaction } from '../context/auto-compaction.js'
+import { compactContext } from '../context/auto-compaction.js'
 import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
 import { loadAllAgentsDefault, getSubAgents } from '../agents/registry.js'
@@ -883,28 +883,24 @@ async function handleClientMessage(
         return
       }
 
-      const contextState = sessionManager.getContextState(sessionId)
-      const tokensBefore = contextState.currentTokens
-
       // Acknowledge immediately
       send({ type: 'ack', payload: {}, id: message.id })
 
-      // Perform compaction asynchronously
+      // Perform compaction (direct LLM call, no agent loop)
       ;(async () => {
         try {
-          await performManualContextCompaction({
+          await compactContext({
             sessionManager,
             sessionId,
             llmClient: llmForSession(sessionId),
             statsIdentity: statsForSession(sessionId),
-            tokenCountAtClose: tokensBefore,
           })
 
           // Send updated context state
           const newContextState = sessionManager.getContextState(sessionId)
           sendForSession(sessionId, createContextStateMessage(newContextState))
 
-          // Send updated session state so client sees all messages
+          // Send updated session state so client sees the compaction summary
           const updatedSession = sessionManager.requireSession(sessionId)
           const compactEventStore = getEventStore()
           const compactEvents = compactEventStore.getEvents(sessionId)

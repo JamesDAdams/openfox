@@ -26,10 +26,6 @@ vi.mock('./execute-tools.js', () => ({
   executeTools: vi.fn(),
 }))
 
-vi.mock('../context/auto-compaction.js', () => ({
-  maybeAutoCompactContext: vi.fn(),
-}))
-
 vi.mock('../context/compactor.js', () => ({
   shouldCompact: vi.fn().mockReturnValue(false),
 }))
@@ -206,29 +202,6 @@ describe('agentLoop integration', () => {
     expect(chatDoneEvents.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('rejects tool calls in compaction mode and continues loop', async () => {
-    const append = vi.fn()
-    const toolCall: ToolCall = { id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } }
-
-    ;(consumeStreamGenerator as any)
-      .mockResolvedValueOnce(makeStreamResult({ toolCalls: [toolCall], finishReason: 'tool_calls' }))
-      .mockResolvedValueOnce(makeStreamResult({ content: 'Summary', finishReason: 'stop' }))
-
-    await runTopLevelAgentLoop(makeConfig({ append, loopMode: 'compaction' }), turnMetrics)
-
-    // Should have called streamLLM twice
-    expect(consumeStreamGenerator).toHaveBeenCalledTimes(2)
-    // Should NOT have called executeTools
-    expect(executeTools).not.toHaveBeenCalled()
-    // Should have appended a rejection message
-    const startEvents = append.mock.calls.filter(
-      (args: unknown[]) =>
-        (args[0] as any).type === 'message.start' &&
-        (args[0] as any).data?.content?.includes('Tool calls are not possible'),
-    )
-    expect(startEvents.length).toBeGreaterThanOrEqual(1)
-  })
-
   it('continues loop when retry pattern matches', async () => {
     const append = vi.fn()
 
@@ -295,31 +268,52 @@ describe('agentLoop integration', () => {
     expect(truncatedEvents.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('places compaction summary in the new context window, not the closed one', async () => {
+  it('auto-compacts within the loop when threshold is exceeded, then continues normally', async () => {
     const append = vi.fn()
+    const injectModeReminder = vi.fn()
 
-    ;(consumeStreamGenerator as any).mockResolvedValue(
-      makeStreamResult({ content: 'Compacted summary', finishReason: 'stop' }),
+    // First call: normal response. Second call: compaction summary. Third call: normal response after compaction.
+    ;(consumeStreamGenerator as any)
+      .mockResolvedValueOnce(makeStreamResult({ content: 'Normal response', finishReason: 'stop' }))
+      .mockResolvedValueOnce(makeStreamResult({ content: 'Compacted summary', finishReason: 'stop' }))
+      .mockResolvedValueOnce(makeStreamResult({ content: 'Final response after compaction', finishReason: 'stop' }))
+
+    // Trigger compaction after first LLM call, then return false thereafter
+    const { shouldCompact } = await import('../context/compactor.js')
+    ;(shouldCompact as any).mockReturnValueOnce(true)
+
+    await runTopLevelAgentLoop(
+      makeConfig({ append, injectModeReminder, getConversationMessages: vi.fn().mockResolvedValue([]) }),
+      turnMetrics,
     )
 
-    await runTopLevelAgentLoop(makeConfig({ append, loopMode: 'compaction' }), turnMetrics)
+    // Should have called streamLLM 3 times (normal → compaction → normal)
+    expect(consumeStreamGenerator).toHaveBeenCalledTimes(3)
 
-    // Find the context.compacted event to get the newWindowId
+    // Should have emitted context.compacted
     const compactedEvents = append.mock.calls
       .map((args: unknown[]) => args[0] as any)
       .filter((e: any) => e.type === 'context.compacted')
     expect(compactedEvents.length).toBe(1)
-    const newWindowId = compactedEvents[0]!.data.newWindowId
-    expect(newWindowId).toBeTruthy()
 
-    // Find the compaction summary message.start event
-    const summaryEvents = append.mock.calls
+    // Should have called injectModeReminder after compaction
+    expect(injectModeReminder).toHaveBeenCalledTimes(1)
+
+    // Should have appended the compaction prompt
+    const promptEvents = append.mock.calls
       .map((args: unknown[]) => args[0] as any)
-      .filter((e: any) => e.type === 'message.start' && e.data?.isCompactionSummary)
-    expect(summaryEvents.length).toBe(1)
-    const summaryEvent = summaryEvents[0]!
+      .filter(
+        (e: any) =>
+          e.type === 'message.start' &&
+          e.data?.messageKind === 'auto-prompt' &&
+          e.data?.content?.includes('summarizing conversations'),
+      )
+    expect(promptEvents.length).toBe(1)
 
-    // The summary MUST be placed in the new window so the loop restart finds it
-    expect(summaryEvent.data.contextWindowId).toBe(newWindowId)
+    // Should emit chat.done at the end (normal completion)
+    const chatDoneEvents = append.mock.calls
+      .map((args: unknown[]) => args[0] as any)
+      .filter((e: any) => e.type === 'chat.done' && e.data?.reason === 'complete')
+    expect(chatDoneEvents.length).toBeGreaterThanOrEqual(1)
   })
 })

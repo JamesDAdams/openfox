@@ -254,9 +254,31 @@ export async function runChatTurn(options: OrchestratorOptions): Promise<void> {
 // ============================================================================
 
 /**
- * Inject system reminder only on mode switch.
- * Tracks last mode in session state to avoid re-injecting on subsequent turns.
- * This ensures the reminder is preserved across context compaction and session reloads.
+ * Check if a given context window already has a system reminder message.
+ * Scans events for a message.start in the given window with messageKind 'auto-prompt'
+ * and content containing '<system-reminder>'.
+ */
+function windowHasReminder(sessionId: string, windowId: string): boolean {
+  const eventStore = getEventStore()
+  const events = eventStore.getEvents(sessionId)
+
+  return events.some((event) => {
+    if (event.type !== 'message.start') return false
+    const data = event.data as { contextWindowId?: string; messageKind?: string; content?: string }
+    return (
+      data.contextWindowId === windowId &&
+      data.messageKind === 'auto-prompt' &&
+      typeof data.content === 'string' &&
+      data.content.includes('<system-reminder>')
+    )
+  })
+}
+
+/**
+ * Inject system reminder on mode switch or when current window lacks one.
+ * Tracks last mode in session state to avoid re-injecting on subsequent turns
+ * within the same context window. After compaction creates a new window,
+ * the reminder is reinjected because the new window won't have one.
  */
 function injectModeReminderIfNeeded(
   sessionManager: SessionManager,
@@ -268,12 +290,19 @@ function injectModeReminderIfNeeded(
   const eventStore = getEventStore()
   const session = sessionManager.requireSession(sessionId)
 
+  // Resolve current window ID once — used by guard check and message options
+  const currentWindowId = getCurrentContextWindowId(sessionId)
+
   // Check if we already injected this mode's reminder
   const lastModeReminder = session.executionState?.lastModeWithReminder
 
-  // Only inject if mode changed or this is the first time
+  // Only skip if same mode AND current window already has a reminder.
+  // After compaction, the window changes so we must reinject even if mode is the same.
+  // If no window context exists (edge case), fall back to old behavior: skip.
   if (lastModeReminder === agentId) {
-    return
+    if (!currentWindowId || windowHasReminder(sessionId, currentWindowId)) {
+      return
+    }
   }
 
   // Inject reminder for new mode
@@ -282,9 +311,7 @@ function injectModeReminderIfNeeded(
 
   const reminderContent = buildAgentReminder(agentDef)
   const reminderMsgId = crypto.randomUUID()
-  const currentWindowMessageOptions = getCurrentContextWindowId(sessionId)
-    ? { contextWindowId: getCurrentContextWindowId(sessionId)! }
-    : undefined
+  const currentWindowMessageOptions = currentWindowId ? { contextWindowId: currentWindowId } : undefined
 
   eventStore.append(sessionId, {
     type: 'message.start',
@@ -378,6 +405,8 @@ async function runGenericAgentTurn(
         assembleAgentRequest({ ...input, agentDef, subAgentDefs, modelName: options.llmClient.getModel() }),
       getToolRegistry: () => getToolRegistryForAgent(agentDef),
       getConversationMessages: buildGetConversationMessages(options.sessionId, options.llmClient, append),
+      injectModeReminder: () =>
+        injectModeReminderIfNeeded(options.sessionManager, options.sessionId, agentId, allAgents, options.onMessage),
     },
     turnMetrics,
   )
@@ -445,6 +474,14 @@ export async function runBuilderTurn(
           return filterToolRegistryForStepDone(baseRegistry, options.injectStepDone === true)
         },
         getConversationMessages: buildGetConversationMessages(sessionId, options.llmClient, append),
+        injectModeReminder: () =>
+          injectModeReminderIfNeeded(
+            options.sessionManager,
+            options.sessionId,
+            'builder',
+            allAgents,
+            options.onMessage,
+          ),
         onToolExecuted: (toolCall: ToolCall, toolResult: ToolResult) => {
           if (toolCall.name === 'step_done' && toolResult.success) {
             stepDoneCalled = true

@@ -36,7 +36,7 @@ import { executeTools, type ToolBatchContext } from './execute-tools.js'
 import { createRetryLimiter, type RetryLimiter } from './retry-limiter.js'
 import { drainQueue } from './drain-queue.js'
 import { COMPACTION_PROMPT } from './prompts.js'
-import { maybeAutoCompactContext } from '../context/auto-compaction.js'
+import { logger } from '../utils/logger.js'
 
 function emitPartialDoneEvents(
   _sessionId: string,
@@ -64,7 +64,6 @@ function emitPartialDoneEvents(
 
 export interface TopLevelLoopConfig {
   mode: ToolMode
-  loopMode?: 'normal' | 'compaction'
   retryPatterns?: RetryPatternConfig[]
   maxRetriesPerTurn?: number
   /** Function to append events (provided by orchestrator) */
@@ -93,6 +92,9 @@ export interface TopLevelLoopConfig {
   getToolRegistry: () => ToolRegistry
   onToolExecuted?: ((toolCall: ToolCall, result: ToolResult) => void) | undefined
   injectKickoff?: (() => void) | undefined
+  /** Called after auto-compaction completes within the loop, before the next iteration.
+   *  Reinjects the agent definition reminder into the new context window. */
+  injectModeReminder?: (() => void) | undefined
   /** Build conversation messages for the LLM, with image processing applied.
    *  Called each iteration to get fresh context. */
   getConversationMessages: () => Promise<RequestContextMessage[]>
@@ -118,6 +120,7 @@ export async function runTopLevelAgentLoop(
   let returnValueResult: string | undefined
   let currentMaxTokensOverride: number | undefined
   let lastPatternMatch: { pattern: string; field: string; matchedContent: string } | undefined
+  let compacting = false
 
   for (;;) {
     if (signal?.aborted) throw new Error('Aborted')
@@ -286,25 +289,30 @@ export async function runTopLevelAgentLoop(
     sessionManager.setCurrentContextSize(sessionId, result.usage.promptTokens)
 
     // Check compaction threshold with fresh promptTokens from LLM.
-    if (config.loopMode !== 'compaction') {
+    // When exceeded, append compaction prompt and let the next iteration
+    // handle summarization — same agent, same loop, no nested call.
+    if (!compacting) {
       const contextState = sessionManager.getContextState(sessionId)
       const { shouldCompact } = await import('../context/compactor.js')
       if (
         shouldCompact(contextState.currentTokens, contextState.maxTokens, runtimeConfig.context.compactionThreshold)
       ) {
-        // Post-check: compact if this single LLM response pushed us over the threshold.
-        await maybeAutoCompactContext({
-          sessionManager,
-          sessionId,
-          llmClient,
-          statsIdentity,
-          ...(signal ? { signal } : {}),
-        })
+        const compactPromptMsgId = crypto.randomUUID()
+        append(
+          createMessageStartEvent(compactPromptMsgId, 'user', COMPACTION_PROMPT, {
+            ...(currentWindowMessageOptions ?? {}),
+            isSystemGenerated: true,
+            messageKind: 'auto-prompt',
+            metadata: { type: 'compaction', name: 'Compaction', color: '#64748b' },
+          }),
+        )
+        append({ type: 'message.done', data: { messageId: compactPromptMsgId } })
+        compacting = true
         continue
       }
     }
 
-    if (result.finishReason === 'length' && result.toolCalls.length === 0) {
+    if (!compacting && result.finishReason === 'length' && result.toolCalls.length === 0) {
       if (truncationRetryCount < MAX_TRUNCATION_RETRIES) {
         truncationRetryCount += 1
         const currentMaxTokens = result.modelParams?.maxTokens ?? 16384
@@ -356,7 +364,7 @@ export async function runTopLevelAgentLoop(
     }
 
     if (result.toolCalls.length > 0) {
-      if (config.loopMode === 'compaction') {
+      if (compacting) {
         const rejectionMsgId = crypto.randomUUID()
         append(
           createMessageStartEvent(
@@ -443,15 +451,16 @@ ${COMPACTION_PROMPT}`,
       continue
     }
 
-    if (config.loopMode === 'compaction') {
+    if (compacting) {
       const summary = result.content?.trim() || result.thinkingContent?.trim() || ''
       if (!summary) {
         append({
           type: 'chat.error',
-          data: { error: 'Compaction produced empty summary', recoverable: false },
+          data: { error: 'Compaction produced empty summary, continuing with full context', recoverable: true },
         })
-        append(createChatDoneEvent(assistantMsgId, 'error'))
-        throw new Error('Compaction produced empty summary')
+        logger.warn('Compaction produced empty summary, continuing', { sessionId })
+        compacting = false
+        continue
       }
 
       const closedWindowId = getCurrentContextWindowId(sessionId) ?? ''
@@ -476,7 +485,10 @@ ${COMPACTION_PROMPT}`,
       append(createMessageDoneEvent(assistantMsgId, { stats: turnMetrics.buildStats(statsIdentity, mode) }))
       append(createChatDoneEvent(assistantMsgId, 'complete'))
 
-      break
+      // Reinject the agent reminder into the new window and continue normally
+      config.injectModeReminder?.()
+      compacting = false
+      continue
     }
 
     const stats = turnMetrics.buildStats(statsIdentity, mode)

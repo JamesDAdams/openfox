@@ -953,17 +953,6 @@ describe('createWebSocketServer', () => {
     expect(await harness.nextMessage((message) => message.type === 'session.state')).toMatchObject({
       type: 'session.state',
     })
-    // Compaction is now handled by the loop — it appends context.compacted event
-    const es = getEventStoreMock()
-    const compactEvents = es.getEvents('session-1')
-    const hasCompactedEvent = compactEvents.some((e: any) => e.type === 'context.compacted')
-    expect(hasCompactedEvent).toBe(true)
-    expect(streamLLMPureMock.mock.calls[1]?.[0]?.messages).toEqual(
-      expect.not.arrayContaining([
-        expect.objectContaining({ content: expect.stringContaining('Plan mode ACTIVE') }),
-        expect.objectContaining({ content: expect.stringContaining('Build mode ACTIVE') }),
-      ]),
-    )
 
     harness.send({ id: 'path-missing', type: 'path.confirm', payload: { callId: 'call-1', approved: true } })
     expect(await harness.nextMessage((message) => message.id === 'path-missing')).toMatchObject({
@@ -1074,8 +1063,19 @@ describe('createWebSocketServer', () => {
       createSession: vi.fn(() => sessionState),
       getSession: vi.fn(() => sessionState),
       requireSession: vi.fn(() => structuredClone(sessionState)),
+      getContextState: vi.fn(() => ({
+        currentTokens: 190000,
+        maxTokens: 200000,
+        compactionCount: 0,
+        dangerZone: true,
+        canCompact: true,
+        dynamicContextChanged: false,
+      })),
     })
-    getAllInstructionsMock.mockRejectedValueOnce(new Error('compact blew up'))
+    // Make getRuntimeConfig throw to simulate compaction failure
+    getRuntimeConfigMock.mockImplementation(() => {
+      throw new Error('compact blew up')
+    })
     const harness = await createHarness({ sessionManager })
 
     harness.send({ id: 'sl-ok', type: 'session.load', payload: { sessionId: 'session-1' } })

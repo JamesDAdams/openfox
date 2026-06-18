@@ -287,4 +287,152 @@ describe('System Reminder Injection', () => {
     expect(reminderCalls).toHaveLength(1)
     expect((reminderCalls[0]![1] as any).data.content).toContain('Plan Mode')
   })
+
+  it('reinjects reminder after compaction creates new window', async () => {
+    const eventStore = createEventStore()
+    vi.mocked(getEventStore).mockReturnValue(eventStore as any)
+    vi.mocked(loadAllAgentsDefault).mockResolvedValue([])
+
+    const windowA = 'window-a'
+    const windowB = 'window-b'
+
+    // Simulate state after first turn + compaction:
+    // Window A (closed) has the reminder, Window B (current) has only the summary
+    const existingEvents = [
+      {
+        type: 'message.start',
+        data: {
+          messageId: 'reminder-1',
+          role: 'user',
+          messageKind: 'auto-prompt',
+          content: '<system-reminder>\n# Plan Mode\nPlan carefully\n</system-reminder>',
+          contextWindowId: windowA,
+          isSystemGenerated: true,
+          metadata: { type: 'agent', name: 'Planner', color: '#6b7280' },
+        },
+      },
+      { type: 'message.done', data: { messageId: 'reminder-1' } },
+      {
+        type: 'context.compacted',
+        data: {
+          closedWindowId: windowA,
+          newWindowId: windowB,
+          beforeTokens: 1000,
+          afterTokens: 0,
+          summary: 'Compacted summary',
+        },
+      },
+      {
+        type: 'message.start',
+        data: {
+          messageId: 'summary-1',
+          role: 'assistant',
+          content: 'Compacted summary',
+          contextWindowId: windowB,
+          isCompactionSummary: true,
+        },
+      },
+      { type: 'message.done', data: { messageId: 'summary-1' } },
+    ]
+    eventStore.getEvents.mockReturnValue(existingEvents)
+
+    const state: any = {
+      current: {
+        id: 'session-1',
+        projectId: 'project-1',
+        workdir: '/tmp/project',
+        mode: 'planner',
+        phase: 'plan',
+        isRunning: true,
+        criteria: [],
+        executionState: { lastModeWithReminder: 'planner' },
+        messages: [{ id: 'user-1', role: 'user', content: 'Continue after compaction' }],
+      },
+    }
+    const sessionManager = createSessionManager(state)
+
+    await runChatTurn({
+      sessionManager: sessionManager as any,
+      sessionId: 'session-1',
+      llmClient: { getModel: () => 'qwen3-32b' } as any,
+    })
+
+    // Check that a NEW system reminder was injected into window B
+    const reminderCalls = eventStore.append.mock.calls.filter(
+      ([, event]: any) =>
+        event.type === 'message.start' &&
+        event.data.messageKind === 'auto-prompt' &&
+        event.data.content?.includes('<system-reminder>'),
+    )
+
+    expect(reminderCalls).toHaveLength(1)
+    const newReminder = (reminderCalls[0]![1] as any).data
+    expect(newReminder.contextWindowId).toBe(windowB)
+    expect(newReminder.content).toContain('Plan Mode')
+  })
+
+  it('does NOT inject duplicate reminder within same window (no compaction)', async () => {
+    const eventStore = createEventStore()
+    vi.mocked(getEventStore).mockReturnValue(eventStore as any)
+    vi.mocked(loadAllAgentsDefault).mockResolvedValue([])
+
+    const windowId = 'window-1'
+
+    // Simulate a session with a planner reminder in the CURRENT window
+    const existingEvents = [
+      {
+        type: 'session.initialized',
+        data: {
+          projectId: 'project-1',
+          workdir: '/tmp/project',
+          contextWindowId: windowId,
+        },
+      },
+      {
+        type: 'message.start',
+        data: {
+          messageId: 'reminder-1',
+          role: 'user',
+          messageKind: 'auto-prompt',
+          content: '<system-reminder>\n# Plan Mode\nPlan carefully\n</system-reminder>',
+          contextWindowId: windowId,
+          isSystemGenerated: true,
+          metadata: { type: 'agent', name: 'Planner', color: '#6b7280' },
+        },
+      },
+      { type: 'message.done', data: { messageId: 'reminder-1' } },
+    ]
+    eventStore.getEvents.mockReturnValue(existingEvents)
+
+    const state: any = {
+      current: {
+        id: 'session-1',
+        projectId: 'project-1',
+        workdir: '/tmp/project',
+        mode: 'planner',
+        phase: 'plan',
+        isRunning: true,
+        criteria: [],
+        executionState: { lastModeWithReminder: 'planner' },
+        messages: [{ id: 'user-1', role: 'user', content: 'Continue planning' }],
+      },
+    }
+    const sessionManager = createSessionManager(state)
+
+    await runChatTurn({
+      sessionManager: sessionManager as any,
+      sessionId: 'session-1',
+      llmClient: { getModel: () => 'qwen3-32b' } as any,
+    })
+
+    // Check that NO new system reminder was injected
+    const reminderCalls = eventStore.append.mock.calls.filter(
+      ([, event]: any) =>
+        event.type === 'message.start' &&
+        event.data.messageKind === 'auto-prompt' &&
+        event.data.content?.includes('<system-reminder>'),
+    )
+
+    expect(reminderCalls).toHaveLength(0)
+  })
 })
