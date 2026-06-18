@@ -32,6 +32,7 @@ vi.mock('../events/index.js', () => ({
 
 vi.mock('./conversation-history.js', () => ({
   getConversationMessages: vi.fn(() => []),
+  processEventsForConversation: vi.fn(async () => []),
 }))
 
 vi.mock('../context/instructions.js', () => ({
@@ -86,7 +87,11 @@ vi.mock('../skills/registry.js', () => ({
 }))
 
 vi.mock('../runtime-config.js', () => ({
-  getRuntimeConfig: vi.fn(() => ({ mode: 'development', context: { compactionThreshold: 0.9 } })),
+  getRuntimeConfig: vi.fn(() => ({
+    mode: 'development',
+    context: { compactionThreshold: 0.9 },
+    agent: { toolTimeout: 120000 },
+  })),
 }))
 
 vi.mock('../../cli/paths.js', () => ({
@@ -130,6 +135,14 @@ function createSessionManager(state: any) {
       dangerZone: false,
       canCompact: true,
     })),
+    getCurrentModelSettings: vi.fn(() => ({})),
+    getCurrentModelContext: vi.fn(() => 128000),
+    getDynamicContextChanged: vi.fn(() => false),
+    setDynamicContextChanged: vi.fn(),
+    getCachedPrompt: vi.fn(() => undefined),
+    setCachedPrompt: vi.fn(),
+    getCurrentWindowMessages: vi.fn(() => []),
+    addModifiedFile: vi.fn(),
     getQueueState: vi.fn(() => []),
     drainAsapMessages: vi.fn(() => []),
   }
@@ -144,17 +157,24 @@ describe('runVerifierTurn - Agent Registry Integration', () => {
     getToolRegistryForModeMock.mockReturnValue({ definitions: [], execute: vi.fn() })
     streamLLMPureMock.mockReturnValue({ kind: 'stream' })
 
-    // Need enough responses for nudges (10) + final stall + return_value nudge = 12
-    for (let i = 0; i < 12; i++) {
-      consumeStreamGeneratorMock.mockResolvedValueOnce({
-        content: 'All verified',
-        toolCalls: [],
-        segments: [{ type: 'text', content: 'All verified' }],
-        usage: { promptTokens: 10, completionTokens: 5 },
-        timing: { ttft: 1, completionTime: 1, tps: 5, prefillTps: 10 },
-        aborted: false,
-      })
-    }
+    // First response: no tool calls (triggers return_value nudge)
+    consumeStreamGeneratorMock.mockResolvedValueOnce({
+      content: 'All verified',
+      toolCalls: [],
+      segments: [{ type: 'text', content: 'All verified' }],
+      usage: { promptTokens: 10, completionTokens: 5 },
+      timing: { ttft: 1, completionTime: 1, tps: 5, prefillTps: 10 },
+      aborted: false,
+    })
+    // Second response: call return_value to terminate
+    consumeStreamGeneratorMock.mockResolvedValueOnce({
+      content: 'Done',
+      toolCalls: [{ id: 'rv-1', name: 'return_value', arguments: { content: 'All verified', result: 'success' } }],
+      segments: [],
+      usage: { promptTokens: 5, completionTokens: 2 },
+      timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 5 },
+      aborted: false,
+    })
 
     const state = {
       current: {

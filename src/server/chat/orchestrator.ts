@@ -33,7 +33,6 @@ import type { RequestContextMessage } from './request-context.js'
 import { resolveCachedAssembly } from './system-prompt-cache.js'
 import { runTopLevelAgentLoop } from './agent-loop.js'
 import { executeSubAgent } from '../sub-agents/manager.js'
-import { createVerifierNudgeConfig } from '../sub-agents/verifier-helpers.js'
 import { loadAllAgentsDefault, findAgentById, getSubAgents } from '../agents/registry.js'
 import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
@@ -41,9 +40,7 @@ import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
 import { logger } from '../utils/logger.js'
 import type { RetryPatternConfig } from './auto-patterns.js'
-import { processContextImages, loadVisionModelFromGlobalConfig } from '../context/image-processor.js'
-import { modelSupportsVision } from '../llm/profiles.js'
-import { getConversationMessages } from './conversation-history.js'
+import { getConversationMessages, processEventsForConversation } from './conversation-history.js'
 
 // Re-export for runner orchestrator
 export {
@@ -90,18 +87,7 @@ function buildGetConversationMessages(
   append: (event: import('../events/types.js').TurnEvent) => void,
 ): () => Promise<RequestContextMessage[]> {
   return async () => {
-    const eventStore = getEventStore()
-    const rawEvents = eventStore.getEvents(sessionId)
-    const modelVision = modelSupportsVision(llmClient.getModel())
-    const runtimeConfig = getRuntimeConfig()
-    const visionModel = runtimeConfig.llm.visionModel
-      ? { baseUrl: runtimeConfig.llm.baseUrl, model: runtimeConfig.llm.visionModel, timeout: runtimeConfig.llm.timeout }
-      : await loadVisionModelFromGlobalConfig()
-    const { events: processedEvents } = await processContextImages(rawEvents, {
-      modelSupportsVision: modelVision,
-      ...(visionModel ? { visionModel } : {}),
-      onEvent: (event) => append(event),
-    })
+    const processedEvents = await processEventsForConversation(sessionId, llmClient, (event) => append(event))
     return getConversationMessages({ type: 'toplevel', sessionId }, { events: processedEvents })
   }
 }
@@ -565,14 +551,20 @@ export async function runVerifierTurn(options: OrchestratorOptions, turnMetrics:
     toolRegistry,
     turnMetrics,
     statsIdentity,
-    signal,
-    onMessage,
-    nudgeConfig: createVerifierNudgeConfig(),
+    ...(signal ? { signal } : {}),
+    ...(onMessage ? { onMessage } : {}),
   })
 
+  // Compute verification result from session criteria state
+  const finalSession = sessionManager.requireSession(sessionId)
+  const failed = finalSession.criteria
+    .filter((c) => c.status.type === 'failed')
+    .map((c) => ({ id: c.id, reason: (c.status as { reason?: string | null }).reason ?? 'unknown' }))
+  const remaining = finalSession.criteria.filter((c) => c.status.type === 'completed')
+
   return {
-    allPassed: result.allPassed ?? true,
-    failed: result.failed ?? [],
+    allPassed: failed.length === 0 && remaining.length === 0,
+    failed,
     content: result.content,
   }
 }

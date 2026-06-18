@@ -70,9 +70,23 @@ describe('SubAgentManager', () => {
       getContextState: vi.fn().mockReturnValue({
         currentTokens: 1000,
         maxTokens: 128000,
-        messageCount: 10,
+        compactionCount: 0,
+        dangerZone: false,
+        canCompact: false,
+        dynamicContextChanged: false,
       }),
+      getCurrentModelSettings: vi.fn().mockReturnValue({}),
+      getCurrentModelContext: vi.fn().mockReturnValue(128000),
+      getDynamicContextChanged: vi.fn().mockReturnValue(false),
+      setDynamicContextChanged: vi.fn(),
+      getCachedPrompt: vi.fn().mockReturnValue(undefined),
+      setCachedPrompt: vi.fn(),
       getLspManager: vi.fn().mockReturnValue(undefined),
+      drainAsapMessages: vi.fn().mockReturnValue([]),
+      getCurrentWindowMessages: vi.fn().mockReturnValue([]),
+      updateMessage: vi.fn(),
+      getQueueState: vi.fn().mockReturnValue({ queued: 0, processing: false }),
+      addModifiedFile: vi.fn(),
     } as unknown as SessionManager
 
     let llmCallCount = 0

@@ -24,7 +24,11 @@ import type { RequestContextMessage } from './request-context.js'
 import { minimalMessagesToRequestContextMessages } from './request-context.js'
 import { buildContextMessagesFromEventHistory, foldContextState } from '../events/folding.js'
 import { getEventStore } from '../events/index.js'
+import { getRuntimeConfig } from '../runtime-config.js'
+import { processContextImages, loadVisionModelFromGlobalConfig } from '../context/image-processor.js'
+import { modelSupportsVision } from '../llm/profiles.js'
 import type { Attachment } from '../../shared/types.js'
+import type { LLMClientWithModel } from '../llm/client.js'
 
 // ============================================================================
 // Types
@@ -202,4 +206,28 @@ export function getConversationMessages(
   const contextMessages = buildContextMessages(events, scope)
 
   return minimalMessagesToRequestContextMessages(contextMessages, 'history')
+}
+
+/**
+ * Process raw events through image processing (vision fallback) and return
+ * the processed events. Shared by top-level and sub-agent conversation builders.
+ */
+export async function processEventsForConversation(
+  sessionId: string,
+  llmClient: LLMClientWithModel,
+  onEvent: (event: TurnEvent) => void,
+): Promise<StoredEvent[]> {
+  const eventStore = getEventStore()
+  const rawEvents = eventStore.getEvents(sessionId)
+  const modelVision = modelSupportsVision(llmClient.getModel())
+  const runtimeConfig = getRuntimeConfig()
+  const visionModel = runtimeConfig.llm?.visionModel
+    ? { baseUrl: runtimeConfig.llm.baseUrl, model: runtimeConfig.llm.visionModel, timeout: runtimeConfig.llm.timeout }
+    : await loadVisionModelFromGlobalConfig()
+  const { events: processedEvents } = await processContextImages(rawEvents, {
+    modelSupportsVision: modelVision,
+    ...(visionModel ? { visionModel } : {}),
+    onEvent,
+  })
+  return processedEvents
 }

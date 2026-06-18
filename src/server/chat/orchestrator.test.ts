@@ -59,6 +59,7 @@ vi.mock('../events/index.js', () => ({
 
 vi.mock('./conversation-history.js', () => ({
   getConversationMessages: getConversationMessagesMock,
+  processEventsForConversation: vi.fn(async (_sessionId: string, _llmClient: any, _onEvent: any) => []),
 }))
 
 vi.mock('../db/settings.js', () => ({
@@ -1388,11 +1389,11 @@ describe('chat orchestrator', () => {
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
       })
-      // Extra response for return_value nudge
+      // Call return_value to terminate
       .mockResolvedValueOnce({
         content: 'summary',
-        toolCalls: [],
-        segments: [{ type: 'text', content: 'summary' }],
+        toolCalls: [{ id: 'rv-1', name: 'return_value', arguments: { content: 'summary', result: 'success' } }],
+        segments: [],
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
@@ -1413,116 +1414,6 @@ describe('chat orchestrator', () => {
     expect(types).toContain('tool.call')
     expect(types).toContain('tool.result')
     expect(types).toContain('chat.done')
-  })
-
-  it('nudges verifier in the same context when it stops before terminalizing criteria', async () => {
-    const eventStore = createEventStore()
-    getEventStoreMock.mockReturnValue(eventStore)
-    getAllInstructionsMock.mockResolvedValue({ content: 'Verify carefully', files: [] })
-
-    const state: any = {
-      current: {
-        id: 'session-1',
-        projectId: 'project-1',
-        workdir: '/tmp/project',
-        mode: 'builder',
-        phase: 'verification',
-        isRunning: true,
-        criteria: [
-          {
-            id: 'tests-pass',
-            description: 'Tests pass',
-            status: { type: 'completed', completedAt: '2024-01-01T00:00:00.000Z' },
-            attempts: [],
-          },
-        ],
-        executionState: { modifiedFiles: ['src/index.ts'] },
-        summary: 'Task summary',
-        messages: [],
-      },
-    }
-    const sessionManager = createSessionManager(state)
-    const execute = vi.fn(async () => {
-      state.current.criteria = [
-        {
-          id: 'tests-pass',
-          description: 'Tests pass',
-          status: { type: 'failed', failedAt: '2024-01-01T00:00:00.000Z', reason: 'still broken' },
-          attempts: [],
-        },
-      ]
-      return { success: true, output: 'verification failed', durationMs: 15, truncated: false }
-    })
-
-    getToolRegistryForModeMock.mockReturnValue({
-      definitions: [{ type: 'function', function: { name: 'fail_criterion', description: 'Fail', parameters: {} } }],
-      execute,
-    })
-    streamLLMPureMock.mockReturnValue({ kind: 'stream' })
-    consumeStreamGeneratorMock
-      .mockResolvedValueOnce({
-        content: 'I need to keep verifying.',
-        toolCalls: [],
-        segments: [{ type: 'text', content: 'I need to keep verifying.' }],
-        usage: { promptTokens: 8, completionTokens: 3 },
-        timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 8 },
-        aborted: false,
-      })
-      .mockResolvedValueOnce({
-        content: 'marking failed',
-        toolCalls: [{ id: 'call-1', name: 'fail_criterion', arguments: { id: 'tests-pass', reason: 'still broken' } }],
-        segments: [],
-        usage: { promptTokens: 6, completionTokens: 2 },
-        timing: { ttft: 1, completionTime: 1, tps: 2, prefillTps: 6 },
-        aborted: false,
-      })
-      .mockResolvedValueOnce({
-        content: 'done',
-        toolCalls: [],
-        segments: [{ type: 'text', content: 'done' }],
-        usage: { promptTokens: 5, completionTokens: 1 },
-        timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
-        aborted: false,
-      })
-      // Extra response for return_value nudge
-      .mockResolvedValueOnce({
-        content: 'summary',
-        toolCalls: [],
-        segments: [{ type: 'text', content: 'summary' }],
-        usage: { promptTokens: 5, completionTokens: 1 },
-        timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
-        aborted: false,
-      })
-
-    const result = await runVerifierTurn(
-      {
-        sessionManager: sessionManager as never,
-        sessionId: 'session-1',
-        llmClient: { getModel: () => 'qwen3-32b' } as never,
-        onMessage: vi.fn(),
-      },
-      new TurnMetrics(),
-    )
-
-    expect(result).toMatchObject({ allPassed: false, failed: [{ id: 'tests-pass', reason: 'still broken' }] })
-    expect(execute).toHaveBeenCalledTimes(1)
-
-    expect(streamLLMPureMock.mock.calls).toHaveLength(4)
-    // After unification: sub-agents use assembleAgentRequest via getConversationMessages.
-    // The mocked getConversationMessages returns [], so the first call has empty history.
-    // The nudge is emitted to the event store and will be included on the next iteration.
-
-    expect(
-      eventStore.append.mock.calls.find(([, event]) => {
-        if (event.type !== 'message.start') return false
-        const data = event.data as { content?: string; subAgentType?: string; messageKind?: string }
-        return (
-          data.subAgentType === 'verifier' &&
-          data.messageKind === 'correction' &&
-          data.content?.includes('tests-pass') === true
-        )
-      }),
-    ).toBeDefined()
   })
 
   it('verifier continues without nudge after tool calls (tool calls are progress)', async () => {
@@ -1606,11 +1497,11 @@ describe('chat orchestrator', () => {
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
       })
-      // Extra response for return_value nudge
+      // Call return_value to terminate
       .mockResolvedValueOnce({
         content: 'summary',
-        toolCalls: [],
-        segments: [{ type: 'text', content: 'summary' }],
+        toolCalls: [{ id: 'rv-1', name: 'return_value', arguments: { content: 'summary', result: 'success' } }],
+        segments: [],
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
@@ -1645,76 +1536,6 @@ describe('chat orchestrator', () => {
         }),
       ]),
     })
-  })
-
-  it('nudges verifier 10 times, then exits without failing criteria', async () => {
-    const eventStore = createEventStore()
-    getEventStoreMock.mockReturnValue(eventStore)
-    getAllInstructionsMock.mockResolvedValue({ content: 'Verify carefully', files: [] })
-
-    const state: any = {
-      current: {
-        id: 'session-1',
-        projectId: 'project-1',
-        workdir: '/tmp/project',
-        mode: 'builder',
-        phase: 'verification',
-        isRunning: true,
-        criteria: [
-          {
-            id: 'tests-pass',
-            description: 'Tests pass',
-            status: { type: 'completed', completedAt: '2024-01-01T00:00:00.000Z' },
-            attempts: [],
-          },
-        ],
-        executionState: { modifiedFiles: ['src/index.ts'] },
-        summary: 'Task summary',
-        messages: [],
-      },
-    }
-    const sessionManager = createSessionManager(state)
-
-    getToolRegistryForModeMock.mockReturnValue({
-      definitions: [{ type: 'function', function: { name: 'fail_criterion', description: 'Fail', parameters: {} } }],
-      execute: vi.fn(),
-    })
-    streamLLMPureMock.mockReturnValue({ kind: 'stream' })
-    // 11 for verifier nudges/stall + 1 for return_value nudge = 12
-    for (let index = 0; index < 12; index++) {
-      consumeStreamGeneratorMock.mockResolvedValueOnce({
-        content: `stopped-${index}`,
-        toolCalls: [],
-        segments: [{ type: 'text', content: `stopped-${index}` }],
-        usage: { promptTokens: 8, completionTokens: 1 },
-        timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
-        aborted: false,
-      })
-    }
-
-    const result = await runVerifierTurn(
-      {
-        sessionManager: sessionManager as never,
-        sessionId: 'session-1',
-        llmClient: { getModel: () => 'qwen3-32b' } as never,
-        onMessage: vi.fn(),
-      },
-      new TurnMetrics(),
-    )
-
-    expect(result).toMatchObject({ allPassed: false, failed: [] })
-    expect(sessionManager.updateCriterionStatus).not.toHaveBeenCalled()
-    expect(sessionManager.addCriterionAttempt).not.toHaveBeenCalled()
-    expect(streamLLMPureMock.mock.calls).toHaveLength(12)
-
-    const nudgeMessages = eventStore.append.mock.calls.filter(
-      ([, event]) =>
-        event.type === 'message.start' &&
-        (event.data as any).messageKind === 'correction' &&
-        (event.data as any).subAgentType === 'verifier' &&
-        (event.data as any).content?.includes('You stopped before finalizing verification.'),
-    )
-    expect(nudgeMessages).toHaveLength(10)
   })
 
   it('does not nudge verifier when tool calls terminalize criteria', async () => {
@@ -1797,11 +1618,11 @@ describe('chat orchestrator', () => {
       timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
       aborted: false,
     })
-    // Extra response for return_value nudge
+    // Call return_value to terminate
     consumeStreamGeneratorMock.mockResolvedValueOnce({
       content: 'summary',
-      toolCalls: [],
-      segments: [{ type: 'text', content: 'summary' }],
+      toolCalls: [{ id: 'rv-1', name: 'return_value', arguments: { content: 'summary', result: 'success' } }],
+      segments: [],
       usage: { promptTokens: 5, completionTokens: 1 },
       timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
       aborted: false,
@@ -1819,7 +1640,7 @@ describe('chat orchestrator', () => {
 
     // Should pass - criterion was terminalized
     expect(result).toMatchObject({ allPassed: true, failed: [] })
-    expect(execute).toHaveBeenCalledTimes(2) // 1 read_file + 1 pass_criterion
+    expect(execute).toHaveBeenCalledTimes(3) // 1 read_file + 1 pass_criterion + 1 return_value
 
     // Verify NO nudge messages were emitted (criteria were terminalized)
     // Filter for stall messages specifically
@@ -1831,309 +1652,6 @@ describe('chat orchestrator', () => {
         (event.data as any).content?.includes('Verifier stopped repeatedly'),
     )
     expect(stallMessages).toHaveLength(0)
-  })
-
-  it('nudges verifier that makes non-terminalizing tool calls repeatedly', async () => {
-    // Exploratory tool calls should not consume the empty-stop budget.
-    // Only repeated no-tool verifier stops should count toward auto-failure.
-    const eventStore = createEventStore()
-    getEventStoreMock.mockReturnValue(eventStore)
-    getAllInstructionsMock.mockResolvedValue({ content: 'Verify carefully', files: [] })
-
-    const state: any = {
-      current: {
-        id: 'session-1',
-        projectId: 'project-1',
-        workdir: '/tmp/project',
-        mode: 'builder',
-        phase: 'verification',
-        isRunning: true,
-        criteria: [
-          {
-            id: 'tests-pass',
-            description: 'Tests pass',
-            status: { type: 'completed', completedAt: '2024-01-01T00:00:00.000Z' },
-            attempts: [],
-          },
-        ],
-        executionState: { modifiedFiles: ['src/index.ts'] },
-        summary: 'Task summary',
-        messages: [],
-      },
-    }
-    const sessionManager = createSessionManager(state)
-    const execute = vi.fn(async (name: string, args: Record<string, unknown>) => {
-      if (name === 'pass_criterion') {
-        const id = args['id'] as string
-        state.current.criteria = state.current.criteria.map((criterion: any) =>
-          criterion.id === id
-            ? { ...criterion, status: { type: 'passed', verifiedAt: '2024-01-01T00:00:00.000Z' } }
-            : criterion,
-        )
-        return { success: true, output: 'criterion passed', durationMs: 5, truncated: false }
-      }
-
-      return { success: true, output: 'file contents', durationMs: 5, truncated: false }
-    })
-
-    getToolRegistryForModeMock.mockReturnValue({
-      definitions: [
-        { type: 'function', function: { name: 'read_file', description: 'Read', parameters: {} } },
-        { type: 'function', function: { name: 'run_command', description: 'Run', parameters: {} } },
-        { type: 'function', function: { name: 'pass_criterion', description: 'Pass', parameters: {} } },
-      ],
-      execute,
-    })
-    streamLLMPureMock.mockReturnValue({ kind: 'stream' })
-
-    let toolCallCount = 0
-    consumeStreamGeneratorMock.mockImplementation(async () => {
-      toolCallCount += 1
-      if (toolCallCount <= 4) {
-        return {
-          content: `checking-${toolCallCount}`,
-          toolCalls: [{ id: `call-${toolCallCount}`, name: 'read_file', arguments: { path: 'src/index.ts' } }],
-          segments: [],
-          usage: { promptTokens: 8, completionTokens: 1 },
-          timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
-          aborted: false,
-        }
-      }
-
-      if (toolCallCount === 5) {
-        return {
-          content: 'still checking',
-          toolCalls: [],
-          segments: [{ type: 'text', content: 'still checking' }],
-          usage: { promptTokens: 8, completionTokens: 1 },
-          timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
-          aborted: false,
-        }
-      }
-
-      if (toolCallCount === 6) {
-        return {
-          content: 'passing criterion',
-          toolCalls: [
-            {
-              id: 'call-pass',
-              name: 'pass_criterion',
-              arguments: { id: 'tests-pass', reason: 'verified after continued checking' },
-            },
-          ],
-          segments: [],
-          usage: { promptTokens: 8, completionTokens: 1 },
-          timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
-          aborted: false,
-        }
-      }
-
-      // Final response after criteria are terminalized
-      return {
-        content: 'All criteria verified',
-        toolCalls: [],
-        segments: [{ type: 'text', content: 'All criteria verified' }],
-        usage: { promptTokens: 8, completionTokens: 1 },
-        timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
-        aborted: false,
-      }
-    })
-
-    const result = await runVerifierTurn(
-      {
-        sessionManager: sessionManager as never,
-        sessionId: 'session-1',
-        llmClient: { getModel: () => 'qwen3-32b' } as never,
-        onMessage: vi.fn(),
-      },
-      new TurnMetrics(),
-    )
-
-    expect(result).toMatchObject({ allPassed: true, failed: [] })
-    expect(sessionManager.updateCriterionStatus).not.toHaveBeenCalledWith(
-      'session-1',
-      'tests-pass',
-      expect.objectContaining({ type: 'failed' }),
-    )
-
-    const verifierNudgeMessages = eventStore.append.mock.calls.filter(
-      ([, event]) =>
-        event.type === 'message.start' &&
-        (event.data as any).messageKind === 'correction' &&
-        (event.data as any).subAgentType === 'verifier' &&
-        (event.data as any).content?.includes('Use criterion with action'),
-    )
-    expect(verifierNudgeMessages).toHaveLength(1)
-  })
-
-  it('fails verifier only after repeated empty stops even after exploratory tool calls', async () => {
-    const eventStore = createEventStore()
-    getEventStoreMock.mockReturnValue(eventStore)
-    getAllInstructionsMock.mockResolvedValue({ content: 'Verify carefully', files: [] })
-
-    const state: any = {
-      current: {
-        id: 'session-1',
-        projectId: 'project-1',
-        workdir: '/tmp/project',
-        mode: 'builder',
-        phase: 'verification',
-        isRunning: true,
-        criteria: [
-          {
-            id: 'tests-pass',
-            description: 'Tests pass',
-            status: { type: 'completed', completedAt: '2024-01-01T00:00:00.000Z' },
-            attempts: [],
-          },
-        ],
-        executionState: { modifiedFiles: ['src/index.ts'] },
-        summary: 'Task summary',
-        messages: [],
-      },
-    }
-    const sessionManager = createSessionManager(state)
-    const execute = vi.fn(async () => {
-      return { success: true, output: 'file contents', durationMs: 5, truncated: false }
-    })
-
-    getToolRegistryForModeMock.mockReturnValue({
-      definitions: [
-        { type: 'function', function: { name: 'read_file', description: 'Read', parameters: {} } },
-        { type: 'function', function: { name: 'run_command', description: 'Run', parameters: {} } },
-        { type: 'function', function: { name: 'pass_criterion', description: 'Pass', parameters: {} } },
-      ],
-      execute,
-    })
-    streamLLMPureMock.mockReturnValue({ kind: 'stream' })
-
-    let iterationCount = 0
-    consumeStreamGeneratorMock.mockImplementation(async () => {
-      iterationCount += 1
-
-      if (iterationCount <= 4) {
-        return {
-          content: `checking-${iterationCount}`,
-          toolCalls: [{ id: `call-${iterationCount}`, name: 'read_file', arguments: { path: 'src/index.ts' } }],
-          segments: [],
-          usage: { promptTokens: 8, completionTokens: 1 },
-          timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
-          aborted: false,
-        }
-      }
-
-      return {
-        content: `stopped-${iterationCount}`,
-        toolCalls: [],
-        segments: [{ type: 'text', content: `stopped-${iterationCount}` }],
-        usage: { promptTokens: 8, completionTokens: 1 },
-        timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
-        aborted: false,
-      }
-    })
-
-    const result = await runVerifierTurn(
-      {
-        sessionManager: sessionManager as never,
-        sessionId: 'session-1',
-        llmClient: { getModel: () => 'qwen3-32b' } as never,
-        onMessage: vi.fn(),
-      },
-      new TurnMetrics(),
-    )
-
-    expect(result).toMatchObject({ allPassed: false, failed: [] })
-    expect(sessionManager.updateCriterionStatus).not.toHaveBeenCalled()
-    expect(sessionManager.addCriterionAttempt).not.toHaveBeenCalled()
-
-    const correctionMessages = eventStore.append.mock.calls.filter(
-      ([, event]) =>
-        event.type === 'message.start' &&
-        (event.data as any).messageKind === 'correction' &&
-        (event.data as any).subAgentType === 'verifier',
-    )
-    // 10 nudges + 1 stall restart message + 1 return_value nudge + 1 return_value stall = 13
-    expect(correctionMessages).toHaveLength(13)
-  })
-
-  it('does not consume the empty-stop budget for malformed verifier tool calls', async () => {
-    const eventStore = createEventStore()
-    getEventStoreMock.mockReturnValue(eventStore)
-    getAllInstructionsMock.mockResolvedValue({ content: 'Verify carefully', files: [] })
-
-    const state: any = {
-      current: {
-        id: 'session-1',
-        projectId: 'project-1',
-        workdir: '/tmp/project',
-        mode: 'builder',
-        phase: 'verification',
-        isRunning: true,
-        criteria: [
-          {
-            id: 'tests-pass',
-            description: 'Tests pass',
-            status: { type: 'completed', completedAt: '2024-01-01T00:00:00.000Z' },
-            attempts: [],
-          },
-        ],
-        executionState: { modifiedFiles: ['src/index.ts'] },
-        summary: 'Task summary',
-        messages: [],
-      },
-    }
-    const sessionManager = createSessionManager(state)
-    const execute = vi.fn()
-
-    getToolRegistryForModeMock.mockReturnValue({
-      definitions: [{ type: 'function', function: { name: 'read_file', description: 'Read', parameters: {} } }],
-      execute,
-    })
-    streamLLMPureMock.mockReturnValue({ kind: 'stream' })
-    consumeStreamGeneratorMock.mockResolvedValueOnce({
-      content: 'checking',
-      toolCalls: [
-        {
-          id: 'call-1',
-          name: 'read_file',
-          arguments: {},
-          parseError: 'Unexpected token in JSON at position 1',
-          rawArguments: '{bad-json',
-        },
-      ],
-      segments: [],
-      usage: { promptTokens: 8, completionTokens: 1 },
-      timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
-      aborted: false,
-    })
-
-    // 11 for verifier nudges/stall + 1 for return_value nudge = 12
-    for (let index = 0; index < 12; index++) {
-      consumeStreamGeneratorMock.mockResolvedValueOnce({
-        content: `stopped-${index}`,
-        toolCalls: [],
-        segments: [{ type: 'text', content: `stopped-${index}` }],
-        usage: { promptTokens: 8, completionTokens: 1 },
-        timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 8 },
-        aborted: false,
-      })
-    }
-
-    const result = await runVerifierTurn(
-      {
-        sessionManager: sessionManager as never,
-        sessionId: 'session-1',
-        llmClient: { getModel: () => 'qwen3-32b' } as never,
-        onMessage: vi.fn(),
-      },
-      new TurnMetrics(),
-    )
-
-    expect(result).toMatchObject({ allPassed: false, failed: [] })
-    expect(execute).not.toHaveBeenCalled()
-    expect(sessionManager.updateCriterionStatus).not.toHaveBeenCalled()
-    expect(sessionManager.addCriterionAttempt).not.toHaveBeenCalled()
-    expect(streamLLMPureMock.mock.calls).toHaveLength(13)
   })
 
   it('handles verifier path denial and nudges until verification reaches a terminal state', async () => {
@@ -2224,11 +1742,11 @@ describe('chat orchestrator', () => {
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,
       })
-      // Extra response for return_value nudge
+      // Call return_value to terminate
       .mockResolvedValueOnce({
         content: 'summary',
-        toolCalls: [],
-        segments: [{ type: 'text', content: 'summary' }],
+        toolCalls: [{ id: 'rv-1', name: 'return_value', arguments: { content: 'summary', result: 'success' } }],
+        segments: [],
         usage: { promptTokens: 5, completionTokens: 1 },
         timing: { ttft: 1, completionTime: 1, tps: 1, prefillTps: 5 },
         aborted: false,

@@ -22,7 +22,6 @@ import { getEventStore, getCurrentContextWindowId } from '../events/index.js'
 import { createChatMessageMessage } from '../ws/protocol.js'
 import { runBuilderTurn, TurnMetrics, createMessageStartEvent, type BuilderTurnOptions } from '../chat/orchestrator.js'
 import { executeSubAgent } from '../sub-agents/manager.js'
-import { createVerifierNudgeConfig } from '../sub-agents/verifier-helpers.js'
 import { loadAllAgentsDefault, findAgentById } from '../agents/registry.js'
 import { getToolRegistryForAgent } from '../tools/index.js'
 import { computeSessionStats } from '../../shared/stats.js'
@@ -453,9 +452,6 @@ export async function executeWorkflow(
           execute: toolRegistry.execute,
         }
 
-        const nudgeConfig =
-          subStep.subAgentType === 'verifier' && !subStep.nudgePrompt ? createVerifierNudgeConfig() : undefined
-
         const result = await executeSubAgent({
           subAgentType: subStep.subAgentType,
           prompt: resolvedPrompt,
@@ -472,7 +468,6 @@ export async function executeWorkflow(
           },
           ...(signal ? { signal } : {}),
           ...(onMessage ? { onMessage } : {}),
-          nudgeConfig,
         })
 
         lastStepOutput = { content: result.content ?? '', ...(result.result ? { result: result.result } : {}) }

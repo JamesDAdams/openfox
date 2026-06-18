@@ -95,6 +95,16 @@ export interface TopLevelLoopConfig {
   /** Called after auto-compaction completes within the loop, before the next iteration.
    *  Reinjects the agent definition reminder into the new context window. */
   injectModeReminder?: (() => void) | undefined
+  /** When set, assistant messages are tagged with sub-agent metadata for scope isolation. */
+  subAgentMetadata?: { subAgentId: string; subAgentType: string }
+  /** When set and return_value tool is called, emit done events and break immediately. */
+  breakOnReturnValue?: boolean
+  /** When set, if the loop would normally break without return_value being called,
+   *  inject a nudge and continue. Retries up to maxReturnValueNudges times.
+   *  Prevents sub-agents from finishing without passing their result back. */
+  requireReturnValue?: boolean
+  /** Maximum number of return_value nudges before giving up. Default 10. */
+  maxReturnValueNudges?: number
   /** Build conversation messages for the LLM, with image processing applied.
    *  Called each iteration to get fresh context. */
   getConversationMessages: () => Promise<RequestContextMessage[]>
@@ -121,6 +131,7 @@ export async function runTopLevelAgentLoop(
   let currentMaxTokensOverride: number | undefined
   let lastPatternMatch: { pattern: string; field: string; matchedContent: string } | undefined
   let compacting = false
+  let returnValueNudgeCount = 0
 
   for (;;) {
     if (signal?.aborted) throw new Error('Aborted')
@@ -196,7 +207,14 @@ export async function runTopLevelAgentLoop(
     }
 
     const assistantMsgId = crypto.randomUUID()
-    append(createMessageStartEvent(assistantMsgId, 'assistant', undefined, currentWindowMessageOptions))
+    append(
+      createMessageStartEvent(assistantMsgId, 'assistant', undefined, {
+        ...(currentWindowMessageOptions ?? {}),
+        ...(config.subAgentMetadata
+          ? { subAgentId: config.subAgentMetadata.subAgentId, subAgentType: config.subAgentMetadata.subAgentType }
+          : {}),
+      }),
+    )
 
     const previousContextTokens = sessionManager.getContextState(sessionId).currentTokens
 
@@ -412,6 +430,30 @@ ${COMPACTION_PROMPT}`,
         const batchResult = await executeTools(assistantMsgId, result.toolCalls, batchContext, append)
         if (batchResult.returnValueContent) {
           returnValueContent = batchResult.returnValueContent
+          returnValueResult = batchResult.returnValueResult
+          if (config.breakOnReturnValue) {
+            const stats = turnMetrics.buildStats(statsIdentity, mode)
+            append(
+              createMessageDoneEvent(assistantMsgId, {
+                segments: result.segments,
+                stats,
+                promptContext: assembledRequest.promptContext,
+              }),
+            )
+            append(createChatDoneEvent(assistantMsgId, 'complete', stats))
+            if (onMessage) {
+              onMessage(
+                createChatMessageUpdatedMessage(assistantMsgId, {
+                  isStreaming: false,
+                  stats,
+                  promptContext: assembledRequest.promptContext,
+                }),
+              )
+              const { createChatDoneMessage } = await import('../ws/protocol.js')
+              onMessage(createChatDoneMessage(assistantMsgId, 'complete', stats))
+            }
+            break
+          }
         }
         if (batchResult.returnValueResult) {
           returnValueResult = batchResult.returnValueResult
@@ -489,6 +531,32 @@ ${COMPACTION_PROMPT}`,
       config.injectModeReminder?.()
       compacting = false
       continue
+    }
+
+    // If sub-agent finished without calling return_value, nudge and retry
+    if (config.requireReturnValue && !returnValueContent) {
+      const maxNudges = config.maxReturnValueNudges ?? 10
+      if (returnValueNudgeCount < maxNudges) {
+        returnValueNudgeCount++
+        const nudgeMsgId = crypto.randomUUID()
+        append(
+          createMessageStartEvent(
+            nudgeMsgId,
+            'user',
+            'You must call return_value with a summary of your findings before finishing. Call return_value now.',
+            {
+              ...(currentWindowMessageOptions ?? {}),
+              isSystemGenerated: true,
+              messageKind: 'correction',
+              ...(config.subAgentMetadata
+                ? { subAgentId: config.subAgentMetadata.subAgentId, subAgentType: config.subAgentMetadata.subAgentType }
+                : {}),
+            },
+          ),
+        )
+        append({ type: 'message.done', data: { messageId: nudgeMsgId } })
+        continue
+      }
     }
 
     const stats = turnMetrics.buildStats(statsIdentity, mode)

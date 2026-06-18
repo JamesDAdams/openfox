@@ -105,8 +105,8 @@ export const callSubAgentTool: Tool = {
           backend: 'unknown',
           model: llmClient.getModel(),
         },
-        signal: context.signal,
-        onMessage: context.onEvent,
+        ...(context.signal ? { signal: context.signal } : {}),
+        ...(context.onEvent ? { onMessage: context.onEvent } : {}),
       })
 
       return {
