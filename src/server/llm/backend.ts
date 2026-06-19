@@ -4,6 +4,7 @@
  */
 
 import { logger } from '../utils/logger.js'
+import { stripVersionPrefix, ensureVersionPrefix } from './url-utils.js'
 
 export type Backend = 'vllm' | 'sglang' | 'ollama' | 'llamacpp' | 'opencode-go' | 'unknown'
 
@@ -77,8 +78,7 @@ export async function detectBackend(baseUrl: string, explicitBackend?: Backend, 
     return explicitBackend
   }
 
-  // Normalize URL - remove /v1 suffix if present for probing
-  const probeUrl = baseUrl.replace(/\/v1\/?$/, '')
+  const probeUrl = stripVersionPrefix(baseUrl)
 
   try {
     // 1. Check for Ollama
@@ -183,7 +183,7 @@ async function probeSGLang(baseUrl: string): Promise<boolean> {
 async function probeOpenAI(baseUrl: string): Promise<boolean> {
   try {
     // Ensure URL has /v1 for OpenAI-compatible endpoint
-    const url = baseUrl.includes('/v1') ? baseUrl : `${baseUrl}/v1`
+    const url = ensureVersionPrefix(baseUrl)
     const response = await fetch(`${url}/models`, {
       signal: AbortSignal.timeout(5000),
     })

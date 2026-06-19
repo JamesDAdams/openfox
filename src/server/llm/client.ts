@@ -6,6 +6,7 @@ import { logger } from '../utils/logger.js'
 import { LLMError } from '../utils/errors.js'
 import { getModelProfile, type ModelProfile } from './profiles.js'
 import { type Backend, getBackendCapabilities } from './backend.js'
+import { ensureVersionPrefix } from './url-utils.js'
 import {
   buildNonStreamingCreateParams,
   buildStreamingCreateParams,
@@ -22,8 +23,7 @@ export interface LLMClientWithModel extends LLMClient {
 }
 
 export function createLLMClient(config: Config, initialBackend: Backend = 'unknown'): LLMClientWithModel {
-  // Ensure baseURL includes /v1 for OpenAI-compatible endpoint
-  const baseURL = config.llm.baseUrl.includes('/v1') ? config.llm.baseUrl : `${config.llm.baseUrl}/v1`
+  const baseURL = ensureVersionPrefix(config.llm.baseUrl)
 
   const openai = new OpenAI({
     baseURL,

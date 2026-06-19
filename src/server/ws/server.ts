@@ -14,6 +14,7 @@ import { buildMessagesFromStoredEvents, foldPendingConfirmations } from '../even
 import type { Message, Provider, ProviderBackend, StatsIdentity, Attachment } from '../../shared/types.js'
 import type { ProviderManager } from '../provider-manager.js'
 import { createLLMClient } from '../llm/index.js'
+import { ensureVersionPrefix } from '../llm/url-utils.js'
 import { runChatTurn } from '../chat/orchestrator.js'
 
 import { runOrchestrator } from '../runner/index.js'
@@ -366,7 +367,7 @@ export function createWebSocketServer(
     }
 
     // Create a new LLM client for this session
-    const baseUrl = provider.url.includes('/v1') ? provider.url : `${provider.url}/v1`
+    const baseUrl = ensureVersionPrefix(provider.url)
     const sessionConfig: Config = {
       ...config,
       llm: {

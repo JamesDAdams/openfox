@@ -8,6 +8,7 @@ import {
   type LLMClientWithModel,
 } from './llm/index.js'
 import { logger } from './utils/logger.js'
+import { ensureVersionPrefix, stripVersionPrefix, buildModelsUrl } from './llm/url-utils.js'
 
 function normalizeModelId(s: string): string {
   return s.toLowerCase().replace(/[-_\s:.]+/g, '')
@@ -75,7 +76,7 @@ function mergeModelsWithUserOverrides(backendModels: ModelConfig[], userModels: 
 }
 
 export async function fetchAvailableModelsFromBackend(baseUrl: string, apiKey?: string): Promise<string[]> {
-  const url = baseUrl.includes('/v1') ? `${baseUrl}/models` : `${baseUrl}/v1/models`
+  const url = buildModelsUrl(baseUrl)
   const models = await fetchModelsFromBackend(url, apiKey)
   return models.map((m) => m.id)
 }
@@ -96,11 +97,7 @@ export async function fetchModelsWithContext(
 
   // OpenCode Go has models at /zen/v1/models not /zen/go/v1/models
   const isOpenCodeGo = baseUrl.includes('opencode.ai/zen/go')
-  const url = isOpenCodeGo
-    ? baseUrl.replace('/zen/go', '/zen').replace(/\/v1$/, '') + '/v1/models'
-    : baseUrl.includes('/v1')
-      ? `${baseUrl}/models`
-      : `${baseUrl}/v1/models`
+  const url = isOpenCodeGo ? buildModelsUrl(baseUrl.replace('/zen/go', '/zen')) : buildModelsUrl(baseUrl)
 
   logger.info('Fetching models via /v1/models', { url })
   const models = await fetchModelsFromBackend(url, apiKey)
@@ -266,7 +263,7 @@ export function createProviderManager(config: Config): ProviderManager {
       ...config,
       llm: {
         ...config.llm,
-        baseUrl: provider.url.includes('/v1') ? provider.url : `${provider.url}/v1`,
+        baseUrl: ensureVersionPrefix(provider.url),
         model,
         backend: provider.backend as LlmBackend | 'auto',
         ...(provider.apiKey && { apiKey: provider.apiKey }),
@@ -341,7 +338,7 @@ export function createProviderManager(config: Config): ProviderManager {
       const newClient = createLLMClient(providerConfig)
 
       try {
-        const url = provider.url.includes('/v1') ? provider.url.replace('/v1', '') : provider.url
+        const url = stripVersionPrefix(provider.url)
         clearModelCache(url)
 
         // Refetch models from backend when switching providers
@@ -491,7 +488,7 @@ export function createProviderManager(config: Config): ProviderManager {
       }
 
       // Fallback: fetch from backend if no stored models
-      const url = provider.url.includes('/v1') ? provider.url.replace('/v1', '') : provider.url
+      const url = stripVersionPrefix(provider.url)
       const backend = provider.backend as 'ollama' | 'vllm' | 'sglang' | 'llamacpp' | 'unknown'
       return fetchModelsWithContext(url, provider.apiKey, backend)
     },
@@ -645,7 +642,7 @@ export function createProviderManager(config: Config): ProviderManager {
         return { success: false, error: 'Provider not found' }
       }
 
-      const url = provider.url.includes('/v1') ? provider.url.replace('/v1', '') : provider.url
+      const url = stripVersionPrefix(provider.url)
       const backend = provider.backend as 'ollama' | 'vllm' | 'sglang' | 'llamacpp' | 'unknown'
       logger.info('refreshProviderModels fetching models', { providerId, providerName: provider.name, url, backend })
       const modelsWithContext = await fetchModelsWithContext(url, provider.apiKey, backend)

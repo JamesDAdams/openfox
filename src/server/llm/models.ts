@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger.js'
+import { stripVersionPrefix, buildModelsUrl } from './url-utils.js'
 
 export interface LlmModel {
   id: string
@@ -27,9 +28,9 @@ let llmStatus: LlmStatus = 'unknown'
 let lastActiveUrl: string | null = null
 const CACHE_TTL_MS = 30_000 // 30 seconds
 
-/** Normalize URL for cache key (strip /v1 suffix) */
+/** Normalize URL for cache key (strip version suffix) */
 function getCacheKey(url: string): string {
-  return url.replace(/\/v1\/?$/, '')
+  return stripVersionPrefix(url)
 }
 
 /**
@@ -49,8 +50,7 @@ export async function detectModel(llmBaseUrl: string, retries = 3, silent = fals
     return cached.model
   }
 
-  // Ensure URL has /v1 for OpenAI-compatible endpoint
-  const url = llmBaseUrl.includes('/v1') ? `${llmBaseUrl}/models` : `${llmBaseUrl}/v1/models`
+  const url = buildModelsUrl(llmBaseUrl)
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
