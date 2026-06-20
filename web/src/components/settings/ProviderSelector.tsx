@@ -32,7 +32,6 @@ export function ProviderSelector() {
   const providers = useConfigStore((state) => state.providers)
   const activeProviderId = useConfigStore((state) => state.activeProviderId)
   const defaultModelSelection = useConfigStore((state) => state.defaultModelSelection)
-  const backend = useConfigStore((state) => state.backend)
   const activating = useConfigStore((state) => state.activating)
   const activateProvider = useConfigStore((state) => state.activateProvider)
   const refreshModel = useConfigStore((state) => state.refreshModel)
@@ -81,10 +80,6 @@ export function ProviderSelector() {
     if (!defaultModelSelection) return false
     return defaultModelSelection === `${providerId}/${modelId}`
   }
-
-  const backendName = getBackendDisplayName(backend)
-  void isLlmOffline
-  void backendName
 
   const loadProviderModels = async (providerId: string) => {
     setLoadingModels(providerId)
@@ -135,9 +130,7 @@ export function ProviderSelector() {
 
   const handleRefreshClick = async (e: React.MouseEvent, providerId: string) => {
     e.stopPropagation()
-    // Allow retry on manual refresh
     loadedProvidersRef.current.delete(providerId)
-    await refreshProviderModels(providerId)
     await loadProviderModels(providerId)
   }
 
@@ -145,6 +138,8 @@ export function ProviderSelector() {
     setEditingModel({ providerId, model })
     setShowProviderModal(true)
   }
+
+  const editingProvider = editingModel ? providers.find((p) => p.id === editingModel.providerId) : undefined
 
   const handleCloseEditModal = () => {
     setEditingModel(null)
@@ -154,7 +149,7 @@ export function ProviderSelector() {
   const handleProviderModalSave = async (formData: ProviderFormData) => {
     // Send PUT to update provider on server
     try {
-      await authFetch(`/api/providers/${formData.id}`, {
+      const res = await authFetch(`/api/providers/${formData.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -167,6 +162,24 @@ export function ProviderSelector() {
           models: formData.models,
         }),
       })
+      if (!res.ok) throw new Error('Failed to update provider')
+      // Persist per-model configs via individual POST calls
+      for (const model of formData.models) {
+        const settings: Record<string, unknown> = {}
+        if (model.contextWindow !== undefined) settings.contextWindow = model.contextWindow
+        if (model.supportsVision !== undefined) settings.supportsVision = model.supportsVision
+        if (model.thinkingEnabled !== undefined) settings.thinkingEnabled = model.thinkingEnabled
+        if (model.thinkingLevel !== undefined) settings.thinkingLevel = model.thinkingLevel
+        if (model.nonThinkingEnabled !== undefined) settings.nonThinkingEnabled = model.nonThinkingEnabled
+        if (Object.keys(settings).length > 0) {
+          const modelRes = await authFetch(`/api/providers/${formData.id}/models/${encodeURIComponent(model.id)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings),
+          })
+          if (!modelRes.ok) throw new Error(`Failed to update model: ${model.id}`)
+        }
+      }
       // Refresh config to get updated providers
       await useConfigStore.getState().fetchConfig()
     } catch {
@@ -399,13 +412,13 @@ export function ProviderSelector() {
           initialStep={2}
           editProvider={{
             id: editingModel.providerId,
-            name: providers.find((p) => p.id === editingModel.providerId)?.name ?? '',
-            url: providers.find((p) => p.id === editingModel.providerId)?.url ?? '',
-            backend: providers.find((p) => p.id === editingModel.providerId)?.backend ?? 'auto',
-            apiKey: providers.find((p) => p.id === editingModel.providerId)?.apiKey,
-            isLocal: providers.find((p) => p.id === editingModel.providerId)?.isLocal,
-            thinkingField: providers.find((p) => p.id === editingModel.providerId)?.thinkingField,
-            models: providers.find((p) => p.id === editingModel.providerId)?.models,
+            name: editingProvider?.name ?? '',
+            url: editingProvider?.url ?? '',
+            backend: editingProvider?.backend ?? 'auto',
+            apiKey: editingProvider?.apiKey,
+            isLocal: editingProvider?.isLocal,
+            thinkingField: editingProvider?.thinkingField,
+            models: editingProvider?.models,
           }}
           editModelId={editingModel.model.id}
         />

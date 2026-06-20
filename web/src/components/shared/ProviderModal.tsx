@@ -53,8 +53,6 @@ function TestResultBlock({
 
 const COMMON_PORTS = [8000, 11434, 8080]
 
-const PRESETS: { name: string; url: string; backend: Backend }[] = []
-
 const BACKEND_OPTIONS: { value: Backend; label: string }[] = [
   { value: 'auto', label: 'Auto-detect' },
   { value: 'vllm', label: 'vLLM' },
@@ -312,28 +310,7 @@ export function ProviderModal({
         {formStep === 1 && (
           <div className="px-6 py-4 space-y-4">
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Quick presets</label>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                {PRESETS.map((preset) => (
-                  <button
-                    key={preset.name}
-                    type="button"
-                    onClick={() => {
-                      setFormName(preset.name)
-                      setFormUrl(preset.url)
-                      setFormBackend(preset.backend)
-                      setFetchError(null)
-                    }}
-                    className={`p-2 rounded border text-center text-sm transition-colors ${
-                      formUrl === preset.url
-                        ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
-                        : 'border-border hover:border-text-muted text-text-secondary'
-                    }`}
-                  >
-                    {preset.name}
-                  </button>
-                ))}
-              </div>
+              <label className="block text-sm text-text-secondary mb-2">Common URLs</label>
               <div className="grid grid-cols-3 gap-2">
                 {COMMON_PORTS.map((port) => (
                   <button
