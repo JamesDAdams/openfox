@@ -17,7 +17,7 @@ import { loadConfig } from '../config.js'
 import { closeDatabase, getDatabase, initDatabase } from '../db/index.js'
 import { createProject } from '../db/projects.js'
 import { getSession } from '../db/sessions.js'
-import { initEventStore } from '../events/index.js'
+import { initEventStore, getCurrentContextWindowId, emitContextCompacted } from '../events/index.js'
 import { SessionManager } from './manager.js'
 
 // Mock provider manager
@@ -154,7 +154,7 @@ describe('SessionManager', () => {
     expect(loadedSession?.isRunning).toBe(false)
   })
 
-  it('adds messages and manages context windows during compaction', () => {
+  it('adds messages and manages context windows', () => {
     const session = manager.createSession(projectId)
     const eventTypes: string[] = []
     manager.subscribeToSession(session.id, (event) => {
@@ -177,36 +177,12 @@ describe('SessionManager', () => {
       role: 'user',
     })
 
-    manager.compactContext(session.id, 'summary text', 50)
-    expect(manager.getCurrentWindowMessages(session.id)).toEqual([
-      expect.objectContaining({
-        role: 'user',
-        content: expect.stringContaining('summary text'),
-        isCompactionSummary: true,
-        isSystemGenerated: true,
-      }),
-    ])
-    // In event-sourced model, compaction info is in contextState, not executionState
-    expect(manager.getContextState(session.id)).toMatchObject({
-      currentTokens: 0,
-      compactionCount: 1,
-    })
-
     const second = manager.addMessage(session.id, {
       role: 'user', // User messages can be added via addMessage
       content: 'fresh window',
       tokenCount: 2,
     })
     expect(second.contextWindowId).toBeDefined()
-    expect(second.contextWindowId).not.toBe(first.contextWindowId)
-
-    const compacted = manager.compactMessages(session.id, [first.id, second.id], 'rolled up')
-    // In event-sourced model, compactMessages just emits a system message
-    // originalMessageIds is no longer tracked (messages are immutable events)
-    expect(compacted).toMatchObject({
-      role: 'system',
-      isCompacted: true,
-    })
     expect(eventTypes).toContain('message_added')
     // In event-sourced model, message operations don't emit session_updated
     // (messages are stored as events, not in session object)
@@ -334,7 +310,9 @@ describe('SessionManager', () => {
     expect(manager.getContextState(session.id).currentTokens).toBe(85000)
 
     // After compaction, context resets
-    manager.compactContext(session.id, 'summary', 85000)
+    const closedWindowId = getCurrentContextWindowId(session.id) ?? ''
+    const newWindowId = crypto.randomUUID()
+    emitContextCompacted(session.id, closedWindowId, newWindowId, 85000, 0, 'summary')
     // New LLM call after compaction reports smaller context
     manager.setCurrentContextSize(session.id, 5000)
     expect(manager.getContextState(session.id).currentTokens).toBe(5000)

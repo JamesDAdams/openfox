@@ -1,8 +1,9 @@
 /**
  * Context compaction utilities.
  *
- * The actual compaction is now handled by streamLLMResponse with the COMPACTION_PROMPT
- * from chat/prompts.ts. This module provides helper functions for deciding when to compact.
+ * Compaction runs inside the agent loop (auto-compaction) or via compactContext()
+ * (manual compaction). Both use the COMPACTION_PROMPT from chat/prompts.ts.
+ * This module provides helper functions for deciding when to compact.
  */
 
 /**

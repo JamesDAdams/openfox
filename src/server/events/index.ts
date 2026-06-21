@@ -99,6 +99,5 @@ export {
   emitTurnSnapshot,
   emitMetadataSet,
   truncateSessionMessages,
-  compactContext,
   getRecentUserPromptsForSession,
 } from './session.js'

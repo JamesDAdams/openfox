@@ -6,10 +6,8 @@ import { shouldCompact } from './compactor.js'
 import { COMPACTION_PROMPT, buildBasePrompt } from '../chat/prompts.js'
 import { createMessageStartEvent, createMessageDoneEvent, createChatDoneEvent } from '../chat/stream-pure.js'
 import { streamLLMPure, consumeStreamGenerator } from '../chat/stream-pure.js'
-import { getConversationMessages } from '../chat/conversation-history.js'
+import { getConversationMessages, processEventsForConversation } from '../chat/conversation-history.js'
 import { getRuntimeConfig } from '../runtime-config.js'
-import { processContextImages, loadVisionModelFromGlobalConfig } from './image-processor.js'
-import { modelSupportsVision } from '../llm/profiles.js'
 import { logger } from '../utils/logger.js'
 
 interface ContextCompactionOptions {
@@ -78,26 +76,25 @@ export async function compactContext(options: ContextCompactionOptions): Promise
   eventStore.append(sessionId, { type: 'message.done', data: { messageId: compactPromptMsgId } })
 
   // 2. Get conversation messages (includes the compaction prompt)
-  // jscpd:ignore-start
-  const rawEvents = eventStore.getEvents(sessionId)
-  const modelVision = modelSupportsVision(llmClient.getModel())
-  const runtimeConfig = getRuntimeConfig()
-  const visionModel = runtimeConfig.llm.visionModel
-    ? { baseUrl: runtimeConfig.llm.baseUrl, model: runtimeConfig.llm.visionModel, timeout: runtimeConfig.llm.timeout }
-    : await loadVisionModelFromGlobalConfig()
-  const { events: processedEvents } = await processContextImages(rawEvents, {
-    modelSupportsVision: modelVision,
-    ...(visionModel ? { visionModel } : {}),
-    onEvent: (event) => eventStore.append(sessionId, event),
+  const processedEvents = await processEventsForConversation(sessionId, llmClient, (event) => {
+    eventStore.append(sessionId, event)
   })
   const messages = getConversationMessages({ type: 'toplevel', sessionId }, { events: processedEvents })
-  // jscpd:ignore-end
 
-  // 3. Build minimal system prompt
-  const systemPrompt = buildBasePrompt(session.workdir)
+  // 3. Use cached system prompt to preserve vLLM prefix cache
+  const cached = sessionManager.getCachedPrompt(sessionId)
+  const systemPrompt = cached?.systemPrompt ?? buildBasePrompt(session.workdir)
 
-  // 4. Call LLM for summary
+  // 4. Emit message.start before streaming (same pattern as agent loop)
   const assistantMsgId = crypto.randomUUID()
+  eventStore.append(
+    sessionId,
+    createMessageStartEvent(assistantMsgId, 'assistant', undefined, {
+      ...(getCurrentWindowMessageOptions(sessionId) ?? {}),
+    }),
+  )
+
+  // 5. Call LLM for summary
   const streamGen = streamLLMPure({
     messageId: assistantMsgId,
     systemPrompt,
@@ -112,7 +109,7 @@ export async function compactContext(options: ContextCompactionOptions): Promise
     eventStore.append(sessionId, event)
   })
 
-  // 5. Extract summary — gracefully handle empty result
+  // 6. Extract summary — gracefully handle empty result
   const summary = result.content?.trim() || result.thinkingContent?.trim() || ''
   if (!summary) {
     eventStore.append(sessionId, {
@@ -123,7 +120,7 @@ export async function compactContext(options: ContextCompactionOptions): Promise
     return
   }
 
-  // 6. Emit compaction events
+  // 7. Emit compaction events (overwrites the pre-stream message.start with summary)
   const closedWindowId = getCurrentContextWindowId(sessionId) ?? ''
   const newWindowId = crypto.randomUUID()
 

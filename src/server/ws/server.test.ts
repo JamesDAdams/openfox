@@ -191,6 +191,7 @@ vi.mock('../chat/stream-pure.js', async (importOriginal) => {
 
 vi.mock('../chat/conversation-history.js', () => ({
   getConversationMessages: vi.fn().mockReturnValue([]),
+  processEventsForConversation: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('../chat/orchestrator.js', async (importOriginal) => {
@@ -403,7 +404,7 @@ function createSessionManager(overrides: Record<string, unknown> = {}) {
     setPhase: vi.fn((_sessionId, phase: string) => ({ ...session, phase })),
     resetAllCriteriaAttempts: vi.fn(),
     setCriteria: vi.fn(),
-    compactContext: vi.fn(),
+    getCachedPrompt: vi.fn(() => undefined),
     updateMessageStats: vi.fn(),
     updateMessage: vi.fn(),
     getCurrentWindowMessages: vi.fn(() => []),
@@ -1065,8 +1066,8 @@ describe('createWebSocketServer', () => {
         dynamicContextChanged: false,
       })),
     })
-    // Make getRuntimeConfig throw to simulate compaction failure
-    getRuntimeConfigMock.mockImplementation(() => {
+    // Make getCachedPrompt throw to simulate compaction failure
+    sessionManager.getCachedPrompt = vi.fn(() => {
       throw new Error('compact blew up')
     })
     const harness = await createHarness({ sessionManager })

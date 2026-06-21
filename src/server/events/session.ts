@@ -655,50 +655,6 @@ export function truncateSessionMessages(sessionId: string, messageIndex: number)
 }
 
 // ============================================================================
-// Convenience Helpers
-// ============================================================================
-
-/**
- * Create a compaction summary message and emit context compaction
- */
-export function compactContext(
-  sessionId: string,
-  summary: string,
-  beforeTokens: number,
-): { newWindowId: string; summaryMessageId: string } {
-  const state = getSessionState(sessionId)
-  if (!state) {
-    throw new Error('Session not found')
-  }
-
-  const closedWindowId = state.currentContextWindowId
-  const newWindowId = crypto.randomUUID()
-  const summaryMessageId = crypto.randomUUID()
-
-  // Emit summary message
-  const eventStore = getEventStore()
-  eventStore.append(sessionId, {
-    type: 'message.start',
-    data: {
-      messageId: summaryMessageId,
-      role: 'assistant',
-      content: summary,
-      contextWindowId: closedWindowId,
-      isCompactionSummary: true,
-    },
-  })
-  eventStore.append(sessionId, {
-    type: 'message.done',
-    data: { messageId: summaryMessageId },
-  })
-
-  // Emit compaction event
-  emitContextCompacted(sessionId, closedWindowId, newWindowId, beforeTokens, 0, summary)
-
-  return { newWindowId, summaryMessageId }
-}
-
-// ============================================================================
 // Recent User Prompts
 // ============================================================================
 

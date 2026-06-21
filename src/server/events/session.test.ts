@@ -31,7 +31,6 @@ import {
   getCurrentWindowMessages,
   getReadFilesCache,
   isFileInCache,
-  compactContext,
 } from './session.js'
 
 let db: Database.Database
@@ -320,21 +319,6 @@ describe('emitContextState', () => {
     expect(state!.contextState.currentTokens).toBe(5000)
     expect(state!.contextState.maxTokens).toBe(200000)
     expect(state!.contextState.dangerZone).toBe(false)
-  })
-})
-
-describe('compactContext', () => {
-  it('should create new window and return IDs', () => {
-    initSession('s1', 'old-win')
-    const result = compactContext('s1', 'Conversation summary', 5000)
-
-    expect(result.newWindowId).toBeTruthy()
-    expect(result.summaryMessageId).toBeTruthy()
-    expect(getCurrentContextWindowId('s1')).toBe(result.newWindowId)
-  })
-
-  it('should throw for non-existent session', () => {
-    expect(() => compactContext('nonexistent', 'Summary', 100)).toThrow('Session not found')
   })
 })
 

@@ -47,7 +47,6 @@ import {
   emitCriteriaSet,
   emitCriterionUpdated,
   emitMetadataSet,
-  emitContextCompacted,
   emitContextState,
 } from '../events/index.js'
 import type { Message, CriterionStatus } from '../../shared/types.js'
@@ -519,28 +518,6 @@ export class SessionManager {
   }
 
   /**
-   * Compact context. Delegates to EventStore.
-   */
-  compactContext(sessionId: string, summary: string, tokenCountAtClose: number): void {
-    const state = getSessionState(sessionId)
-    if (!state) {
-      throw new Error('Session not found')
-    }
-
-    const closedWindowId = state.currentContextWindowId
-    const newWindowId = crypto.randomUUID()
-
-    emitContextCompacted(sessionId, closedWindowId, newWindowId, tokenCountAtClose, 0, summary)
-    emitUserMessage(sessionId, `Previous context summary:\n${summary}`, {
-      contextWindowId: newWindowId,
-      isSystemGenerated: true,
-      messageKind: 'auto-prompt',
-      isCompactionSummary: true,
-      metadata: { type: 'compaction', name: 'Compaction', color: '#64748b' },
-    })
-  }
-
-  /**
    * Set current context size (for token tracking).
    * Emits a context.state event with the real promptTokens from the LLM.
    * maxTokens comes from providerManager.getCurrentModelContext() - the currently selected model's limit.
@@ -857,24 +834,6 @@ export class SessionManager {
 
   getDynamicContextChanged(sessionId: string): boolean {
     return this.dynamicContextChangedStore.get(sessionId) ?? false
-  }
-
-  /**
-   * @deprecated Use addMessage + compactContext instead
-   */
-  compactMessages(sessionId: string, _messageIds: string[], summary: string): Message {
-    // Emit a system message with the compacted summary
-    const messageId = emitUserMessage(sessionId, `[COMPACTED HISTORY]\n${summary}`, {
-      isSystemGenerated: true,
-    })
-
-    return {
-      id: messageId,
-      role: 'system',
-      content: `[COMPACTED HISTORY]\n${summary}`,
-      timestamp: new Date().toISOString(),
-      isCompacted: true,
-    }
   }
 
   /**
