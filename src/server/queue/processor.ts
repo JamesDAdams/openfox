@@ -257,6 +257,12 @@ export class QueueProcessor {
             return
           }
 
+          // Safety: orchestrator only appends running.changed to event store;
+          // ensure running state is reset before starting next turn
+          const currentSession = sessionManager.getSession(sessionId)
+          if (currentSession?.isRunning) {
+            sessionManager.setRunning(sessionId, false)
+          }
           this.startTurn(sessionId)
         } catch (error) {
           logger.error('Error in turn completion cleanup', {

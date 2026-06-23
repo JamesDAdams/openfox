@@ -21,15 +21,33 @@ describe('QueueProcessor', () => {
   let mockBroadcastForSession: any
   let queueProcessor: QueueProcessor
 
+  // Stateful session mock: mutations via setRunning are reflected in getSession
+  let sessionState: {
+    id: string
+    isRunning: boolean
+    metadata?: any
+    providerId?: string
+    providerModel?: string
+    mode?: string
+  }
+  let queueItems: Array<{ queueId: string; mode: string; content: string; queuedAt: string; attachments?: any[] }>
+
   beforeEach(() => {
+    sessionState = { id: 'sess-1', isRunning: false, metadata: { title: undefined } }
+    queueItems = []
+
     mockSessionManager = {
       subscribe: vi.fn(() => () => {}),
-      getSession: vi.fn(),
-      hasQueuedMessages: vi.fn(),
-      setRunning: vi.fn(),
+      getSession: vi.fn(() => sessionState),
+      hasQueuedMessages: vi.fn(() => queueItems.length > 0),
+      setRunning: vi.fn((_id: string, running: boolean) => {
+        sessionState = { ...sessionState, isRunning: running }
+      }),
       addMessage: vi.fn(() => ({ id: 'msg-1' })),
-      cancelQueuedMessage: vi.fn(),
-      getQueueState: vi.fn(),
+      cancelQueuedMessage: vi.fn((_id: string, queueId: string) => {
+        queueItems = queueItems.filter((q) => q.queueId !== queueId)
+      }),
+      getQueueState: vi.fn(() => queueItems),
       getContextState: vi.fn(() => ({
         currentTokens: 100,
         maxTokens: 1000,
@@ -88,11 +106,8 @@ describe('QueueProcessor', () => {
 
   describe('queue events', () => {
     it('should start turn when queue_added event received for idle session', () => {
-      mockSessionManager.getSession.mockReturnValue({ id: 'sess-1', isRunning: false, metadata: { title: undefined } })
-      mockSessionManager.hasQueuedMessages.mockReturnValue(true)
-      mockSessionManager.getQueueState.mockReturnValue([
-        { queueId: 'q-1', mode: 'asap', content: 'hello', queuedAt: '2024-01-01' },
-      ])
+      sessionState = { id: 'sess-1', isRunning: false, metadata: { title: undefined } }
+      queueItems = [{ queueId: 'q-1', mode: 'asap', content: 'hello', queuedAt: '2024-01-01' }]
 
       queueProcessor.start()
 
@@ -104,7 +119,7 @@ describe('QueueProcessor', () => {
     })
 
     it('should NOT start turn when session is already running', () => {
-      mockSessionManager.getSession.mockReturnValue({ id: 'sess-1', isRunning: true })
+      sessionState = { id: 'sess-1', isRunning: true, metadata: { title: undefined } }
 
       queueProcessor.start()
 
@@ -115,8 +130,8 @@ describe('QueueProcessor', () => {
     })
 
     it('should NOT start turn when no queued messages', () => {
-      mockSessionManager.getSession.mockReturnValue({ id: 'sess-1', isRunning: false })
-      mockSessionManager.hasQueuedMessages.mockReturnValue(false)
+      sessionState = { id: 'sess-1', isRunning: false, metadata: { title: undefined } }
+      // queueItems is empty by default
 
       queueProcessor.start()
 
@@ -140,17 +155,14 @@ describe('QueueProcessor', () => {
       mockProviderManager.getProviders = vi.fn(() => [mockProvider])
       mockProviderManager.activateProvider = mockActivateProvider
 
-      mockSessionManager.getSession.mockReturnValue({
+      sessionState = {
         id: 'sess-1',
         isRunning: false,
         metadata: { title: undefined },
         providerId: 'provider-2',
         providerModel: 'custom-model',
-      })
-      mockSessionManager.hasQueuedMessages.mockReturnValue(true)
-      mockSessionManager.getQueueState.mockReturnValue([
-        { queueId: 'q-1', mode: 'asap', content: 'hello', queuedAt: '2024-01-01' },
-      ])
+      }
+      queueItems = [{ queueId: 'q-1', mode: 'asap', content: 'hello', queuedAt: '2024-01-01' }]
 
       queueProcessor.start()
 
@@ -168,16 +180,13 @@ describe('QueueProcessor', () => {
       const mockActivateProvider = vi.fn().mockResolvedValue({ success: true })
       mockProviderManager.activateProvider = mockActivateProvider
 
-      mockSessionManager.getSession.mockReturnValue({
+      sessionState = {
         id: 'sess-1',
         isRunning: false,
         metadata: { title: undefined },
         // No providerId or providerModel - should use global
-      })
-      mockSessionManager.hasQueuedMessages.mockReturnValue(true)
-      mockSessionManager.getQueueState.mockReturnValue([
-        { queueId: 'q-1', mode: 'asap', content: 'hello', queuedAt: '2024-01-01' },
-      ])
+      }
+      queueItems = [{ queueId: 'q-1', mode: 'asap', content: 'hello', queuedAt: '2024-01-01' }]
 
       queueProcessor.start()
 
@@ -194,11 +203,8 @@ describe('QueueProcessor', () => {
 
   describe('queue events trigger turns', () => {
     it('starts turn when queue_added for idle session', () => {
-      mockSessionManager.getSession.mockReturnValue({ id: 'sess-1', isRunning: false, metadata: { title: undefined } })
-      mockSessionManager.hasQueuedMessages.mockReturnValue(true)
-      mockSessionManager.getQueueState.mockReturnValue([
-        { queueId: 'q-1', mode: 'asap', content: 'hello', queuedAt: '2024-01-01' },
-      ])
+      sessionState = { id: 'sess-1', isRunning: false, metadata: { title: undefined } }
+      queueItems = [{ queueId: 'q-1', mode: 'asap', content: 'hello', queuedAt: '2024-01-01' }]
 
       queueProcessor.start()
 
@@ -210,7 +216,7 @@ describe('QueueProcessor', () => {
     })
 
     it('does NOT start turn when already running', () => {
-      mockSessionManager.getSession.mockReturnValue({ id: 'sess-1', isRunning: true, metadata: { title: undefined } })
+      sessionState = { id: 'sess-1', isRunning: true, metadata: { title: undefined } }
 
       queueProcessor.start()
 
@@ -221,8 +227,8 @@ describe('QueueProcessor', () => {
     })
 
     it('does NOT start turn when no queued messages', () => {
-      mockSessionManager.getSession.mockReturnValue({ id: 'sess-1', isRunning: false, metadata: { title: undefined } })
-      mockSessionManager.hasQueuedMessages.mockReturnValue(false)
+      sessionState = { id: 'sess-1', isRunning: false, metadata: { title: undefined } }
+      // queueItems is empty by default
 
       queueProcessor.start()
 
@@ -233,11 +239,8 @@ describe('QueueProcessor', () => {
     })
 
     it('checks for more messages when running becomes false and has queued messages', () => {
-      mockSessionManager.getSession.mockReturnValue({ id: 'sess-1', isRunning: false, metadata: { title: undefined } })
-      mockSessionManager.hasQueuedMessages.mockReturnValue(true)
-      mockSessionManager.getQueueState.mockReturnValue([
-        { queueId: 'q-2', mode: 'asap', content: 'next', queuedAt: '2024-01-01' },
-      ])
+      sessionState = { id: 'sess-1', isRunning: false, metadata: { title: undefined } }
+      queueItems = [{ queueId: 'q-2', mode: 'asap', content: 'next', queuedAt: '2024-01-01' }]
 
       queueProcessor.start()
 
