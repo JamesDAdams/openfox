@@ -278,6 +278,27 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       toolCalls: [{ name: 'ask_user', arguments: { question: 'Which framework would you prefer?' } }],
       response: 'I asked about framework preference.',
     },
+    // Ask user with confirm type (must be before generic ask rules)
+    {
+      promptMatch: /confirm.*question/i,
+      toolCalls: [{ name: 'ask_user', arguments: { question: 'Do you approve?', type: 'confirm' } }],
+      response: 'I asked a confirm question.',
+    },
+    // Ask user with choice type (must be before generic ask rules)
+    {
+      promptMatch: /choose.*option/i,
+      toolCalls: [
+        {
+          name: 'ask_user',
+          arguments: {
+            question: 'Which option do you prefer?',
+            type: 'choice',
+            options: ['Option A', 'Option B', 'Option C'],
+          },
+        },
+      ],
+      response: 'I asked a choice question.',
+    },
     {
       promptMatch: /ask.*user|ask.*question|clarif/i,
       toolCalls: [{ name: 'ask_user', arguments: { question: 'What would you like me to do?' } }],

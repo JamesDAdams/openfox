@@ -589,6 +589,26 @@ const RULES: MockRule[] = [
   // -------------------------------------------------------------------------
   // Ask User Tool
   // -------------------------------------------------------------------------
+  // Specific type rules must come before generic ask rules
+  {
+    match: /confirm.*question/i,
+    tools: [{ name: 'ask_user', arguments: { question: 'Do you approve?', type: 'confirm' } }],
+    response: 'I asked a confirm question.',
+  },
+  {
+    match: /choose.*option/i,
+    tools: [
+      {
+        name: 'ask_user',
+        arguments: {
+          question: 'Which option do you prefer?',
+          type: 'choice',
+          options: ['Option A', 'Option B', 'Option C'],
+        },
+      },
+    ],
+    response: 'I asked a choice question.',
+  },
   {
     match: /ask.*user|ask.*question|clarif/i,
     tools: [{ name: 'ask_user', arguments: { question: 'What would you like me to do?' } }],

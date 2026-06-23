@@ -70,7 +70,7 @@ export async function executeTools(
     } else if (error instanceof AskUserInterrupt) {
       append({
         type: 'chat.ask_user',
-        data: { callId: error.callId, question: error.question },
+        data: { callId: error.callId, question: error.question, type: error.type, options: error.options },
       })
 
       const { awaitAnswer } = await import('../tools/ask.js')

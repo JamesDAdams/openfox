@@ -5,6 +5,7 @@ import { ThinkingBlock } from '../shared/ThinkingBlock'
 import { ToolCallDisplay } from '../shared/ToolCallDisplay'
 import { ToolCallPreparing } from '../shared/ToolCallPreparing'
 import { TodoListDisplay } from '../shared/TodoListDisplay'
+import { AskUserCard } from '../shared/AskUserCard'
 import { CriteriaGroupDisplay, isCriterionTool } from '../shared/CriteriaGroupDisplay'
 import { useSessionStore } from '../../stores/session'
 import { useAgentsStore, getAgentColor } from '../../stores/agents'
@@ -183,6 +184,11 @@ export const AssistantMessage = memo(function AssistantMessage({
             case 'tool_call': {
               const tc = element.toolCall
               const result = tc.result
+
+              // Special: ask_user → inline question card
+              if (tc.name === 'ask_user') {
+                return <AskUserCard key={i} toolCall={tc} />
+              }
 
               // Special: todo_write → inline todo list
               if (tc.name === 'todo_write') {

@@ -311,6 +311,8 @@ export type TurnEvent =
       data: {
         callId: string
         question: string
+        type: 'text' | 'confirm' | 'choice' | undefined
+        options: string[] | undefined
       }
     }
   | {
@@ -443,6 +445,8 @@ export interface VisionFallback {
 export interface PendingUserInput {
   callId: string
   question: string
+  type: 'text' | 'confirm' | 'choice' | undefined
+  options: string[] | undefined
 }
 
 export interface TaskStats {

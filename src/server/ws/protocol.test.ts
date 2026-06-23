@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  createChatAskUserMessage,
   createChatDoneMessage,
   createChatDeltaMessage,
   createChatErrorMessage,
@@ -38,6 +39,18 @@ describe('ws/protocol', () => {
         id: '1',
         type: 'ask.answer',
         payload: { callId: 'c1', answer: 'yes' },
+      })
+    })
+
+    it('parses ask.answer with skip flag', () => {
+      expect(
+        parseClientMessage(
+          JSON.stringify({ id: '2', type: 'ask.answer', payload: { callId: 'c1', answer: '', skip: true } }),
+        ),
+      ).toEqual({
+        id: '2',
+        type: 'ask.answer',
+        payload: { callId: 'c1', answer: '', skip: true },
       })
     })
 
@@ -86,7 +99,14 @@ describe('ws/protocol', () => {
     }
 
     it('enriches session messages with tool results', () => {
-      const message = createSessionStateMessage(session, [assistantMessage, toolMessage], [], undefined, 'corr-1')
+      const message = createSessionStateMessage(
+        session,
+        [assistantMessage, toolMessage],
+        [],
+        undefined,
+        undefined,
+        'corr-1',
+      )
 
       expect(message).toEqual({
         id: 'corr-1',
@@ -110,6 +130,31 @@ describe('ws/protocol', () => {
           pendingConfirmations: [],
         },
       })
+    })
+
+    it('creates chat.ask_user message with type and options', () => {
+      const message = createChatAskUserMessage('call-1', 'Pick one?', 'choice', ['A', 'B', 'C'])
+      expect(message).toEqual({
+        type: 'chat.ask_user',
+        payload: { callId: 'call-1', question: 'Pick one?', type: 'choice', options: ['A', 'B', 'C'] },
+      })
+    })
+
+    it('creates chat.ask_user message with default type', () => {
+      const message = createChatAskUserMessage('call-2', 'What do you think?')
+      expect(message).toEqual({
+        type: 'chat.ask_user',
+        payload: { callId: 'call-2', question: 'What do you think?', type: undefined, options: undefined },
+      })
+    })
+
+    it('includes pendingQuestions in session state payload', () => {
+      const pendingQ = [
+        { callId: 'pq-1', question: 'Proceed?', type: 'confirm' as const, options: undefined as string[] | undefined },
+      ]
+      const message = createSessionStateMessage(session, [], [], pendingQ)
+      expect(message.payload).toHaveProperty('pendingQuestions')
+      expect(message.payload.pendingQuestions).toEqual(pendingQ)
     })
 
     it('builds project and session list messages', () => {

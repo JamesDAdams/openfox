@@ -102,6 +102,7 @@ vi.mock('../tools/index.js', () => ({
   addAllowedPaths: vi.fn(),
   cancelQuestionsForSession: vi.fn(),
   cancelPathConfirmationsForSession: vi.fn(),
+  getPendingQuestionsForSession: vi.fn(() => []),
 }))
 
 vi.mock('../agents/registry.js', () => {

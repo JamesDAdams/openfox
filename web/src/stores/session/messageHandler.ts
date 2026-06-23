@@ -179,6 +179,7 @@ export function handleServerMessage(
         streamingMessage: streamingMsg,
         currentTodos: [],
         pendingPathConfirmations: payload.pendingConfirmations ?? [],
+        pendingQuestions: payload.pendingQuestions ?? [],
         error: null,
         ...(wasPendingCreate ? { pendingSessionCreate: payload.session.id } : {}),
       })
@@ -605,13 +606,21 @@ export function handleServerMessage(
         markBackgroundSessionUnread()
         return
       }
-      const payload = message.payload as { callId: string; question: string }
-      set({
-        pendingQuestion: {
-          callId: payload.callId,
-          question: payload.question,
-        },
-      })
+      const payload = message.payload as {
+        callId: string
+        question: string
+        type?: 'text' | 'confirm' | 'choice'
+        options?: string[]
+      }
+      const newQuestion = {
+        callId: payload.callId,
+        question: payload.question,
+        type: payload.type ?? 'text',
+        options: payload.options ?? undefined,
+      }
+      set((state) => ({
+        pendingQuestions: [...state.pendingQuestions.filter((q) => q.callId !== payload.callId), newQuestion],
+      }))
       break
     }
 

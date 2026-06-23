@@ -51,6 +51,7 @@ export interface SessionLoadPayload {
 export interface AskAnswerPayload {
   callId: string
   answer: string
+  skip?: boolean
 }
 
 // Shared queue types
@@ -154,10 +155,18 @@ export interface ProjectDeletedPayload {
 }
 
 // Session payloads
+export interface PendingQuestionPayload {
+  callId: string
+  question: string
+  type: 'text' | 'confirm' | 'choice'
+  options: string[] | undefined
+}
+
 export interface SessionStatePayload {
   session: Session
   messages: Message[] // All messages for this session
   pendingConfirmations: PendingPathConfirmationPayload[]
+  pendingQuestions?: PendingQuestionPayload[]
   gitStatus?: GitStatusPayload // Current branch and diff, embedded on session load
 }
 
@@ -304,6 +313,8 @@ export interface PathConfirmPayload {
 export interface ChatAskUserPayload {
   callId: string
   question: string
+  type: 'text' | 'confirm' | 'choice' | undefined
+  options: string[] | undefined
 }
 
 // Mode payloads

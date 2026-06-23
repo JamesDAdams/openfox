@@ -23,6 +23,8 @@ export interface PendingPathConfirmation {
 export interface PendingQuestion {
   callId: string
   question: string
+  type: 'text' | 'confirm' | 'choice'
+  options: string[] | undefined
 }
 
 export interface StreamingBuffer {
@@ -50,7 +52,7 @@ export interface SessionState {
     branch: string | null
     diff: { files: { path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number }[] }
   } | null
-  pendingQuestion: PendingQuestion | null
+  pendingQuestions: PendingQuestion[]
   visionFallbackByMessage: Record<
     string,
     { type: 'start' | 'done'; attachmentId: string; filename?: string; description?: string }
@@ -93,7 +95,7 @@ export interface SessionState {
   updateSubAgentContextState: (subAgentId: string, context: ContextState) => void
   clearSubAgentContextState: (subAgentId: string) => void
   confirmPath: (callId: string, approved: boolean, alwaysAllow?: boolean) => void
-  answerQuestion: (callId: string, answer: string) => void
+  answerQuestion: (callId: string, answer: string, skip?: boolean) => void
   queueAsap: (content: string, attachments?: Attachment[], messageKind?: string) => void
   queueCompletion: (content: string, attachments?: Attachment[], messageKind?: string) => void
   cancelQueued: (queueId: string) => void

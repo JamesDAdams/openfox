@@ -916,7 +916,12 @@ async function handleClientMessage(
           const compactEvents = compactEventStore.getEvents(sessionId)
           const compactMessages = buildMessagesFromStoredEvents(compactEvents)
           const pendingConfirmations = foldPendingConfirmations(compactEvents)
-          sendForSession(sessionId, createSessionStateMessage(updatedSession, compactMessages, pendingConfirmations))
+          const { getPendingQuestionsForSession } = await import('../tools/index.js')
+          const pendingQuestions = getPendingQuestionsForSession(sessionId)
+          sendForSession(
+            sessionId,
+            createSessionStateMessage(updatedSession, compactMessages, pendingConfirmations, pendingQuestions),
+          )
         } catch (error) {
           logger.error('Compaction failed', { error, sessionId })
           sendForSession(
@@ -1187,8 +1192,8 @@ async function handleClientMessage(
         return
       }
 
-      const { callId, answer } = message.payload
-      const found = provideAnswer(callId, answer)
+      const { callId, answer, skip } = message.payload as { callId: string; answer: string; skip?: boolean }
+      const found = provideAnswer(callId, answer, skip)
 
       if (!found) {
         send(createErrorMessage('NOT_FOUND', 'No pending question with that ID', message.id))

@@ -359,6 +359,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   app.get('/api/sessions/:id', async (req, res) => {
     const { getEventStore } = await import('./events/index.js')
     const { buildMessagesFromStoredEvents } = await import('./events/folding.js')
+    const { getPendingQuestionsForSession } = await import('./tools/index.js')
 
     const session = sessionManager.getSession(req.params.id)
     if (!session) {
@@ -370,8 +371,9 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const messages = buildMessagesFromStoredEvents(events)
     const contextState = sessionManager.getContextState(req.params.id)
     const queueState = sessionManager.getQueueState(req.params.id)
+    const pendingQuestions = getPendingQuestionsForSession(req.params.id)
 
-    res.json({ session, messages, contextState, queueState })
+    res.json({ session, messages, contextState, queueState, pendingQuestions })
   })
 
   app.delete('/api/sessions/:id', (req, res) => {
@@ -545,13 +547,15 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const { getEventStore } = await import('./events/index.js')
     const { buildMessagesFromStoredEvents, foldPendingConfirmations } = await import('./events/folding.js')
     const { createSessionStateMessage } = await import('./ws/protocol.js')
+    const { getPendingQuestionsForSession } = await import('./tools/index.js')
     const eventStore = getEventStore()
     const events = eventStore.getEvents(sessionId)
     const messages = buildMessagesFromStoredEvents(events)
     const pendingConfirmations = foldPendingConfirmations(events)
+    const pendingQuestions = getPendingQuestionsForSession(sessionId)
     const session = sessionManager.getSession(sessionId)
     if (session) {
-      const stateMsg = createSessionStateMessage(session, messages, pendingConfirmations)
+      const stateMsg = createSessionStateMessage(session, messages, pendingConfirmations, pendingQuestions)
       wssExports.broadcastForSession(sessionId, { ...stateMsg, sessionId })
     }
 
@@ -560,14 +564,17 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
   // Ask user answer (REST)
   app.post('/api/sessions/:id/answer', async (req, res) => {
-    const { callId, answer } = req.body
+    const { callId, answer, skip } = req.body
 
-    if (!callId || !answer) {
-      return res.status(400).json({ error: 'callId and answer are required' })
+    if (!callId) {
+      return res.status(400).json({ error: 'callId is required' })
+    }
+    if (!skip && typeof answer !== 'string') {
+      return res.status(400).json({ error: 'answer is required when not skipping' })
     }
 
     const { provideAnswer } = await import('./tools/index.js')
-    const found = provideAnswer(callId, answer)
+    const found = provideAnswer(callId, answer ?? '', skip ?? false)
 
     if (!found) {
       return res.status(404).json({ error: 'No pending question with that ID' })

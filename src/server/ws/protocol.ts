@@ -10,6 +10,7 @@ import type {
   SessionRunningPayload,
   SessionNameGeneratedPayload,
   PendingPathConfirmationPayload,
+  PendingQuestionPayload,
   ChatDeltaPayload,
   ChatThinkingPayload,
   ChatToolPreparingPayload,
@@ -117,6 +118,7 @@ export function createSessionStateMessage(
   session: Session,
   messages: Message[],
   pendingConfirmations: PendingPathConfirmationPayload[] = [],
+  pendingQuestions?: PendingQuestionPayload[],
   gitStatus?: GitStatusPayload,
   correlationId?: string,
 ): ServerMessage<SessionStatePayload> {
@@ -124,7 +126,13 @@ export function createSessionStateMessage(
   const enrichedMessages = enrichMessagesWithToolResults(messages)
   return createServerMessage(
     'session.state',
-    { session, messages: enrichedMessages, pendingConfirmations, ...(gitStatus ? { gitStatus } : {}) },
+    {
+      session,
+      messages: enrichedMessages,
+      pendingConfirmations,
+      ...(pendingQuestions ? { pendingQuestions } : {}),
+      ...(gitStatus ? { gitStatus } : {}),
+    },
     correlationId,
   )
 }
@@ -288,8 +296,13 @@ export function createChatPathConfirmationMessage(
 }
 
 // Ask user messages
-export function createChatAskUserMessage(callId: string, question: string): ServerMessage<ChatAskUserPayload> {
-  return createServerMessage('chat.ask_user', { callId, question })
+export function createChatAskUserMessage(
+  callId: string,
+  question: string,
+  type?: 'text' | 'confirm' | 'choice',
+  options?: string[],
+): ServerMessage<ChatAskUserPayload> {
+  return createServerMessage('chat.ask_user', { callId, question, type, options })
 }
 
 // Mode messages
@@ -544,7 +557,7 @@ export function storedEventToServerMessage(event: StoredEvent): ServerMessage | 
 
     case 'chat.ask_user': {
       const data = event.data as Extract<TurnEvent, { type: 'chat.ask_user' }>['data']
-      return createChatAskUserMessage(data.callId, data.question)
+      return createChatAskUserMessage(data.callId, data.question, data.type, data.options)
     }
 
     case 'pattern.retry': {

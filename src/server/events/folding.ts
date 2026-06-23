@@ -805,8 +805,13 @@ export function foldSessionState(
         break
       }
       case 'chat.ask_user': {
-        const data = event.data as { callId: string; question: string }
-        pendingUserInput = { callId: data.callId, question: data.question }
+        const data = event.data as {
+          callId: string
+          question: string
+          type?: 'text' | 'confirm' | 'choice'
+          options?: string[]
+        }
+        pendingUserInput = { callId: data.callId, question: data.question, type: data.type, options: data.options }
         break
       }
       case 'task.completed': {

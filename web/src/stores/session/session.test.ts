@@ -965,6 +965,55 @@ describe('useSessionStore session isolation', () => {
     expect(useSessionStore.getState().unreadSessionIds).toEqual([])
   })
 
+  it('restores pendingQuestions from session.state on load', async () => {
+    const useSessionStore = await loadSessionStore()
+
+    useSessionStore.setState({
+      currentSession: {
+        id: 'session-1',
+        projectId: 'project-1',
+        workdir: '/tmp/project-1',
+        mode: 'planner',
+        phase: 'plan',
+        isRunning: false,
+        criteria: [],
+        summary: null,
+        messages: [],
+      } as any,
+    })
+
+    useSessionStore.getState().handleServerMessage({
+      type: 'session.state',
+      sessionId: 'session-1',
+      payload: {
+        session: {
+          id: 'session-1',
+          projectId: 'project-1',
+          workdir: '/tmp/project-1',
+          mode: 'planner',
+          phase: 'plan',
+          isRunning: false,
+          criteria: [],
+          summary: null,
+          messages: [],
+        },
+        messages: [],
+        pendingConfirmations: [],
+        pendingQuestions: [
+          { callId: 'pq-1', question: 'Proceed?', type: 'confirm', options: undefined },
+          { callId: 'pq-2', question: 'Pick one:', type: 'choice', options: ['A', 'B'] },
+        ],
+      },
+    })
+
+    const state = useSessionStore.getState()
+    expect(state.pendingQuestions).toHaveLength(2)
+    expect(state.pendingQuestions[0]!.callId).toBe('pq-1')
+    expect(state.pendingQuestions[0]!.type).toBe('confirm')
+    expect(state.pendingQuestions[1]!.callId).toBe('pq-2')
+    expect(state.pendingQuestions[1]!.options).toEqual(['A', 'B'])
+  })
+
   it('preserves recentUserPrompts from incoming sessions', async () => {
     const useSessionStore = await loadSessionStore()
 
@@ -1254,10 +1303,14 @@ describe('useSessionStore session isolation', () => {
         criteria: [],
         summary: null,
       } as any,
-      pendingQuestion: {
-        callId: 'call-123',
-        question: 'What is your name?',
-      },
+      pendingQuestions: [
+        {
+          callId: 'call-123',
+          question: 'What is your name?',
+          type: 'text',
+          options: undefined,
+        },
+      ],
     })
 
     await useSessionStore.getState().answerQuestion('call-123', 'My name is Conrad')
@@ -1266,10 +1319,10 @@ describe('useSessionStore session isolation', () => {
       '/api/sessions/session-1/answer',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ callId: 'call-123', answer: 'My name is Conrad' }),
+        body: JSON.stringify({ callId: 'call-123', answer: 'My name is Conrad', skip: undefined }),
       }),
     )
-    expect(useSessionStore.getState().pendingQuestion).toBeNull()
+    expect(useSessionStore.getState().pendingQuestions).toEqual([])
   })
 
   it('prevents concurrent createSession calls when pendingSessionCreate is already true', async () => {
@@ -1311,7 +1364,7 @@ describe('useSessionStore session isolation', () => {
     )
   })
 
-  it('clears pendingQuestion when answerQuestion is called with empty answer (skip)', async () => {
+  it('clears pendingQuestions when answerQuestion is called with skip', async () => {
     const useSessionStore = await loadSessionStore()
 
     useSessionStore.setState({
@@ -1325,21 +1378,25 @@ describe('useSessionStore session isolation', () => {
         criteria: [],
         summary: null,
       } as any,
-      pendingQuestion: {
-        callId: 'call-456',
-        question: 'Do you want to continue?',
-      },
+      pendingQuestions: [
+        {
+          callId: 'call-456',
+          question: 'Do you want to continue?',
+          type: 'confirm',
+          options: undefined,
+        },
+      ],
     })
 
-    await useSessionStore.getState().answerQuestion('call-456', '')
+    await useSessionStore.getState().answerQuestion('call-456', '', true)
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/sessions/session-1/answer',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ callId: 'call-456', answer: '' }),
+        body: JSON.stringify({ callId: 'call-456', answer: '', skip: true }),
       }),
     )
-    expect(useSessionStore.getState().pendingQuestion).toBeNull()
+    expect(useSessionStore.getState().pendingQuestions).toEqual([])
   })
 })

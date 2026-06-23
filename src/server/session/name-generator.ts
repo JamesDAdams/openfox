@@ -14,6 +14,7 @@ import { logger } from '../utils/logger.js'
 import { updateSessionMetadata } from '../db/sessions.js'
 import { buildMessagesFromStoredEvents, foldPendingConfirmations } from '../events/folding.js'
 import { createSessionStateMessage } from '../ws/protocol.js'
+import { getPendingQuestionsForSession } from '../tools/index.js'
 
 // ============================================================================
 // Ultra-Lightweight Prompt
@@ -187,6 +188,10 @@ export function applyGeneratedSessionName(sessionId: string, name: string, deps:
     const events = deps.eventStore.getEvents(sessionId)
     const messages = buildMessagesFromStoredEvents(events)
     const pendingConfirmations = foldPendingConfirmations(events)
-    deps.broadcastForSession(sessionId, createSessionStateMessage(updatedSession, messages, pendingConfirmations))
+    const pendingQuestions = getPendingQuestionsForSession(sessionId)
+    deps.broadcastForSession(
+      sessionId,
+      createSessionStateMessage(updatedSession, messages, pendingConfirmations, pendingQuestions),
+    )
   }
 }

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { authFetch } from '../../lib/api'
 import type { SessionSummary, Message } from '@shared/types.js'
-import type { QueuedMessage } from '@shared/protocol.js'
+import type { QueuedMessage, PendingQuestionPayload } from '@shared/protocol.js'
 import { wsClient } from '../../lib/ws'
 import { useConfigStore } from '../config'
 import { useProjectStore } from '../project'
@@ -129,7 +129,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
     contextState: null,
     subAgentContextStates: {},
     pendingPathConfirmations: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
     visionFallbackByMessage: {},
     gitStatus: null,
     queuedMessages: [],
@@ -303,6 +303,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
             currentTodos: [],
             contextState: null,
             pendingPathConfirmations: [],
+            pendingQuestions: [],
             queuedMessages: [],
             abortInProgress: false,
             restoredInput: null,
@@ -322,6 +323,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
           messages: (data.messages as Message[] | undefined) ?? [],
           contextState: data.contextState,
           queuedMessages: (data.queueState as QueuedMessage[] | undefined) ?? [],
+          pendingQuestions: (data.pendingQuestions ?? []) as PendingQuestionPayload[],
         })
 
         wsClient.send('session.load', { sessionId })
@@ -694,7 +696,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
       }
     },
 
-    answerQuestion: async (callId: string, answer: string) => {
+    answerQuestion: async (callId: string, answer: string, skip?: boolean) => {
       const sessionId = get().currentSession?.id
       if (!sessionId) return
 
@@ -702,12 +704,14 @@ export const useSessionStore = create<SessionState>((set, get) => {
         await authFetch(`/api/sessions/${sessionId}/answer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ callId, answer }),
+          body: JSON.stringify({ callId, answer, skip }),
         })
       } catch (error) {
         console.error('Error answering question:', error)
       }
-      set({ pendingQuestion: null })
+      set((state) => ({
+        pendingQuestions: state.pendingQuestions.filter((q) => q.callId !== callId),
+      }))
     },
 
     queueAsap: async (content, attachments, messageKind?: string) => {

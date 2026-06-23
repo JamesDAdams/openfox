@@ -7,7 +7,6 @@ import { SessionLayout } from '../layout/SessionLayout'
 import { SessionHeader } from './SessionHeader'
 import { TurnStatsModal } from './TurnStatsModal'
 import { MessageList } from './MessageList'
-import { AskUserDialog } from '../shared/AskUserDialog'
 import { ConnectionStatusBar } from '../shared/ConnectionStatusBar'
 import { useAgentsStore } from '../../stores/agents'
 import { useCommandsStore } from '../../stores/commands'
@@ -50,7 +49,6 @@ export function PlanPanel({
   const rawMessages = useSessionStore((state) => state.messages)
   const streamingMessage = useSessionStore((state) => state.streamingMessage)
   const sessions = useSessionStore((state) => state.sessions)
-  const pendingQuestion = useSessionStore((state) => state.pendingQuestion)
   const isRunning = useIsRunning()
   const sendMessage = useSessionStore((state) => state.sendMessage)
   const acceptAndBuild = useSessionStore((state) => state.acceptAndBuild)
@@ -177,7 +175,6 @@ export function PlanPanel({
         onCriteriaSidebarToggle={onCriteriaSidebarToggle}
         messages={messages}
       >
-        {pendingQuestion && <AskUserDialog question={pendingQuestion} />}
         <SessionHeader />
 
         {turnStatsModal && <TurnStatsModal stats={turnStatsModal} onClose={() => setTurnStatsModal(null)} />}
