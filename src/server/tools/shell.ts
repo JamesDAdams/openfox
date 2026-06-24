@@ -6,6 +6,16 @@ import { extractAbsolutePathsFromCommand, extractSensitivePathsFromCommand } fro
 import { terminateProcessTree } from '../utils/process-tree.js'
 import { stripTailPipe } from './shell-tail.js'
 
+export function hasBackgroundAmpersand(command: string): boolean {
+  const trimmed = command.replace(/[;\s]+$/, '')
+  if (trimmed.endsWith('&')) {
+    const before = trimmed[trimmed.length - 2]
+    if (before === '&' || before === '|') return false
+    return true
+  }
+  return false
+}
+
 interface RunCommandArgs {
   command: string
   cwd?: string
@@ -18,7 +28,8 @@ export const runCommandTool = createTool<RunCommandArgs>(
     type: 'function',
     function: {
       name: 'run_command',
-      description: 'Execute a shell command. Returns stdout, stderr, and exit code.',
+      description:
+        'Execute a shell command. Returns stdout, stderr, and exit code. Does NOT support trailing "&" for backgrounding — use background_process tool instead.',
       parameters: {
         type: 'object',
         properties: {
@@ -41,6 +52,12 @@ export const runCommandTool = createTool<RunCommandArgs>(
   },
   async (args, context, helpers) => {
     const timeout = args.timeout ?? 120_000
+
+    if (hasBackgroundAmpersand(args.command)) {
+      return helpers.error(
+        'Use background_process tool (action: "start") for background/long-running commands instead of \'&\'. See the tool description for details.',
+      )
+    }
 
     const workingDir = args.cwd ? helpers.resolvePath(args.cwd) : context.workdir
 
