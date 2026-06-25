@@ -7,6 +7,7 @@ import { DevServerConfigModal } from './DevServerConfigModal'
 import { LogViewer } from './LogViewer'
 import { LogRenderer } from '../shared/LogRenderer'
 import { AutoScrollToggle } from '../shared/AutoScrollToggle'
+import { useAutoScroll } from '../../hooks/useAutoScroll'
 import { ansiToReact } from '../../lib/ansiParser'
 
 interface DevServerFooterProps {
@@ -18,14 +19,18 @@ const LogHoverExpand = memo(function LogHoverExpand({
   anchorRef,
   isHiding,
   isAutoScrollActive,
+  onSetAutoScroll,
 }: {
   logs: { stream: 'stdout' | 'stderr'; content: string }[]
   anchorRef: React.RefObject<HTMLDivElement | null>
   isHiding: boolean
   isAutoScrollActive: boolean
+  onSetAutoScroll: (enabled: boolean) => void
 }) {
   const [pos, setPos] = useState<{ bottom: number; right: number; width: number; height: number } | null>(null)
   const preRef = useRef<HTMLPreElement>(null)
+  const onSetAutoScrollRef = useRef(onSetAutoScroll)
+  onSetAutoScrollRef.current = onSetAutoScroll
 
   useEffect(() => {
     const rect = anchorRef.current?.getBoundingClientRect()
@@ -40,27 +45,54 @@ const LogHoverExpand = memo(function LogHoverExpand({
   }, [anchorRef])
 
   useEffect(() => {
+    const el = preRef.current
+    if (!el) return
+
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) {
+        onSetAutoScrollRef.current(false)
+        return
+      }
+      if (e.deltaY > 0) {
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const distance = el.scrollHeight - el.scrollTop - el.offsetHeight
+            if (distance < 100) {
+              onSetAutoScrollRef.current(true)
+            }
+          }),
+        )
+      }
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: true })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  useEffect(() => {
     if (preRef.current && isAutoScrollActive) {
       preRef.current.scrollTop = preRef.current.scrollHeight
     }
   }, [logs, isAutoScrollActive, pos])
 
-  if (!pos) return null
-
   return (
-    <div className="relative">
+    <div className={`relative ${!pos ? 'hidden' : ''}`}>
       <pre
         ref={preRef}
         className="fixed z-40 text-sm font-mono text-text-primary bg-bg-primary p-2 rounded border border-border overflow-auto transition-all duration-150 ease-out select-text"
-        style={{
-          bottom: pos.bottom,
-          right: pos.right,
-          width: pos.width * 2,
-          maxHeight: pos.height * 3,
-          transformOrigin: 'bottom right',
-          transform: isHiding ? 'scale(0.01)' : 'scale(1)',
-          opacity: isHiding ? 0 : 1,
-        }}
+        style={
+          pos
+            ? {
+                bottom: pos.bottom,
+                right: pos.right,
+                width: pos.width * 2,
+                maxHeight: pos.height * 3,
+                transformOrigin: 'bottom right',
+                transform: isHiding ? 'scale(0.01)' : 'scale(1)',
+                opacity: isHiding ? 0 : 1,
+              }
+            : undefined
+        }
       >
         {logs.map((chunk, i) => (
           <span key={i} className={chunk.stream === 'stderr' ? 'text-accent-warning' : ''}>
@@ -86,10 +118,10 @@ export const DevServerFooter = memo(function DevServerFooter({ workdir }: DevSer
   const [showExpandModal, setShowExpandModal] = useState(false)
   const [isHoveringLogs, setIsHoveringLogs] = useState(false)
   const [isHidingLogs, setIsHidingLogs] = useState(false)
-  const [isAutoScrollActive, setIsAutoScrollActive] = useState(true)
+  const logRef = useRef<HTMLPreElement>(null)
+  const { isAutoScrollActive, setAutoScroll } = useAutoScroll(logRef, null)
   const showTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const logRef = useRef<HTMLPreElement>(null)
   const logContainerRef = useRef<HTMLDivElement>(null)
   const inspectWindowRef = useRef<Window | null>(null)
 
@@ -152,13 +184,6 @@ export const DevServerFooter = memo(function DevServerFooter({ workdir }: DevSer
       fetchLogs()
     }
   }, [isAlive, fetchLogs])
-
-  // Auto-scroll logs
-  useEffect(() => {
-    if (logRef.current && isAlive && isAutoScrollActive) {
-      logRef.current.scrollTop = logRef.current.scrollHeight
-    }
-  }, [logs, isAlive, isAutoScrollActive])
 
   const handleAction = () => {
     if (isAlive) {
@@ -227,61 +252,6 @@ export const DevServerFooter = memo(function DevServerFooter({ workdir }: DevSer
               Start
             </button>
           )}
-
-          {/* Log panel — always visible when running */}
-          {isAlive && (
-            <div
-              ref={logContainerRef}
-              className="relative"
-              onMouseEnter={() => {
-                if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current)
-                showTimeoutRef.current = setTimeout(() => {
-                  setIsHoveringLogs(true)
-                  setIsHidingLogs(false)
-                }, 500)
-              }}
-              onMouseLeave={() => {
-                if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current)
-                setIsHidingLogs(true)
-                hideTimeoutRef.current = setTimeout(() => setIsHoveringLogs(false), 150)
-              }}
-            >
-              <LogRenderer
-                logs={logs}
-                preRef={logRef}
-                preClassName="text-sm bg-bg-primary p-2 rounded overflow-auto max-h-[200px] border border-border"
-              />
-
-              <div className="absolute bottom-1 right-1 z-50 flex items-center gap-1">
-                {(isHoveringLogs || isHidingLogs) && (
-                  <AutoScrollToggle
-                    isActive={isAutoScrollActive}
-                    onToggle={setIsAutoScrollActive}
-                    className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors"
-                  />
-                )}
-                <button
-                  onClick={() => setShowExpandModal(true)}
-                  className="px-2 py-0.5 rounded text-xs font-medium bg-accent-primary/30 text-text-primary hover:bg-accent-primary/50 transition-colors"
-                >
-                  Expand
-                </button>
-              </div>
-
-              {/* Hover expansion portal */}
-              {(isHoveringLogs || isHidingLogs) &&
-                logContainerRef.current &&
-                createPortal(
-                  <LogHoverExpand
-                    logs={logs}
-                    anchorRef={logContainerRef}
-                    isHiding={isHidingLogs}
-                    isAutoScrollActive={isAutoScrollActive}
-                  />,
-                  document.body,
-                )}
-            </div>
-          )}
         </>
       ) : (
         <button
@@ -291,6 +261,65 @@ export const DevServerFooter = memo(function DevServerFooter({ workdir }: DevSer
           Configure
         </button>
       )}
+
+      {/* Log panel — always mounted so useAutoScroll can attach, hidden when not alive+configured */}
+      <div
+        ref={logContainerRef}
+        className={`relative ${hasConfig && isAlive ? '' : 'hidden'}`}
+        onMouseEnter={() => {
+          if (!hasConfig || !isAlive) return
+          if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current)
+          showTimeoutRef.current = setTimeout(() => {
+            setIsHoveringLogs(true)
+            setIsHidingLogs(false)
+          }, 500)
+        }}
+        onMouseLeave={() => {
+          if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current)
+          setIsHidingLogs(true)
+          hideTimeoutRef.current = setTimeout(() => setIsHoveringLogs(false), 150)
+        }}
+      >
+        <LogRenderer
+          logs={logs}
+          preRef={logRef}
+          preClassName="text-sm bg-bg-primary p-2 rounded overflow-auto max-h-[200px] border border-border"
+        />
+
+        {hasConfig && isAlive && (
+          <>
+            <div className="absolute bottom-1 right-1 z-50 flex items-center gap-1">
+              {(isHoveringLogs || isHidingLogs) && (
+                <AutoScrollToggle
+                  isActive={isAutoScrollActive}
+                  onToggle={setAutoScroll}
+                  className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors"
+                />
+              )}
+              <button
+                onClick={() => setShowExpandModal(true)}
+                className="px-2 py-0.5 rounded text-xs font-medium bg-accent-primary/30 text-text-primary hover:bg-accent-primary/50 transition-colors"
+              >
+                Expand
+              </button>
+            </div>
+
+            {/* Hover expansion portal */}
+            {(isHoveringLogs || isHidingLogs) &&
+              logContainerRef.current &&
+              createPortal(
+                <LogHoverExpand
+                  logs={logs}
+                  anchorRef={logContainerRef}
+                  isHiding={isHidingLogs}
+                  isAutoScrollActive={isAutoScrollActive}
+                  onSetAutoScroll={setAutoScroll}
+                />,
+                document.body,
+              )}
+          </>
+        )}
+      </div>
 
       <DevServerConfigModal isOpen={showConfigModal} onClose={() => setShowConfigModal(false)} />
 
