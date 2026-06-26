@@ -230,7 +230,8 @@ describe('readFileTool - Image Support', () => {
       expect(result.output).toContain('2: line 2')
       expect(result.output).toContain('3: line 3')
       expect(result.output).not.toContain('1: line 1')
-      expect(result.metadata).toBeUndefined() // Text files don't have metadata
+      expect(result.metadata).toBeDefined()
+      expect(result.metadata?.['encoding']).toBe('utf-8')
     })
 
     it('should handle text files with offset and limit parameters', async () => {
@@ -300,7 +301,8 @@ describe('readFileTool - Image Support', () => {
 
       // Should fall back to text reading for unknown types
       expect(result.success).toBe(true)
-      expect(result.metadata).toBeUndefined()
+      expect(result.metadata).toBeDefined()
+      expect(result.metadata?.['encoding']).toBeDefined()
     })
   })
 

@@ -4,10 +4,12 @@ import type { Diagnostic } from '../../shared/types.js'
 import { createTool } from './tool-helpers.js'
 import { formatDiagnosticsForLLM, appendLspInstallHint } from './diagnostics.js'
 import { validateFileForWrite, computeFileHash } from './file-tracker.js'
+import { encodeContent } from '../utils/encoding.js'
 
 interface WriteFileArgs {
   path: string
   content: string
+  encoding?: string
 }
 
 export const writeFileTool = createTool<WriteFileArgs>(
@@ -28,6 +30,11 @@ export const writeFileTool = createTool<WriteFileArgs>(
           content: {
             type: 'string',
             description: 'Content to write to the file',
+          },
+          encoding: {
+            type: 'string',
+            description:
+              'Optional file encoding (e.g. "ISO-8859-1", "windows-1252", "utf-16"). Defaults to "utf-8". Use the encoding reported by read_file to match project conventions.',
           },
         },
         required: ['path', 'content'],
@@ -50,10 +57,12 @@ export const writeFileTool = createTool<WriteFileArgs>(
     await mkdir(dir, { recursive: true })
 
     // Write file
-    await writeFile(fullPath, args.content, 'utf-8')
+    const encoding = args.encoding ?? 'utf-8'
+    const encoded = encodeContent(args.content, encoding)
+    await writeFile(fullPath, encoded)
 
     const lineCount = args.content.split('\n').length
-    const byteCount = Buffer.byteLength(args.content, 'utf-8')
+    const byteCount = encoded.length
 
     let output = `Successfully wrote ${lineCount} lines (${byteCount} bytes) to ${args.path}`
     let diagnostics: Diagnostic[] = []

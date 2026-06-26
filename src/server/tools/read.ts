@@ -3,6 +3,7 @@ import { extname, join } from 'node:path'
 import { OUTPUT_LIMITS } from './types.js'
 import { createTool } from './tool-helpers.js'
 import { computeFileHash } from './file-tracker.js'
+import { detectEncoding, decodeContent } from '../utils/encoding.js'
 
 interface ReadFileArgs {
   path: string
@@ -215,7 +216,8 @@ export const readFileTool = createTool<ReadFileArgs>(
     }
 
     // Handle as text file
-    const content = rawBuffer.toString('utf-8')
+    const { encoding, confidence } = detectEncoding(rawBuffer)
+    const content = decodeContent(rawBuffer, encoding)
     const lines = content.split('\n')
     const totalLines = lines.length
 
@@ -247,6 +249,12 @@ export const readFileTool = createTool<ReadFileArgs>(
       context.sessionManager.recordFileRead(context.sessionId, fullPath, contentHash)
     }
 
-    return helpers.success(output, truncated)
+    return helpers.success(output, truncated, {
+      metadata: {
+        encoding,
+        confidence: Math.round(confidence * 100) / 100,
+        lineCount: totalLines,
+      },
+    })
   },
 )

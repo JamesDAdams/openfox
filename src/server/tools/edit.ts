@@ -4,6 +4,7 @@ import { createTool } from './tool-helpers.js'
 import { formatDiagnosticsForLLM, appendLspInstallHint } from './diagnostics.js'
 import { validateFileForWrite, computeFileHash } from './file-tracker.js'
 import { extractEditContext } from './edit-context.js'
+import { detectEncoding, decodeContent, encodeContent } from '../utils/encoding.js'
 
 // Per-file mutex to serialize parallel edits on the same file.
 // Prevents the read-modify-write race condition where concurrent edits
@@ -87,13 +88,15 @@ export const editFileTool = createTool<EditFileArgs>(
         return helpers.error(validation.error?.message ?? 'File validation failed')
       }
 
-      let content: string
+      let rawBuffer: Buffer
       try {
-        content = await readFile(fullPath, 'utf-8')
+        rawBuffer = await readFile(fullPath)
       } catch {
         return helpers.error(`File not found: ${args.path}`)
       }
 
+      const { encoding, bomSize } = detectEncoding(rawBuffer)
+      const content = decodeContent(rawBuffer, encoding)
       const fileLineEnding = detectLineEnding(content)
       const normalizedContent = normalizeToLF(content)
       const normalizedOldString = normalizeToLF(args.old_string)
@@ -161,18 +164,19 @@ export const editFileTool = createTool<EditFileArgs>(
           normalizedContent.slice(index + normalizedOldString.length)
       }
 
-      const newContent = replacedContent.replace(
+      const restoredContent = replacedContent.replace(
         /\n/g,
         fileLineEnding === 'crlf' ? '\r\n' : fileLineEnding === 'cr' ? '\r' : '\n',
       )
 
-      await writeFile(fullPath, newContent, 'utf-8')
+      const encoded = encodeContent(restoredContent, encoding, bomSize > 0)
+      await writeFile(fullPath, encoded)
 
       let output = `Successfully replaced ${replaceAll ? occurrences : 1} occurrence(s) in ${args.path}`
       let diagnostics: Diagnostic[] = []
 
       if (context.lspManager) {
-        diagnostics = await context.lspManager.notifyFileChange(fullPath, newContent)
+        diagnostics = await context.lspManager.notifyFileChange(fullPath, restoredContent)
         output += formatDiagnosticsForLLM(diagnostics)
         output = appendLspInstallHint(output, context.lspManager, fullPath)
       }
