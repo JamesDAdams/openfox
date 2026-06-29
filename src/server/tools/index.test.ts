@@ -105,6 +105,14 @@ vi.mock('./web-fetch.js', () => ({
   },
 }))
 
+vi.mock('./step-done.js', () => ({
+  stepDoneTool: {
+    name: 'step_done',
+    definition: { type: 'function', function: { name: 'step_done', description: 'Step Done', parameters: {} } },
+    execute: vi.fn(async () => ({ success: true, output: 'done', durationMs: 1, truncated: false })),
+  },
+}))
+
 vi.mock('./sub-agent.js', () => ({
   callSubAgentTool: {
     name: 'call_sub_agent',
@@ -176,9 +184,31 @@ const verifierDef: AgentDefinition = {
     name: 'Verifier',
     description: 'Verifies',
     subagent: true,
-    allowedTools: ['read_file', 'run_command', 'session_metadata:get,add,update,remove', 'web_fetch'],
+    allowedTools: ['read_file', 'run_command', 'session_metadata', 'web_fetch'],
   },
   prompt: 'Verify.',
+}
+
+const plannerDef: AgentDefinition = {
+  metadata: {
+    id: 'planner',
+    name: 'Planner',
+    description: 'Plans',
+    subagent: false,
+    allowedTools: [
+      'read_file',
+      'web_fetch',
+      'run_command',
+      'ask_user',
+      'session_metadata',
+      'call_sub_agent',
+      'load_skill',
+      'background_process',
+      'mcp_config',
+      'dev_server',
+    ],
+  },
+  prompt: 'Plan mode.',
 }
 
 describe('tool registries', () => {
@@ -258,7 +288,7 @@ describe('tool registries', () => {
     })
   })
 
-  it('handles empty allowedTools list by providing all tools to top-level agents', async () => {
+  it('allows always-allowed tools (step_done) even with empty allowedTools', async () => {
     const emptyAgentDef: AgentDefinition = {
       metadata: {
         id: 'empty',
@@ -273,30 +303,137 @@ describe('tool registries', () => {
     const registry = getToolRegistryForAgent(emptyAgentDef)
     const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
 
+    const stepResult = await registry.execute('step_done', {}, context)
+    expect(stepResult).toMatchObject({ success: true, output: 'done' })
+  })
+
+  it('denies non-always-allowed tools (including read_file) when allowedTools is empty', async () => {
+    const emptyAgentDef: AgentDefinition = {
+      metadata: {
+        id: 'empty',
+        name: 'Empty',
+        description: 'No tools',
+        subagent: false,
+        allowedTools: [],
+      },
+      prompt: 'Empty',
+    }
+
+    const registry = getToolRegistryForAgent(emptyAgentDef)
+    const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
+
+    const readResult = await registry.execute('read_file', { path: 'test.ts' }, context)
+    expect(readResult).toMatchObject({
+      success: false,
+      error: expect.stringContaining("not available in 'empty' mode"),
+    })
+
+    const writeResult = await registry.execute('write_file', { path: 'test.ts' }, context)
+    expect(writeResult).toMatchObject({
+      success: false,
+      error: expect.stringContaining("not available in 'empty' mode"),
+    })
+  })
+
+  it('planner cannot use write_file — gets permission denied with planner-specific message', async () => {
+    const registry = getToolRegistryForAgent(plannerDef)
+    const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
+
+    const result = await registry.execute('write_file', { path: 'test.ts' }, context)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("not available in 'planner' mode")
+    expect(result.error).toContain('write_file')
+  })
+
+  it('planner cannot use edit_file — gets permission denied', async () => {
+    const registry = getToolRegistryForAgent(plannerDef)
+    const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
+
+    const result = await registry.execute('edit_file', { path: 'test.ts' }, context)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("not available in 'planner' mode")
+    expect(result.error).toContain('edit_file')
+  })
+
+  it('planner can use read_file (in allowedTools)', async () => {
+    const registry = getToolRegistryForAgent(plannerDef)
+    const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
+
     const result = await registry.execute('read_file', { path: 'test.ts' }, context)
 
-    expect(result).toMatchObject({
-      success: true,
-      output: 'read',
-    })
+    expect(result).toMatchObject({ success: true, output: 'read' })
+  })
+
+  it('planner can use step_done (always-allowed tool)', async () => {
+    const registry = getToolRegistryForAgent(plannerDef)
+    const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
+
+    const result = await registry.execute('step_done', {}, context)
+
+    expect(result).toMatchObject({ success: true, output: 'done' })
+  })
+
+  it('planner can use MCP tools (always-allowed)', async () => {
+    const { setMcpTools } = await import('./index.js')
+    const mcpTool = {
+      name: 'github_create_issue',
+      definition: {
+        type: 'function' as const,
+        function: { name: 'github_create_issue', description: 'Create issue', parameters: {} },
+      },
+      execute: vi.fn(async () => ({ success: true, output: 'issue created', durationMs: 1, truncated: false })),
+    }
+    setMcpTools([mcpTool])
+
+    const registry = getToolRegistryForAgent(plannerDef)
+    const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
+
+    const result = await registry.execute('github_create_issue', { title: 'test' }, context)
+
+    expect(result).toMatchObject({ success: true, output: 'issue created' })
+
+    // Cleanup
+    setMcpTools([])
+  })
+
+  it('builder can still use write_file (unchanged)', async () => {
+    const registry = getToolRegistryForAgent(builderDef)
+    const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
+
+    const result = await registry.execute('write_file', { path: 'test.ts' }, context)
+
+    expect(result).toMatchObject({ success: true, output: 'write' })
+  })
+
+  it('tool definitions are identical across planner and builder (vLLM cache preserved)', () => {
+    const plannerRegistry = getToolRegistryForAgent(plannerDef)
+    const builderRegistry = getToolRegistryForAgent(builderDef)
+
+    const plannerDefs = plannerRegistry.definitions.map((d) => d.function.name).sort()
+    const builderDefs = builderRegistry.definitions.map((d) => d.function.name).sort()
+
+    expect(plannerDefs).toEqual(builderDefs)
+    expect(plannerDefs).not.toContain('return_value')
   })
 
   it('enforces permissions when tool is in registry but not in allowed list', async () => {
     const allToolsRegistry = createToolRegistry()
     const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
 
-    const tools = allToolsRegistry.tools.filter((t) => t.name === 'read_file')
-    const allowedTools = ['write_file']
+    const tools = allToolsRegistry.tools.filter((t) => t.name === 'write_file')
+    const allowedTools = ['read_file']
 
     const restrictedRegistry = createRegistryFromTools(tools, allowedTools)
 
-    const result = await restrictedRegistry.execute('read_file', { path: 'test.ts' }, context)
+    const result = await restrictedRegistry.execute('write_file', { path: 'test.ts' }, context)
 
     expect(result).toMatchObject({
       success: false,
-      error: expect.stringContaining("Tool 'read_file' is not in your allowed tools list"),
+      error: expect.stringContaining("Tool 'write_file' is not in your allowed tools list"),
     })
-    expect(result.error).toContain('Available: write_file')
+    expect(result.error).toContain('Available: read_file')
   })
 
   it('blocks unauthorized tools in sub-agent registry', async () => {
@@ -363,7 +500,7 @@ describe('tool registries', () => {
         name: 'Verifier',
         description: 'Verify',
         subagent: true,
-        allowedTools: ['read_file', 'run_command', 'session_metadata:get,add,update,remove', 'web_fetch'],
+        allowedTools: ['read_file', 'run_command', 'session_metadata', 'web_fetch'],
       },
       prompt: 'Verify.',
     }

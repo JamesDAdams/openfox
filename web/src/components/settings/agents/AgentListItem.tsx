@@ -5,6 +5,7 @@ export function AgentListItem({
   agent,
   isBuiltIn,
   isConfirmingDelete,
+  alwaysAllowedNames,
   onView,
   onEdit,
   onDuplicate,
@@ -13,11 +14,13 @@ export function AgentListItem({
   agent: AgentInfo
   isBuiltIn: boolean
   isConfirmingDelete: boolean
+  alwaysAllowedNames?: Set<string>
   onView: () => void
   onEdit?: () => void
   onDuplicate: () => void
   onDelete?: () => void
 }) {
+  const displayTools = agent.allowedTools.filter((t) => !alwaysAllowedNames?.has(t))
   return (
     <CRUDListItem
       isBuiltIn={isBuiltIn}
@@ -40,13 +43,13 @@ export function AgentListItem({
       </div>
       {agent.description && <p className="text-text-secondary text-xs mt-0.5 truncate">{agent.description}</p>}
       <div className="flex flex-wrap gap-1 mt-1">
-        {agent.allowedTools.slice(0, 5).map((tool) => (
+        {displayTools.slice(0, 5).map((tool) => (
           <span key={tool} className="text-[10px] font-mono text-text-muted bg-bg-primary px-1 py-0.5 rounded">
             {tool}
           </span>
         ))}
-        {agent.allowedTools.length > 5 && (
-          <span className="text-[10px] text-text-muted">+{agent.allowedTools.length - 5} more</span>
+        {displayTools.length > 5 && (
+          <span className="text-[10px] text-text-muted">+{displayTools.length - 5} more</span>
         )}
       </div>
     </CRUDListItem>
@@ -58,6 +61,7 @@ export function AgentGroup({
   agents,
   subagents,
   isBuiltIn,
+  alwaysAllowedNames,
   onView,
   onDuplicate,
   onEdit,
@@ -67,6 +71,7 @@ export function AgentGroup({
   agents: AgentInfo[]
   subagents: AgentInfo[]
   isBuiltIn: boolean
+  alwaysAllowedNames?: Set<string>
   onView: (id: string) => void
   onDuplicate: (id: string) => void
   onEdit?: (id: string) => void
@@ -79,6 +84,7 @@ export function AgentGroup({
       agent={agent}
       isBuiltIn={isBuiltIn}
       isConfirmingDelete={false}
+      alwaysAllowedNames={alwaysAllowedNames}
       onView={() => onView(agent.id)}
       onEdit={isBuiltIn ? undefined : () => onEdit?.(agent.id)}
       onDuplicate={() => onDuplicate(agent.id)}

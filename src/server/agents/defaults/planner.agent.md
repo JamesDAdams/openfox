@@ -8,10 +8,13 @@ allowedTools:
   - read_file
   - web_fetch
   - run_command
-  - session_metadata:get,add,update,remove
+  - ask_user
+  - session_metadata
   - call_sub_agent
   - load_skill
   - background_process
+  - mcp_config
+  - dev_server
 ---
 
 # Plan Mode

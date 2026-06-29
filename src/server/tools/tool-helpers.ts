@@ -78,7 +78,7 @@ export function checkActionPermission(
   permittedActions: string[] | undefined,
   startTime: number,
 ): ToolResult | undefined {
-  if (action && permittedActions && !permittedActions.includes(action)) {
+  if (action && permittedActions && permittedActions.length > 0 && !permittedActions.includes(action)) {
     return {
       success: false,
       error: `Action '${action}' not allowed. Available: ${permittedActions.join(', ')}`,

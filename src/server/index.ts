@@ -15,6 +15,7 @@ import { ensureVersionPrefix, buildModelsUrl } from './llm/url-utils.js'
 import { createMockLLMClient } from './llm/mock.js'
 import { createProviderManager, parseDefaultModelSelection } from './provider-manager.js'
 import { createToolRegistry, setMcpTools } from './tools/index.js'
+import { ALWAYS_ALLOWED, ALWAYS_ALLOWED_FOR_SUBAGENTS, TOP_LEVEL_ONLY_TOOLS } from './tools/tool-policy.js'
 import { McpManager, createMcpTools } from './mcp/index.js'
 import { setMcpManagerForTools, setMcpConfigMode, setNotifyMcpServersChanged } from './tools/mcp-config.js'
 import { createServerMessage } from '../shared/protocol.js'
@@ -218,6 +219,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const tools = toolRegistry.tools.map((t) => ({
       name: t.name,
       actions: t.permittedActions || [],
+      alwaysAllowed: ALWAYS_ALLOWED.has(t.name) || ALWAYS_ALLOWED_FOR_SUBAGENTS.has(t.name),
+      topLevelOnly: TOP_LEVEL_ONLY_TOOLS.has(t.name),
     }))
     res.json({ tools })
   })

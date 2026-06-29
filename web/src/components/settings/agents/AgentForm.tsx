@@ -13,11 +13,12 @@ interface AgentFormProps {
   formError: string
   saving: boolean
   isReadOnly: boolean
-  availableTools: { name: string; actions: string[] }[]
+  availableTools: { name: string; actions: string[]; topLevelOnly?: boolean }[]
   onNameChange: (name: string) => void
   onIdChange: (id: string) => void
   onDescriptionChange: (desc: string) => void
   onSubagentChange: (subagent: boolean) => void
+  onToolsChange: (tools: string[]) => void
   onColorChange: (color: string) => void
   onPromptChange: (prompt: string) => void
   onSave: () => void
@@ -41,6 +42,7 @@ export function AgentForm({
   onIdChange,
   onDescriptionChange,
   onSubagentChange,
+  onToolsChange,
   onColorChange,
   onPromptChange,
   onSave,
@@ -48,6 +50,7 @@ export function AgentForm({
   onDuplicate,
 }: AgentFormProps) {
   const granularTools = parseAllowedTools(formTools)
+  const filteredTools = availableTools.filter((t) => !(formSubagent && t.topLevelOnly))
 
   const toggleToolAction = (toolName: string, action: string) => {
     const newGranular = new Map(granularTools)
@@ -75,8 +78,6 @@ export function AgentForm({
     }
     onToolsChange(serializeTools(newGranular))
   }
-
-  const onToolsChange = (_tools: string[]) => {}
 
   return (
     <div className="flex flex-col h-full">
@@ -114,6 +115,16 @@ export function AgentForm({
             <label className="block text-xs text-text-secondary mb-1">Type</label>
             <div className="flex items-center gap-3 h-[34px]">
               <button
+                onClick={() => !isReadOnly && onSubagentChange(false)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  !formSubagent
+                    ? 'bg-accent-primary/25 text-accent-primary'
+                    : 'bg-bg-tertiary text-text-muted hover:text-text-secondary'
+                } ${isReadOnly ? 'pointer-events-none opacity-60' : ''}`}
+              >
+                Agent
+              </button>
+              <button
                 onClick={() => !isReadOnly && onSubagentChange(true)}
                 className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                   formSubagent
@@ -122,16 +133,6 @@ export function AgentForm({
                 } ${isReadOnly ? 'pointer-events-none opacity-60' : ''}`}
               >
                 Sub-agent
-              </button>
-              <button
-                onClick={() => !isReadOnly && onSubagentChange(false)}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                  !formSubagent
-                    ? 'bg-accent-primary/25 text-accent-primary'
-                    : 'bg-bg-tertiary text-text-muted hover:text-text-secondary'
-                } ${isReadOnly ? 'pointer-events-none opacity-60' : ''}`}
-              >
-                Top-level
               </button>
               <div className="flex items-center gap-1.5 ml-auto">
                 <label className="text-xs text-text-secondary">Color</label>
@@ -150,7 +151,7 @@ export function AgentForm({
         <div>
           <label className="block text-xs text-text-secondary mb-1">Tools</label>
           <div className="flex flex-wrap gap-1.5 p-2 bg-bg-tertiary border border-border rounded max-h-32 overflow-y-auto">
-            {availableTools.map((tool) => {
+            {filteredTools.map((tool) => {
               const isSelected = granularTools.has(tool.name)
               const hasActions = tool.actions.length > 0
               const selectedActions = granularTools.get(tool.name) || new Set()

@@ -7,7 +7,7 @@ color: '#22c55e'
 allowedTools:
   - read_file
   - run_command
-  - session_metadata:get,add,update,remove
+  - session_metadata
   - web_fetch
 ---
 

@@ -16,8 +16,57 @@ import { devServerTool } from './dev-server.js'
 import { stepDoneTool } from './step-done.js'
 import { backgroundProcessTool } from './background-process/index.js'
 import { mcpConfigTool } from './mcp-config.js'
+import { computeEffectiveTools } from './tool-policy.js'
 import { loadAllAgentsDefault, findAgentById } from '../agents/registry.js'
 import { logger } from '../utils/logger.js'
+
+// ============================================================================
+// Built-in Tool Registry
+// ============================================================================
+
+/**
+ * All built-in tools. This is the single source of truth — both
+ * BUILT_IN_TOOL_NAMES and getAllToolsMap() derive from it.
+ * MCP tools are dynamic and injected separately via setMcpTools().
+ *
+ * Lazy initialization to avoid circular dependency issues during module load
+ * (mcpConfigTool imports from ../chat/dynamic-context.js which may trigger
+ *  re-entrant module evaluation).
+ */
+let _builtInTools: Tool[] | undefined
+
+function getBuiltInTools(): Tool[] {
+  if (!_builtInTools) {
+    _builtInTools = [
+      readFileTool,
+      writeFileTool,
+      editFileTool,
+      runCommandTool,
+      askUserTool,
+      sessionMetadataTool,
+      callSubAgentTool,
+      loadSkillTool,
+      returnValueTool,
+      webFetchTool,
+      devServerTool,
+      stepDoneTool,
+      backgroundProcessTool,
+      mcpConfigTool,
+    ]
+  }
+  return _builtInTools
+}
+
+function getBuiltInToolNames(): Set<string> {
+  if (BUILT_IN_TOOL_NAMES_CACHE.size === 0) {
+    for (const t of getBuiltInTools()) {
+      BUILT_IN_TOOL_NAMES_CACHE.add(t.name)
+    }
+  }
+  return BUILT_IN_TOOL_NAMES_CACHE
+}
+
+const BUILT_IN_TOOL_NAMES_CACHE = new Set<string>()
 
 // ============================================================================
 // Granular Tool Permissions
@@ -102,9 +151,10 @@ export function createRegistryFromTools(
   tools: Tool[],
   allowedTools?: string[],
   toolPermissions?: Record<string, Set<string>>,
+  agentId?: string,
+  isSubAgent?: boolean,
 ): ToolRegistry {
   const toolMap = new Map<string, Tool>()
-  const allowedToolsSet = new Set(allowedTools || [])
 
   for (const tool of tools) {
     toolMap.set(tool.name, tool)
@@ -146,19 +196,26 @@ export function createRegistryFromTools(
         }
       }
 
-      // Check base tool permission (considering granular permissions like "criterion:pass,fail")
-      const hasBaseToolPermission =
-        allowedToolsSet.has(name) || [...allowedToolsSet].some((entry) => entry.startsWith(`${name}:`))
-      if (allowedTools && allowedTools.length > 0 && !hasBaseToolPermission) {
-        logger.debug('Permission denied: tool not in allowed list', {
-          tool: name,
-          allowedTools,
-        })
-        return {
-          success: false,
-          error: createPermissionErrorMessage(name, allowedTools),
-          durationMs: 0,
-          truncated: false,
+      // MCP tools are user-configured and always allowed for top-level agents
+      const isMcpTool = !getBuiltInToolNames().has(name)
+
+      // allowedTools === undefined → no restrictions (all tools allowed)
+      // allowedTools === [...] → only effective tools + MCP tools allowed
+      const hasRestrictions = allowedTools !== undefined
+
+      if (!isMcpTool && hasRestrictions) {
+        const effectiveTools = computeEffectiveTools(allowedTools!, isSubAgent ? 'sub-agent' : 'agent')
+        if (!effectiveTools.has(name)) {
+          logger.debug('Permission denied: tool not in allowed list', {
+            tool: name,
+            allowedTools,
+          })
+          return {
+            success: false,
+            error: createPermissionErrorMessage(name, allowedTools, agentId, isSubAgent),
+            durationMs: 0,
+            truncated: false,
+          }
         }
       }
 
@@ -236,36 +293,29 @@ export function setMcpTools(tools: Tool[]): void {
 }
 
 function getAllToolsMap(): Map<string, Tool> {
-  const builtInTools: [string, Tool][] = (
-    [
-      readFileTool,
-      writeFileTool,
-      editFileTool,
-      runCommandTool,
-      askUserTool,
-      sessionMetadataTool,
-      callSubAgentTool,
-      loadSkillTool,
-      returnValueTool,
-      webFetchTool,
-      devServerTool,
-      stepDoneTool,
-      backgroundProcessTool,
-      mcpConfigTool,
-    ] as Tool[]
-  ).map((t) => [t.name, t])
+  const builtInEntries: [string, Tool][] = getBuiltInTools().map((t) => [t.name, t])
   const mcpEntries: [string, Tool][] = mcpToolsOverride.map((t) => [t.name, t])
-  return new Map<string, Tool>([...builtInTools, ...mcpEntries])
+  return new Map<string, Tool>([...builtInEntries, ...mcpEntries])
 }
 
 /**
  * Creates a permission error message for unauthorized tool access
  */
-function createPermissionErrorMessage(toolName: string, allowedTools: string[]): string {
-  if (allowedTools.length === 0) {
+function createPermissionErrorMessage(
+  toolName: string,
+  allowedTools: string[],
+  agentId?: string,
+  isSubAgent?: boolean,
+): string {
+  const effectiveTools = computeEffectiveTools(allowedTools, isSubAgent ? 'sub-agent' : 'agent')
+  const available = [...effectiveTools].sort()
+  if (agentId) {
+    return `Tool '${toolName}' is not available in '${agentId}' mode. Available: ${available.join(', ')}`
+  }
+  if (available.length === 0) {
     return `Tool '${toolName}' is not in your allowed tools list. No tools are allowed.`
   }
-  return `Tool '${toolName}' is not in your allowed tools list. Available: ${allowedTools.join(', ')}`
+  return `Tool '${toolName}' is not in your allowed tools list. Available: ${available.join(', ')}`
 }
 
 /**
@@ -309,7 +359,7 @@ export function getToolRegistryForSubAgent(toolNames: string[]): ToolRegistry {
     if (rv) tools.push(rv)
   }
   const allowedToolsWithReturnValue = addReturnValueToAllowedTools(toolNames)
-  return createRegistryFromTools(tools, allowedToolsWithReturnValue, toolPermissions)
+  return createRegistryFromTools(tools, allowedToolsWithReturnValue, toolPermissions, undefined, true)
 }
 
 /**
@@ -332,10 +382,10 @@ export function getToolRegistryForAgent(agentDef: AgentDefinition): ToolRegistry
     return getToolRegistryForSubAgent(agentDef.metadata.allowedTools)
   }
 
-  // Top-level agents: return ALL tools for vLLM cache consistency
+  // Top-level agents: return ALL tool definitions for vLLM cache consistency
+  // but enforce the agent's allowedTools for execution permission
   const allTools = getAllToolsMap()
   const tools: Tool[] = []
-  const allowedTools: string[] = []
 
   for (const [name, tool] of allTools.entries()) {
     // Exclude return_value from top-level agents
@@ -343,10 +393,11 @@ export function getToolRegistryForAgent(agentDef: AgentDefinition): ToolRegistry
       continue
     }
     tools.push(tool)
-    allowedTools.push(name)
   }
 
-  return createRegistryFromTools(tools, allowedTools)
+  const allowedTools = agentDef.metadata.allowedTools
+  const toolPermissions = parseToolPermissions(allowedTools)
+  return createRegistryFromTools(tools, allowedTools, toolPermissions, agentDef.metadata.id, false)
 }
 
 /**

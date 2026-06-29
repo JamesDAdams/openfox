@@ -1,5 +1,6 @@
 import type { SkillMetadata } from '../skills/types.js'
 import type { AgentDefinition } from '../agents/types.js'
+import { computeEffectiveTools } from '../tools/tool-policy.js'
 
 // ============================================================================
 // Base Prompt (shared by all agents)
@@ -254,9 +255,12 @@ function buildToolPermissionsSection(allowedTools: string[] | undefined, isSubAg
     }
   }
 
-  // Add return_value for sub-agents if not present
-  if (isSubAgent && !baseTools.includes('return_value') && !toolPermissions.has('return_value')) {
-    baseTools.push('return_value')
+  // Add always-allowed tools for the agent type (step_done for agents, return_value for sub-agents)
+  const effectiveTools = computeEffectiveTools(allowedTools, isSubAgent ? 'sub-agent' : 'agent')
+  for (const tool of effectiveTools) {
+    if (!baseTools.includes(tool) && !toolPermissions.has(tool)) {
+      baseTools.push(tool)
+    }
   }
 
   // Build the display string

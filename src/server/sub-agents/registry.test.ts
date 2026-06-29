@@ -19,12 +19,7 @@ describe('SubAgentRegistry (via agent registry)', () => {
     expect(verifier?.metadata.name).toBe('Verifier')
     expect(typeof verifier?.metadata.description).toBe('string')
     expect(typeof verifier?.prompt).toBe('string')
-    expect(verifier?.metadata.allowedTools).toEqual([
-      'read_file',
-      'run_command',
-      'session_metadata:get,add,update,remove',
-      'web_fetch',
-    ])
+    expect(verifier?.metadata.allowedTools).toEqual(['read_file', 'run_command', 'session_metadata', 'web_fetch'])
     expect(verifier?.metadata.subagent).toBe(true)
   })
 
@@ -37,12 +32,7 @@ describe('SubAgentRegistry (via agent registry)', () => {
     expect(codeReviewer?.metadata.name).toBe('Code Reviewer')
     expect(typeof codeReviewer?.metadata.description).toBe('string')
     expect(typeof codeReviewer?.prompt).toBe('string')
-    expect(codeReviewer?.metadata.allowedTools).toEqual([
-      'read_file',
-      'run_command',
-      'web_fetch',
-      'session_metadata:get,add,update,remove',
-    ])
+    expect(codeReviewer?.metadata.allowedTools).toEqual(['read_file', 'run_command', 'web_fetch', 'session_metadata'])
     expect(codeReviewer?.metadata.subagent).toBe(true)
   })
 

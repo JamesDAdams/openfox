@@ -11,12 +11,11 @@ allowedTools:
   - edit_file
   - run_command
   - ask_user
-  - session_metadata:get,add,update,remove
+  - session_metadata
   - call_sub_agent
   - load_skill
   - dev_server
   - background_process
-  - step_done
 ---
 
 # Build Mode

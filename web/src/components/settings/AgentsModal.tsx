@@ -44,7 +44,10 @@ export function AgentsModal({ isOpen, onClose, initialEditId }: AgentsModalProps
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const [availableTools, setAvailableTools] = useState<{ name: string; actions: string[] }[]>([])
+  const [availableTools, setAvailableTools] = useState<{ name: string; actions: string[]; topLevelOnly?: boolean }[]>(
+    [],
+  )
+  const [alwaysAllowedNames, setAlwaysAllowedNames] = useState<Set<string>>(new Set())
 
   const populateFormFromAgent = (agent: AgentFull) => {
     setFormName(agent.metadata.name)
@@ -85,8 +88,16 @@ export function AgentsModal({ isOpen, onClose, initialEditId }: AgentsModalProps
       fetchAgents()
       authFetch('/api/tools')
         .then((r) => r.json())
-        .then((d) => setAvailableTools(d.tools || []))
-        .catch(() => setAvailableTools([]))
+        .then((d) => {
+          const tools: { name: string; actions: string[]; alwaysAllowed?: boolean; topLevelOnly?: boolean }[] =
+            d.tools || []
+          setAlwaysAllowedNames(new Set(tools.filter((t) => t.alwaysAllowed).map((t) => t.name)))
+          setAvailableTools(tools.filter((t) => !t.alwaysAllowed))
+        })
+        .catch(() => {
+          setAvailableTools([])
+          setAlwaysAllowedNames(new Set())
+        })
 
       if (initialEditId) {
         const isDefault = defaults.some((d) => d.id === initialEditId)
@@ -174,7 +185,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId }: AgentsModalProps
         name: formName,
         description: formDescription,
         subagent: formSubagent,
-        allowedTools: formTools,
+        allowedTools: formTools.filter((t) => !alwaysAllowedNames.has(t)),
         color: formColor,
       },
       prompt: formPrompt,
@@ -237,7 +248,13 @@ export function AgentsModal({ isOpen, onClose, initialEditId }: AgentsModalProps
           onNameChange={handleNameChange}
           onIdChange={setFormId}
           onDescriptionChange={setFormDescription}
-          onSubagentChange={setFormSubagent}
+          onSubagentChange={(subagent) => {
+            setFormSubagent(subagent)
+            if (subagent) {
+              setFormTools((prev) => prev.filter((t) => !availableTools.find((at) => at.name === t)?.topLevelOnly))
+            }
+          }}
+          onToolsChange={setFormTools}
           onColorChange={setFormColor}
           onPromptChange={setFormPrompt}
           onSave={handleSave}
@@ -268,6 +285,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId }: AgentsModalProps
               agents={defaultTopLevelAgents}
               subagents={defaultSubAgents}
               isBuiltIn={true}
+              alwaysAllowedNames={alwaysAllowedNames}
               onView={handleView}
               onDuplicate={handleDuplicate}
             />
@@ -279,6 +297,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId }: AgentsModalProps
               agents={userTopLevelAgents}
               subagents={userSubAgents}
               isBuiltIn={false}
+              alwaysAllowedNames={alwaysAllowedNames}
               onView={handleView}
               onDuplicate={handleDuplicate}
               onEdit={handleEdit}
