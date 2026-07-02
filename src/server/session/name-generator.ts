@@ -87,7 +87,7 @@ export async function generateSessionName(options: GenerateSessionNameOptions): 
       },
     ]
 
-    const timeoutSignal = AbortSignal.timeout(60000)
+    const timeoutSignal = AbortSignal.timeout(120_000)
     const composedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal
 
     const response = await llmClient.complete({
@@ -293,7 +293,7 @@ export async function generateSessionNameForSession(
       return
     }
 
-    const timeoutSignal = AbortSignal.timeout(30000)
+    const timeoutSignal = AbortSignal.timeout(120_000)
     const composedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal
 
     const response = await client.complete({

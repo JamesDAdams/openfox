@@ -42,7 +42,7 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
   let capabilities = getBackendCapabilities(backend)
   const reasoningEffort = config.llm.reasoningEffort
   const thinkingField = config.llm.thinkingField
-  const idleTimeout = config.llm.idleTimeout ?? 30_000
+  const idleTimeout = config.llm.idleTimeout ?? 120_000
 
   return {
     getModel() {
