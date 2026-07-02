@@ -95,6 +95,10 @@ export function ProviderModal({
     loading: boolean
     progress: Record<string, 'pending' | 'probing' | 'done' | 'error'>
   }>({ loading: false, progress: {} })
+  const [testResults, setTestResults] = useState<
+    Record<string, { loading: boolean; result?: string; message?: Record<string, unknown>; error?: string }>
+  >({})
+  const [rawModalData, setRawModalData] = useState<string | null>(null)
   const urlInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -119,6 +123,8 @@ export function ProviderModal({
       setFormIsLocal(editProvider?.isLocal ?? false)
       setFetchError(null)
       setThinkingField(editProvider?.thinkingField ?? '')
+      setTestResults({})
+      setRawModalData(null)
 
       if (editProvider?.models?.length) {
         const configs: Record<string, ModelConfig> = {}
@@ -267,10 +273,58 @@ export function ProviderModal({
     }
   }
 
+  async function testParams(modelId: string, mode: 'thinking' | 'non-thinking') {
+    const key = modelId + '-' + mode
+    setTestResults((prev) => ({ ...prev, [key]: { loading: true } }))
+    try {
+      const config = modelConfigs[modelId]
+      const response = await authFetch('/api/providers/test-params', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: formUrl,
+          model: modelId,
+          apiKey: formApiKey || undefined,
+          backend: formBackend || 'unknown',
+          thinkingField: thinkingField || undefined,
+          mode,
+          modelConfig: {
+            temperature: config?.temperature,
+            topP: config?.topP,
+            topK: config?.topK,
+            maxTokens: config?.maxTokens,
+            supportsVision: config?.supportsVision,
+            thinkingEnabled: config?.thinkingEnabled,
+            thinkingLevel: config?.thinkingLevel,
+            nonThinkingEnabled: config?.nonThinkingEnabled,
+            thinkingQueryParams: config?.thinkingQueryParams,
+            nonThinkingQueryParams: config?.nonThinkingQueryParams,
+          },
+        }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setTestResults((prev) => ({
+          ...prev,
+          [key]: { loading: false, result: JSON.stringify(data, null, 2), message: data.message },
+        }))
+      } else {
+        setTestResults((prev) => ({ ...prev, [key]: { loading: false, error: data.error ?? 'Test failed' } }))
+      }
+    } catch (error) {
+      setTestResults((prev) => ({
+        ...prev,
+        [key]: { loading: false, error: error instanceof Error ? error.message : 'Request failed' },
+      }))
+    }
+  }
+
   function resetStep2() {
     setModels([])
     setModelConfigs({})
     setAutoConfigState({ loading: false, progress: {} })
+    setTestResults({})
+    setRawModalData(null)
     autoConfigRan.current = false
   }
 
@@ -580,6 +634,66 @@ export function ProviderModal({
                             </label>
                           </div>
 
+                          {/* Test buttons */}
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => testParams(model.id, 'thinking')}
+                                disabled={testResults[model.id + '-thinking']?.loading}
+                                className="px-3 py-1.5 bg-bg-tertiary border border-border rounded text-xs font-medium hover:bg-bg-secondary disabled:opacity-50 transition-colors"
+                              >
+                                {testResults[model.id + '-thinking']?.loading ? 'Testing...' : 'Test thinking'}
+                              </button>
+                              {testResults[model.id + '-thinking']?.result && (
+                                <span className="text-xs text-accent-success">OK</span>
+                              )}
+                              {testResults[model.id + '-thinking']?.error && (
+                                <span
+                                  className="text-xs text-red-500"
+                                  title={testResults[model.id + '-thinking']?.error}
+                                >
+                                  Fail
+                                </span>
+                              )}
+                              {testResults[model.id + '-thinking']?.result && (
+                                <button
+                                  onClick={() => setRawModalData(testResults[model.id + '-thinking']!.result!)}
+                                  className="text-xs text-accent-primary hover:underline"
+                                >
+                                  raw
+                                </button>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => testParams(model.id, 'non-thinking')}
+                                disabled={testResults[model.id + '-non-thinking']?.loading}
+                                className="px-3 py-1.5 bg-bg-tertiary border border-border rounded text-xs font-medium hover:bg-bg-secondary disabled:opacity-50 transition-colors"
+                              >
+                                {testResults[model.id + '-non-thinking']?.loading ? 'Testing...' : 'Test non-thinking'}
+                              </button>
+                              {testResults[model.id + '-non-thinking']?.result && (
+                                <span className="text-xs text-accent-success">OK</span>
+                              )}
+                              {testResults[model.id + '-non-thinking']?.error && (
+                                <span
+                                  className="text-xs text-red-500"
+                                  title={testResults[model.id + '-non-thinking']?.error}
+                                >
+                                  Fail
+                                </span>
+                              )}
+                              {testResults[model.id + '-non-thinking']?.result && (
+                                <button
+                                  onClick={() => setRawModalData(testResults[model.id + '-non-thinking']!.result!)}
+                                  className="text-xs text-accent-primary hover:underline"
+                                >
+                                  raw
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
                           {/* Thinking modes — collapsed by default, auto-config usually fills them */}
                           <details className="group">
                             <summary className="text-xs text-text-muted cursor-pointer hover:text-text-secondary list-none flex items-center gap-1 select-none">
@@ -878,6 +992,31 @@ export function ProviderModal({
                 Done
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Raw response modal */}
+      {rawModalData && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRawModalData(null)
+          }}
+        >
+          <div className="bg-bg-secondary border border-border rounded-xl w-[640px] max-h-[80vh] shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+              <h3 className="text-base font-semibold text-text-primary">Raw Response</h3>
+              <button
+                onClick={() => setRawModalData(null)}
+                className="text-text-muted hover:text-text-primary text-xl leading-none p-1"
+              >
+                &times;
+              </button>
+            </div>
+            <pre className="px-6 py-4 overflow-y-auto text-xs text-text-secondary font-mono whitespace-pre-wrap break-all">
+              {rawModalData}
+            </pre>
           </div>
         </div>
       )}

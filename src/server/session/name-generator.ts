@@ -301,6 +301,7 @@ export async function generateSessionNameForSession(
       tools: [],
       ...(modelSettings ? { modelSettings } : {}),
       signal: composedSignal,
+      skipClientReasoningEffort: true,
     })
 
     let name = (response.content || response.thinkingContent || '').trim()

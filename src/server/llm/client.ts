@@ -84,7 +84,9 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
       })
 
       try {
-        const resolvedEffort = (request.reasoningEffort ?? reasoningEffort) as ReasoningEffort | undefined
+        const resolvedEffort = request.skipClientReasoningEffort
+          ? undefined
+          : ((request.reasoningEffort ?? reasoningEffort) as ReasoningEffort | undefined)
 
         const { params: createParams } = await buildNonStreamingCreateParams({
           model,
@@ -145,7 +147,9 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
     },
 
     async *stream(request: LLMCompletionRequest): AsyncIterable<LLMStreamEvent> {
-      const resolvedEffort = (request.reasoningEffort ?? reasoningEffort) as ReasoningEffort | undefined
+      const resolvedEffort = request.skipClientReasoningEffort
+        ? undefined
+        : ((request.reasoningEffort ?? reasoningEffort) as ReasoningEffort | undefined)
 
       logger.debug('LLM stream request', {
         messageCount: request.messages.length,

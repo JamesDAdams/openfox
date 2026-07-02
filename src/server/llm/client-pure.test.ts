@@ -234,7 +234,7 @@ describe('llm client pure helpers', () => {
       },
     })
 
-    // reasoning_effort from client config supersedes queryParams
+    // reasoning_effort from client config supersedes queryParams (user-set thinkingLevel wins)
     expect(
       await buildNonStreamingCreateParams({
         model: 'test-model',

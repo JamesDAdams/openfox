@@ -962,6 +962,100 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
   })
 
+  // Test params: probe a model with the exact same param-building pipeline as the agentic loop
+  app.post('/api/providers/test-params', async (req, res) => {
+    const { url, model, apiKey, backend, thinkingField, mode, modelConfig } = req.body as {
+      url: string
+      model: string
+      apiKey?: string
+      backend?: string
+      thinkingField?: string
+      mode: 'thinking' | 'non-thinking'
+      modelConfig?: {
+        temperature?: number
+        topP?: number
+        topK?: number
+        maxTokens?: number
+        supportsVision?: boolean
+        thinkingEnabled?: boolean
+        thinkingLevel?: string
+        nonThinkingEnabled?: boolean
+        thinkingQueryParams?: string
+        nonThinkingQueryParams?: string
+      }
+    }
+    if (!url) return res.status(400).json({ error: 'url is required' })
+    if (!model) return res.status(400).json({ error: 'model is required' })
+    if (!mode) return res.status(400).json({ error: 'mode is required' })
+
+    try {
+      const { getModelProfile } = await import('./llm/profiles.js')
+      const { getBackendCapabilities } = await import('./llm/backend.js')
+      const { buildNonStreamingCreateParams } = await import('./llm/client-pure.js')
+      const { OpenAIHttpClient } = await import('./llm/http-client.js')
+      const { ensureVersionPrefix } = await import('./llm/url-utils.js')
+
+      const profile = getModelProfile(model)
+      const capabilities = getBackendCapabilities((backend || 'unknown') as import('./llm/backend.js').Backend)
+
+      // Build modelSettings the same way getModelSettings does
+      const modelSettings: Record<string, unknown> = {}
+      if (modelConfig?.temperature !== undefined) modelSettings['temperature'] = modelConfig.temperature
+      if (modelConfig?.topP !== undefined) modelSettings['topP'] = modelConfig.topP
+      if (modelConfig?.topK !== undefined) modelSettings['topK'] = modelConfig.topK
+      if (modelConfig?.maxTokens !== undefined) modelSettings['maxTokens'] = modelConfig.maxTokens
+      if (modelConfig?.supportsVision !== undefined) modelSettings['supportsVision'] = modelConfig.supportsVision
+
+      const rawQP = mode === 'thinking' ? modelConfig?.thinkingQueryParams : modelConfig?.nonThinkingQueryParams
+      if (rawQP) {
+        modelSettings['queryParams'] = JSON.parse(rawQP) as Record<string, unknown>
+      } else {
+        const modeEnabled = mode === 'thinking' ? modelConfig?.thinkingEnabled : modelConfig?.nonThinkingEnabled
+        if (modeEnabled) {
+          modelSettings['chatTemplateKwargs'] =
+            mode === 'thinking' ? { enable_thinking: true } : { enable_thinking: false }
+        }
+      }
+
+      // Resolve reasoningEffort the same way the client does
+      let reasoningEffort: string | undefined
+      if (mode === 'thinking' && modelConfig?.thinkingEnabled && modelConfig?.thinkingLevel) {
+        reasoningEffort = modelConfig.thinkingLevel
+      }
+
+      const hasModelSettings = Object.keys(modelSettings).length > 0
+      const { params } = await buildNonStreamingCreateParams({
+        model,
+        request: {
+          messages: [{ role: 'user' as const, content: 'say hi in one word' }],
+          tools: [],
+          ...(hasModelSettings ? { modelSettings: modelSettings as never } : {}),
+          ...(reasoningEffort ? { reasoningEffort: reasoningEffort as never } : {}),
+        },
+        profile,
+        capabilities,
+        ...(thinkingField ? { thinkingField } : {}),
+      })
+
+      const httpClient = new OpenAIHttpClient({
+        baseURL: ensureVersionPrefix(url),
+        apiKey: apiKey ?? 'not-needed',
+      })
+
+      const response = await httpClient.createChatCompletion(params, { signal: AbortSignal.timeout(15000) }, true)
+
+      res.json({
+        success: true,
+        message: response.choices?.[0]?.message ?? {},
+        raw: response.raw,
+      })
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : 'Test failed',
+      })
+    }
+  })
+
   // Onboarding: create provider
   app.post('/api/providers', async (req, res) => {
     const {

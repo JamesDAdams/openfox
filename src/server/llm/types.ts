@@ -42,6 +42,9 @@ export interface LLMCompletionRequest {
   }
   /** When true, include the raw API response body in the result */
   returnRaw?: boolean
+  /** When true, the client-level reasoningEffort (from thinkingLevel) is NOT applied.
+   *  Used by non-thinking callers (e.g. title generation) that want to opt out. */
+  skipClientReasoningEffort?: boolean
 }
 
 export interface LLMCompletionResponse {
