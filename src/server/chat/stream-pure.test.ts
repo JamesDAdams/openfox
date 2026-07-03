@@ -155,6 +155,59 @@ describe('stream-pure', () => {
     expect(result.content).toBe('')
   })
 
+  it('does not emit chat.error when aborted mid-stream', async () => {
+    vi.useFakeTimers()
+
+    const controller = new AbortController()
+    const events: Array<{ type: string; data: unknown }> = []
+
+    const client = {
+      complete: async () => {
+        throw new Error('Not implemented')
+      },
+      getModel: () => 'test-model',
+      getProfile: () => ({}) as never,
+      getBackend: () => 'unknown' as const,
+      setBackend: () => {},
+      setModel: () => {},
+      stream: async function* (_request: { signal?: AbortSignal }) {
+        yield { type: 'text_delta' as const, content: 'Hello ' }
+        await new Promise<void>((resolve) => setTimeout(resolve, 10))
+        // Simulate the AbortError a real HTTP client throws when signal fires mid-stream
+        throw new Error('The operation was aborted')
+      },
+    }
+
+    const gen = streamLLMPure({
+      messageId: 'msg-abort',
+      systemPrompt: 'system',
+      llmClient: client,
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: controller.signal,
+    })
+
+    const consumePromise = consumeStreamGenerator(gen, (event) => {
+      events.push(event)
+    })
+
+    // Advance time a tiny bit so the first text_delta flows through but the
+    // 10ms timer inside the mock client hasn't fired yet.
+    await vi.advanceTimersByTimeAsync(1)
+    expect(events.filter((e) => e.type === 'message.delta')).toHaveLength(1)
+
+    // Abort mid-stream — signal fires while the mock client is still awaiting
+    controller.abort()
+
+    // Advance past the remaining timer → mock client throws →
+    // streamWithSegments yields 'error' → our fix should suppress chat.error
+    await vi.advanceTimersByTimeAsync(10)
+
+    const result = await consumePromise
+
+    expect(events.filter((e) => e.type === 'chat.error')).toHaveLength(0)
+    expect(result.aborted).toBe(true)
+  })
+
   describe('prefTokenIncrement with context caching', () => {
     it('computes prefillSpeed from increment not total tokens when previousContextTokens provided', () => {
       const metrics = new TurnMetrics()

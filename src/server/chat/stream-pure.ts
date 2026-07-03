@@ -337,6 +337,9 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
         }
 
         case 'error':
+          // Suppress chat.error when user-initiated abort caused the error —
+          // the agent loop handles abort gracefully via signal check + emitPartialDoneEvents.
+          if (signal?.aborted) break
           yield {
             type: 'chat.error',
             data: { error: value.error, recoverable: true },
