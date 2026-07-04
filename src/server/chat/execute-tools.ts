@@ -36,6 +36,17 @@ export interface ToolBatchResult {
   stepDoneCalled?: boolean | undefined
 }
 
+const INTERRUPTED_ERROR = 'Tool execution was interrupted by user'
+
+function createInterruptedResult(startTime?: number): ToolResult {
+  return {
+    success: false,
+    error: INTERRUPTED_ERROR,
+    durationMs: startTime ? Date.now() - startTime : 0,
+    truncated: false,
+  }
+}
+
 export async function executeTools(
   assistantMsgId: string,
   toolCalls: ToolCall[],
@@ -85,6 +96,8 @@ export async function executeTools(
         durationMs: Date.now() - startTime,
         truncated: false,
       }
+    } else if (error instanceof Error && (error.message === 'Aborted' || error.name === 'AbortError')) {
+      return createInterruptedResult(startTime)
     } else {
       throw error
     }
@@ -100,7 +113,14 @@ export async function executeTools(
     index: number
   }> => {
     if (ctx.signal?.aborted) {
-      throw new Error('Aborted')
+      const toolResult = createInterruptedResult()
+      append(createToolResultEvent(assistantMsgId, toolCall.id, toolResult))
+      return {
+        toolCall,
+        toolResult,
+        content: `Error: ${INTERRUPTED_ERROR}`,
+        index,
+      }
     }
 
     if (toolCall.parseError) {

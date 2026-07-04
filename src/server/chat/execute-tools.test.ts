@@ -181,7 +181,7 @@ describe('executeTools', () => {
     expect(result.toolMessages[0]?.content).toContain('Failed to parse')
   })
 
-  it('throws Aborted when signal is aborted', async () => {
+  it('throws Aborted when signal is aborted before tool calls are emitted', async () => {
     const append = vi.fn()
     const controller = new AbortController()
     controller.abort()
@@ -191,6 +191,45 @@ describe('executeTools', () => {
     await expect(executeTools('msg-1', toolCalls, makeCtx({ signal: controller.signal }), append)).rejects.toThrow(
       'Aborted',
     )
+    // No tool.call events should have been emitted
+    expect(append.mock.calls.filter((args: unknown[]) => (args[0] as TurnEvent).type === 'tool.call')).toHaveLength(0)
+  })
+
+  it('returns interrupted results when abort fires mid-execution', async () => {
+    const append = vi.fn()
+    const controller = new AbortController()
+
+    mockToolRegistry.execute = vi.fn().mockImplementation(async () => {
+      controller.abort()
+      throw new Error('Aborted')
+    })
+
+    const toolCalls: ToolCall[] = [
+      { id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } },
+      { id: 'call-2', name: 'read_file', arguments: { path: 'test.txt' } },
+    ]
+
+    const result = await executeTools('msg-1', toolCalls, makeCtx({ signal: controller.signal }), append)
+
+    // tool.call events should have been emitted for both
+    const callEvents = append.mock.calls.filter((args: unknown[]) => (args[0] as TurnEvent).type === 'tool.call')
+    expect(callEvents).toHaveLength(2)
+
+    // Both tools should have interrupted results
+    const resultEvents = append.mock.calls.filter((args: unknown[]) => (args[0] as TurnEvent).type === 'tool.result')
+    expect(resultEvents).toHaveLength(2)
+    for (const [event] of resultEvents) {
+      const te = event as TurnEvent
+      expect(te.type).toBe('tool.result')
+      const data = te.data as { result: { success: boolean; error?: string } }
+      expect(data.result.success).toBe(false)
+      expect(data.result.error).toContain('interrupted')
+    }
+
+    // toolMessages should contain interrupted messages
+    expect(result.toolMessages).toHaveLength(2)
+    expect(result.toolMessages[0]?.content).toBe('Error: Tool execution was interrupted by user')
+    expect(result.toolMessages[1]?.content).toBe('Error: Tool execution was interrupted by user')
   })
 
   it('detects step_done tool and sets stepDoneCalled in result', async () => {

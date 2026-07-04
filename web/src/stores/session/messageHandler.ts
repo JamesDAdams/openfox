@@ -504,6 +504,7 @@ export function handleServerMessage(
                 isStreaming: false,
                 stats: messageStats ?? m.stats,
                 completeReason: payload.reason,
+                preparingToolCalls: undefined,
               }
             : m,
         ),
