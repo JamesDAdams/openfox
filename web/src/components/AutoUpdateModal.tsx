@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Modal } from './shared/Modal'
 import { authFetch } from '../lib/api'
 
-type ModalState = 'ready' | 'updating' | 'complete' | 'failed'
+type ModalState = 'ready' | 'updating' | 'restarting' | 'complete' | 'failed'
 
 interface AutoUpdateModalProps {
   isOpen: boolean
@@ -14,10 +14,8 @@ export function AutoUpdateModal({ isOpen, onClose, versionInfo }: AutoUpdateModa
   const [state, setState] = useState<ModalState>('ready')
   const [progressDots, setProgressDots] = useState('')
   const [modalVersionInfo, setModalVersionInfo] = useState(versionInfo)
-  const [isService, setIsService] = useState(false)
   const [updatedVersion, setUpdatedVersion] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [restarting, setRestarting] = useState(false)
 
   useEffect(() => {
     if (!isOpen) return
@@ -29,13 +27,12 @@ export function AutoUpdateModal({ isOpen, onClose, versionInfo }: AutoUpdateModa
       .then((res) => res.json())
       .then((data) => {
         setModalVersionInfo({ current: data.current, latest: data.latest })
-        setIsService(data.isService ?? false)
       })
       .catch(() => {})
   }, [isOpen])
 
   useEffect(() => {
-    if (!isOpen || state !== 'updating') return
+    if (!isOpen || (state !== 'updating' && state !== 'restarting')) return
     const dots = setInterval(() => {
       setProgressDots((d) => (d.length >= 3 ? '' : d + '.'))
     }, 400)
@@ -50,14 +47,19 @@ export function AutoUpdateModal({ isOpen, onClose, versionInfo }: AutoUpdateModa
       const res = await authFetch('/api/auto-update', { method: 'POST' })
       const data = (await res.json()) as { success: boolean; version?: string; error?: string; isService: boolean }
 
-      setIsService(data.isService ?? false)
-
       if (data.success) {
         const version = data.version ?? 'unknown'
         setUpdatedVersion(version)
         localStorage.setItem('openfox_updated_to', version)
         localStorage.setItem('update_pending', 'true')
-        setState('complete')
+
+        if (data.isService) {
+          setState('restarting')
+          await authFetch('/api/auto-update/restart', { method: 'POST' }).catch(() => {})
+          setTimeout(() => window.location.reload(), 5_000)
+        } else {
+          setState('complete')
+        }
       } else {
         setErrorMessage(data.error ?? 'Update failed')
         setState('failed')
@@ -68,39 +70,29 @@ export function AutoUpdateModal({ isOpen, onClose, versionInfo }: AutoUpdateModa
     }
   }, [])
 
-  const handleRestart = useCallback(async () => {
-    setRestarting(true)
-    try {
-      await authFetch('/api/auto-update/restart', { method: 'POST' })
-    } catch {
-      // server may die before responding, that's ok
-    }
-    setTimeout(() => window.location.reload(), 10_000)
-  }, [])
-
   useEffect(() => {
     if (isOpen) {
       setState('ready')
       setProgressDots('')
       setUpdatedVersion(null)
       setErrorMessage(null)
-      setRestarting(false)
     }
   }, [isOpen])
 
-  const canClose = state !== 'updating'
+  const canClose = state !== 'updating' && state !== 'restarting'
+
+  const title =
+    state === 'failed'
+      ? 'Update Failed'
+      : state === 'complete' || state === 'restarting'
+        ? 'Update Complete'
+        : 'New OpenFox Version Available'
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={canClose ? onClose : undefined}
-      title={
-        state === 'failed'
-          ? 'Update Failed'
-          : state === 'complete'
-            ? 'Update Complete'
-            : 'New OpenFox Version Available'
-      }
+      title={title}
       size="sm"
       closeOnBackdropClick={canClose}
       showCloseButton={canClose}
@@ -119,12 +111,15 @@ export function AutoUpdateModal({ isOpen, onClose, versionInfo }: AutoUpdateModa
           </div>
         )}
 
-        {state === 'updating' && (
+        {(state === 'updating' || state === 'restarting') && (
           <div className="flex flex-col gap-2 mt-2">
             <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
               <div className="h-full bg-accent-primary animate-pulse w-full" />
             </div>
-            <p className="text-xs text-text-muted text-center">Updating{progressDots}</p>
+            <p className="text-xs text-text-muted text-center">
+              {state === 'restarting' ? 'Restarting' : 'Updating'}
+              {progressDots}
+            </p>
           </div>
         )}
 
@@ -132,17 +127,8 @@ export function AutoUpdateModal({ isOpen, onClose, versionInfo }: AutoUpdateModa
           <div className="flex flex-col gap-3 mt-2">
             <div className="bg-bg-tertiary rounded px-3 py-2 text-xs text-text-secondary">
               OpenFox has been updated to v{updatedVersion ?? modalVersionInfo?.latest}.
-              {!isService && ' Please restart OpenFox to use the new version.'}
+              {' Please restart OpenFox to use the new version.'}
             </div>
-            {isService && (
-              <button
-                onClick={handleRestart}
-                disabled={restarting}
-                className="w-full px-3 py-2 text-sm rounded bg-accent-primary hover:brightness-110 transition-all text-white font-medium disabled:opacity-50"
-              >
-                {restarting ? 'Reloading in 10s\u2026' : 'Restart Service'}
-              </button>
-            )}
           </div>
         )}
 
