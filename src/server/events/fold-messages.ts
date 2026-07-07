@@ -255,6 +255,7 @@ export function handleToolResult(
       toolCallId: data.toolCallId,
     }
     if (imageMeta?.dataUrl && imageMeta?.mimeType?.startsWith('image/')) {
+      const description = (imageMeta as Record<string, unknown>)['description']
       toolMsg.attachments = [
         {
           id: crypto.randomUUID(),
@@ -262,6 +263,7 @@ export function handleToolResult(
           mimeType: imageMeta.mimeType as Attachment['mimeType'],
           size: imageMeta.size ?? 0,
           data: imageMeta.dataUrl,
+          ...(typeof description === 'string' ? { description } : {}),
         },
       ]
     }

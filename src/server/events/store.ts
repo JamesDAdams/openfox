@@ -331,6 +331,16 @@ export class EventStore {
   }
 
   /**
+   * Update the payload of an existing event in-place.
+   * Used to persist enriched data (e.g., vision fallback descriptions) back to the store.
+   */
+  updateEventPayload(sessionId: string, seq: number, data: unknown): void {
+    this.db
+      .prepare(`UPDATE events SET payload = ? WHERE session_id = ? AND seq = ?`)
+      .run(JSON.stringify(data), sessionId, seq)
+  }
+
+  /**
    * Get the latest sequence number for a session
    */
   getLatestSeq(sessionId: string): number | undefined {

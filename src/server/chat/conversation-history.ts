@@ -234,6 +234,7 @@ export async function processEventsForConversation(
     modelSupportsVision: modelVision,
     ...(visionModel ? { visionModel } : {}),
     onEvent,
+    persistEvent: (sid, seq, data) => eventStore.updateEventPayload(sid, seq, data),
   })
   return processedEvents
 }

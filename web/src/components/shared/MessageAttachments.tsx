@@ -63,13 +63,17 @@ export function MessageAttachments({ attachments, messageId }: MessageAttachment
               <button
                 onClick={() => handleImageClick(attachment.data)}
                 className="group relative inline-block"
-                title={attachment.filename}
+                title={
+                  (fallback?.type === 'done' && fallback.description) || attachment.description || attachment.filename
+                }
                 disabled={fallback?.type === 'start'}
               >
                 {/* 256px max dimension, maintaining aspect ratio */}
                 <img
                   src={attachment.data}
-                  alt={attachment.filename}
+                  alt={
+                    (fallback?.type === 'done' && fallback.description) || attachment.description || attachment.filename
+                  }
                   className="max-w-[256px] max-h-[256px] object-contain rounded-lg border border-border hover:border-accent-primary transition-colors cursor-pointer"
                 />
                 {fallback?.type === 'start' && (

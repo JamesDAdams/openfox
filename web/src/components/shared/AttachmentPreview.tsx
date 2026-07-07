@@ -27,7 +27,7 @@ export function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewPro
       {/* Thumbnail - 64x64 square */}
       <img
         src={attachment.data}
-        alt={attachment.filename}
+        alt={attachment.description || attachment.filename}
         className="w-16 h-16 object-cover rounded-md bg-bg-secondary"
       />
 

@@ -248,6 +248,7 @@ export interface Attachment {
   mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp' | 'image/svg+xml'
   size: number
   data: string // base64-encoded image data
+  description?: string // Vision fallback description (for non-vision models)
 }
 
 export interface Message {

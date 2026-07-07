@@ -1,4 +1,4 @@
-import type { StoredEvent, TurnEvent } from '../events/types.js'
+import type { StoredEvent, TurnEvent, SessionSnapshot } from '../events/types.js'
 import type { Attachment } from '../../shared/types.js'
 import { describeImageFromDataUrl } from '../llm/vision-fallback.js'
 import type { VisionBackend } from '../llm/vision-fallback.js'
@@ -38,6 +38,8 @@ export interface ImageProcessorOptions {
   }
   signal?: AbortSignal
   onEvent?: (event: TurnEvent) => void
+  /** Called to persist enriched event data (e.g., attachment descriptions) back to the event store */
+  persistEvent?: (sessionId: string, seq: number, data: unknown) => void
 }
 
 export interface ProcessContextResult {
@@ -65,14 +67,6 @@ function hasImageMetadata(result: { metadata?: Record<string, unknown> }): boole
   const dataUrl = meta['dataUrl']
   const mimeType = meta['mimeType']
   return typeof dataUrl === 'string' && typeof mimeType === 'string' && (mimeType as string).startsWith('image/')
-}
-
-function buildImageDescription(filename: string | undefined, description: string): string {
-  return `[Image: ${filename || 'image'} - description: ${description}]`
-}
-
-function buildImagePlaceholder(filename: string | undefined): string {
-  return `[Image: ${filename || 'image'}]`
 }
 
 async function describeAttachment(
@@ -111,7 +105,7 @@ async function describeAttachment(
     return description
   }
 
-  const placeholder = buildImagePlaceholder(att.filename)
+  const placeholder = `[Image: ${att.filename || 'image'}]`
   descriptions.set(att.id, placeholder)
   return placeholder
 }
@@ -157,11 +151,22 @@ async function describeToolResultImage(
     return description
   }
 
-  const placeholder = buildImagePlaceholder(filename)
+  const placeholder = `[Image: ${filename || 'image'}]`
   descriptions.set(toolCallId, placeholder)
   return placeholder
 }
 
+/**
+ * Enrich image attachments with vision fallback descriptions.
+ *
+ * Unlike the old approach (which replaced content and deleted attachments on clones),
+ * this enriches attachments with a `description` field and persists the enriched data
+ * back to the event store. The original image data and attachments array are kept intact
+ * so the UI continues to display images.
+ *
+ * For non-vision models, the LLM context builder uses `attachment.description` instead
+ * of the raw image data. For vision models, the description is ignored.
+ */
 export async function processContextImages(
   events: StoredEvent[],
   options: ImageProcessorOptions,
@@ -181,14 +186,22 @@ export async function processContextImages(
       const imageAtts = data.attachments.filter(isImageAttachment)
       if (imageAtts.length === 0) continue
 
-      let content = data.content ?? ''
+      let enriched = false
       for (const att of imageAtts) {
+        // Skip if already has a description (persisted from a previous run)
+        if (att.description) {
+          descriptions.set(att.id, att.description)
+          continue
+        }
         const description = await describeAttachment(att, data.messageId, options, descriptions)
-        content += `\n${buildImageDescription(att.filename, description)}`
+        att.description = description
+        enriched = true
       }
 
-      ;(data as { content?: string }).content = content
-      delete (data as { attachments: unknown }).attachments
+      // Persist enriched attachments back to the store
+      if (enriched && options.persistEvent) {
+        options.persistEvent(event.sessionId, event.seq, data)
+      }
     }
 
     if (event.type === 'tool.result') {
@@ -196,6 +209,12 @@ export async function processContextImages(
       if (!data.result.metadata || !hasImageMetadata(data.result)) continue
 
       const meta = data.result.metadata
+      // Skip if already has a description
+      if (meta['description']) {
+        descriptions.set(data.toolCallId, meta['description'] as string)
+        continue
+      }
+
       const dataUrl = meta['dataUrl'] as string
       const path = meta['path'] as string | undefined
 
@@ -208,8 +227,66 @@ export async function processContextImages(
         descriptions,
       )
 
-      data.result.output = buildImageDescription(path, description)
-      delete data.result.metadata
+      meta['description'] = description
+
+      // Persist enriched metadata back to the store
+      if (options.persistEvent) {
+        options.persistEvent(event.sessionId, event.seq, data)
+      }
+    }
+
+    if (event.type === 'turn.snapshot') {
+      const snapshot = event.data as SessionSnapshot
+      let enriched = false
+
+      for (const message of snapshot.messages) {
+        if (message.role === 'user' && message.attachments && message.attachments.length > 0) {
+          const imageAtts = message.attachments.filter(isImageAttachment)
+          if (imageAtts.length === 0) continue
+
+          for (const att of imageAtts) {
+            if (att.description) {
+              descriptions.set(att.id, att.description)
+              continue
+            }
+            const description = await describeAttachment(att, message.id, options, descriptions)
+            att.description = description
+            enriched = true
+          }
+        }
+
+        if (message.role === 'assistant' && message.toolCalls) {
+          for (const toolCall of message.toolCalls) {
+            if (!toolCall.result || !toolCall.result.metadata || !hasImageMetadata(toolCall.result)) continue
+
+            const meta = toolCall.result.metadata
+            if (meta['description']) {
+              descriptions.set(toolCall.id, meta['description'] as string)
+              continue
+            }
+
+            const dataUrl = meta['dataUrl'] as string
+            const path = meta['path'] as string | undefined
+
+            const description = await describeToolResultImage(
+              dataUrl,
+              path,
+              toolCall.id,
+              message.id,
+              options,
+              descriptions,
+            )
+
+            meta['description'] = description
+            enriched = true
+          }
+        }
+      }
+
+      // Persist enriched snapshot back to the store
+      if (enriched && options.persistEvent) {
+        options.persistEvent(event.sessionId, event.seq, snapshot)
+      }
     }
   }
 

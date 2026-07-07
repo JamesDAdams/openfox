@@ -96,13 +96,21 @@ function buildAssistantMessage(msg: LLMMessage, thinkingField?: string): Record<
 }
 
 function convertAttachmentSync(
-  attachment: { data: string; filename?: string },
+  attachment: { data: string; filename?: string; description?: string },
   modelSupportsVision: boolean,
 ): { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } } {
   if (modelSupportsVision) {
     return {
       type: 'image_url',
       image_url: { url: attachment.data },
+    }
+  }
+
+  // Use pre-computed description if available (from vision fallback)
+  if (attachment.description) {
+    return {
+      type: 'text',
+      text: `[Image: ${attachment.filename || 'image'} - description: ${attachment.description}]`,
     }
   }
 

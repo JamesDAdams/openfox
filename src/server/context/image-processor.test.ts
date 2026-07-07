@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { processContextImages, clearImageDescriptionCache } from './image-processor.js'
-import type { StoredEvent, TurnEvent } from '../events/types.js'
+import type { StoredEvent, TurnEvent, SessionSnapshot, SnapshotMessage } from '../events/types.js'
 import type { Attachment } from '../../shared/types.js'
 
 vi.mock('../llm/vision-fallback.js', () => ({
@@ -39,9 +39,14 @@ const imageAttachment2: Attachment = {
 }
 
 describe('processContextImages', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     clearImageDescriptionCache()
     vi.clearAllMocks()
+    const mod = await import('../llm/vision-fallback.js')
+    vi.mocked(mod.describeImageFromDataUrl).mockImplementation(async (dataUrl: string) => {
+      if (dataUrl.includes('error')) throw new Error('API error')
+      return 'A screenshot showing a terminal with error messages'
+    })
   })
 
   it('returns events as-is when model supports vision', async () => {
@@ -66,7 +71,7 @@ describe('processContextImages', () => {
     expect(result.descriptions.size).toBe(0)
   })
 
-  it('replaces images with placeholder when no vision model configured', async () => {
+  it('enriches attachment with placeholder when no vision model configured', async () => {
     const events: StoredEvent[] = [
       makeEvent({
         seq: 1,
@@ -88,12 +93,19 @@ describe('processContextImages', () => {
     const msgStart = result.events[0]!
     expect(msgStart.type).toBe('message.start')
     const data = msgStart.data as Extract<TurnEvent, { type: 'message.start' }>['data']
-    expect(data.attachments).toBeUndefined()
-    expect(data.content).toContain('[Image: screenshot.png]')
+    // Attachments are kept intact (UI needs them)
+    expect(data.attachments).toBeDefined()
+    expect(data.attachments).toHaveLength(1)
+    // Description is set on the attachment
+    expect(data.attachments![0]!.description).toBe('[Image: screenshot.png]')
+    // Original content is unchanged
+    expect(data.content).toBe('What is in this image?')
     expect(result.descriptions.size).toBe(1)
   })
 
-  it('describes images via vision model when configured', async () => {
+  it('describes images via vision model and enriches attachment with description', async () => {
+    const { describeImageFromDataUrl } = await import('../llm/vision-fallback.js')
+
     const events: StoredEvent[] = [
       makeEvent({
         seq: 1,
@@ -109,8 +121,6 @@ describe('processContextImages', () => {
       makeEvent({ seq: 2, type: 'message.done', data: { messageId: 'msg-1' } }),
     ]
 
-    const { describeImageFromDataUrl } = await import('../llm/vision-fallback.js')
-
     const result = await processContextImages(events, {
       modelSupportsVision: false,
       visionModel: { baseUrl: 'http://localhost:11434', model: 'llava', timeout: 30000, backend: 'ollama' },
@@ -125,11 +135,49 @@ describe('processContextImages', () => {
     const msgStart = result.events[0]!
     expect(msgStart.type).toBe('message.start')
     const data = msgStart.data as Extract<TurnEvent, { type: 'message.start' }>['data']
-    expect(data.attachments).toBeUndefined()
-    expect(data.content).toContain(
-      '[Image: screenshot.png - description: A screenshot showing a terminal with error messages]',
-    )
+    // Attachments are kept intact with description enriched
+    expect(data.attachments).toBeDefined()
+    expect(data.attachments).toHaveLength(1)
+    expect(data.attachments![0]!.description).toBe('A screenshot showing a terminal with error messages')
+    // Original content and image data are unchanged
+    expect(data.content).toBe('What is in this image?')
+    expect(data.attachments![0]!.data).toBe(imageAttachment.data)
     expect(result.descriptions.get('att-1')).toBe('A screenshot showing a terminal with error messages')
+  })
+
+  it('skips attachment that already has a description (was persisted previously)', async () => {
+    const { describeImageFromDataUrl } = await import('../llm/vision-fallback.js')
+
+    const attWithDescription: Attachment = {
+      ...imageAttachment,
+      description: 'Already described image',
+    }
+
+    const events: StoredEvent[] = [
+      makeEvent({
+        seq: 1,
+        type: 'message.start',
+        data: {
+          messageId: 'msg-1',
+          role: 'user',
+          content: 'What is in this image?',
+          attachments: [attWithDescription],
+          contextWindowId: 'window-1',
+        },
+      }),
+      makeEvent({ seq: 2, type: 'message.done', data: { messageId: 'msg-1' } }),
+    ]
+
+    const result = await processContextImages(events, {
+      modelSupportsVision: false,
+      visionModel: { baseUrl: 'http://localhost:11434', model: 'llava', timeout: 30000, backend: 'ollama' },
+    })
+
+    // Vision model should NOT be called — description already exists
+    expect(describeImageFromDataUrl).not.toHaveBeenCalled()
+    const data = result.events[0]!.data as Extract<TurnEvent, { type: 'message.start' }>['data']
+    expect(data.attachments![0]!.description).toBe('Already described image')
+    expect(result.descriptions.get('att-1')).toBe('Already described image')
   })
 
   it('caches descriptions by content hash across multiple calls', async () => {
@@ -180,7 +228,7 @@ describe('processContextImages', () => {
     expect(describeImageFromDataUrl).toHaveBeenCalledTimes(1)
   })
 
-  it('handles tool result images from read_file', async () => {
+  it('enriches tool result image metadata with description', async () => {
     const events: StoredEvent[] = [
       makeEvent({
         seq: 1,
@@ -229,10 +277,11 @@ describe('processContextImages', () => {
     const toolResult = result.events[2]!
     expect(toolResult.type).toBe('tool.result')
     const trData = toolResult.data as Extract<TurnEvent, { type: 'tool.result' }>['data']
-    expect(trData.result.output).toContain(
-      '[Image: /test/image.png - description: A screenshot showing a terminal with error messages]',
-    )
-    expect(trData.result.metadata).toBeUndefined()
+    // Metadata is kept intact with description added
+    expect(trData.result.metadata).toBeDefined()
+    expect(trData.result.metadata!['description']).toBe('A screenshot showing a terminal with error messages')
+    // Original output is unchanged
+    expect(trData.result.output).toBe('[Image: /test/image.png (image/png, 1024 bytes)]')
   })
 
   it('handles multiple images in a single message', async () => {
@@ -258,9 +307,11 @@ describe('processContextImages', () => {
 
     const msgStart = result.events[0]!
     const data = msgStart.data as Extract<TurnEvent, { type: 'message.start' }>['data']
-    expect(data.attachments).toBeUndefined()
-    expect(data.content).toContain('[Image: screenshot.png - description:')
-    expect(data.content).toContain('[Image: diagram.jpg - description:')
+    // Attachments kept intact, both enriched with descriptions
+    expect(data.attachments).toBeDefined()
+    expect(data.attachments).toHaveLength(2)
+    expect(data.attachments![0]!.description).toBeTruthy()
+    expect(data.attachments![1]!.description).toBeTruthy()
     expect(result.descriptions.size).toBe(2)
   })
 
@@ -329,9 +380,393 @@ describe('processContextImages', () => {
     const result = await resultPromise
     const msgStart = result.events[0]!
     const data = msgStart.data as Extract<TurnEvent, { type: 'message.start' }>['data']
-    expect(data.content).toContain('[Image: screenshot.png - description: [Image description timed out]')
+    // Attachment gets the timeout description
+    expect(data.attachments![0]!.description).toBe('[Image description timed out]')
 
-    vi.mocked(describeImageFromDataUrl).mockReset()
+    vi.mocked(describeImageFromDataUrl).mockClear()
+  })
+
+  it('calls persistEvent callback when enriching attachments', async () => {
+    const persistEvent = vi.fn()
+
+    const events: StoredEvent[] = [
+      makeEvent({
+        seq: 5,
+        type: 'message.start',
+        data: {
+          messageId: 'msg-1',
+          role: 'user',
+          content: 'What is in this image?',
+          attachments: [imageAttachment],
+          contextWindowId: 'window-1',
+        },
+      }),
+      makeEvent({ seq: 6, type: 'message.done', data: { messageId: 'msg-1' } }),
+    ]
+
+    await processContextImages(events, {
+      modelSupportsVision: false,
+      visionModel: { baseUrl: 'http://localhost:11434', model: 'llava', timeout: 30000, backend: 'ollama' },
+      persistEvent,
+    })
+
+    // Should have been called with sessionId, seq, and enriched data
+    expect(persistEvent).toHaveBeenCalledTimes(1)
+    expect(persistEvent).toHaveBeenCalledWith(
+      'test-session',
+      5,
+      expect.objectContaining({
+        messageId: 'msg-1',
+        attachments: [
+          expect.objectContaining({
+            id: 'att-1',
+            description: 'A screenshot showing a terminal with error messages',
+          }),
+        ],
+      }),
+    )
+  })
+
+  it('does not call persistEvent when attachment already has description', async () => {
+    const persistEvent = vi.fn()
+
+    const attWithDescription: Attachment = {
+      ...imageAttachment,
+      description: 'Already described',
+    }
+
+    const events: StoredEvent[] = [
+      makeEvent({
+        seq: 5,
+        type: 'message.start',
+        data: {
+          messageId: 'msg-1',
+          role: 'user',
+          content: 'What is in this image?',
+          attachments: [attWithDescription],
+          contextWindowId: 'window-1',
+        },
+      }),
+      makeEvent({ seq: 6, type: 'message.done', data: { messageId: 'msg-1' } }),
+    ]
+
+    await processContextImages(events, {
+      modelSupportsVision: false,
+      visionModel: { baseUrl: 'http://localhost:11434', model: 'llava', timeout: 30000, backend: 'ollama' },
+      persistEvent,
+    })
+
+    expect(persistEvent).not.toHaveBeenCalled()
+  })
+
+  it('enriches user message attachments inside turn.snapshot events', async () => {
+    const { describeImageFromDataUrl } = await import('../llm/vision-fallback.js')
+
+    const snapshotMsg: SnapshotMessage = {
+      id: 'msg-1',
+      role: 'user',
+      content: 'What is in this image?',
+      timestamp: Date.now(),
+      attachments: [imageAttachment],
+      contextWindowId: 'window-1',
+    }
+
+    const events: StoredEvent[] = [
+      makeEvent({
+        seq: 1,
+        type: 'turn.snapshot',
+        data: {
+          mode: 'planner',
+          phase: 'plan',
+          isRunning: false,
+          messages: [snapshotMsg],
+          criteria: [],
+          metadataEntries: {},
+          contextState: {
+            currentTokens: 0,
+            maxTokens: 200000,
+            compactionCount: 0,
+            dangerZone: false,
+            canCompact: true,
+            dynamicContextChanged: false,
+          },
+          currentContextWindowId: 'window-1',
+          todos: [],
+          snapshotSeq: 1,
+          snapshotAt: Date.now(),
+        } satisfies SessionSnapshot,
+      }),
+    ]
+
+    const result = await processContextImages(events, {
+      modelSupportsVision: false,
+      visionModel: { baseUrl: 'http://localhost:11434', model: 'llava', timeout: 30000, backend: 'ollama' },
+    })
+
+    expect(describeImageFromDataUrl).toHaveBeenCalledTimes(1)
+    const snapshotEvent = result.events[0]!
+    expect(snapshotEvent.type).toBe('turn.snapshot')
+    const snapshotData = snapshotEvent.data as SessionSnapshot
+    const processedMsg = snapshotData.messages[0]!
+    // Attachments kept intact with description enriched
+    expect(processedMsg.attachments).toBeDefined()
+    expect(processedMsg.attachments).toHaveLength(1)
+    expect(processedMsg.attachments![0]!.description).toBe('A screenshot showing a terminal with error messages')
+    // Original content unchanged
+    expect(processedMsg.content).toBe('What is in this image?')
+    expect(result.descriptions.get('att-1')).toBe('A screenshot showing a terminal with error messages')
+  })
+
+  it('enriches tool result images inside assistant messages in turn.snapshot events', async () => {
+    const { describeImageFromDataUrl } = await import('../llm/vision-fallback.js')
+
+    const snapshotMsg: SnapshotMessage = {
+      id: 'msg-1',
+      role: 'assistant',
+      content: 'Here is the image you requested.',
+      timestamp: Date.now(),
+      contextWindowId: 'window-1',
+      toolCalls: [
+        {
+          id: 'call-1',
+          name: 'read_file',
+          arguments: { path: '/test/image.png' },
+          result: {
+            success: true,
+            output: '[Image: /test/image.png (image/png, 1024 bytes)]',
+            durationMs: 10,
+            truncated: false,
+            metadata: {
+              mimeType: 'image/png',
+              size: 1024,
+              dataUrl:
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              path: '/test/image.png',
+            },
+          },
+        },
+      ],
+    }
+
+    const events: StoredEvent[] = [
+      makeEvent({
+        seq: 1,
+        type: 'turn.snapshot',
+        data: {
+          mode: 'planner',
+          phase: 'plan',
+          isRunning: false,
+          messages: [snapshotMsg],
+          criteria: [],
+          metadataEntries: {},
+          contextState: {
+            currentTokens: 0,
+            maxTokens: 200000,
+            compactionCount: 0,
+            dangerZone: false,
+            canCompact: true,
+            dynamicContextChanged: false,
+          },
+          currentContextWindowId: 'window-1',
+          todos: [],
+          snapshotSeq: 1,
+          snapshotAt: Date.now(),
+        } satisfies SessionSnapshot,
+      }),
+    ]
+
+    const result = await processContextImages(events, {
+      modelSupportsVision: false,
+      visionModel: { baseUrl: 'http://localhost:11434', model: 'llava', timeout: 30000, backend: 'ollama' },
+    })
+
+    expect(describeImageFromDataUrl).toHaveBeenCalledTimes(1)
+    const snapshotEvent = result.events[0]!
+    expect(snapshotEvent.type).toBe('turn.snapshot')
+    const snapshotData = snapshotEvent.data as SessionSnapshot
+    const processedMsg = snapshotData.messages[0]!
+    // Metadata kept intact with description added
+    expect(processedMsg.toolCalls![0]!.result!.metadata).toBeDefined()
+    expect(processedMsg.toolCalls![0]!.result!.metadata!['description']).toBe(
+      'A screenshot showing a terminal with error messages',
+    )
+    // Original output unchanged
+    expect(processedMsg.toolCalls![0]!.result!.output).toBe('[Image: /test/image.png (image/png, 1024 bytes)]')
+    expect(result.descriptions.get('call-1')).toBe('A screenshot showing a terminal with error messages')
+  })
+
+  it('leaves snapshot messages unchanged when model supports vision', async () => {
+    const snapshotMsg: SnapshotMessage = {
+      id: 'msg-1',
+      role: 'user',
+      content: 'What is in this image?',
+      timestamp: Date.now(),
+      attachments: [imageAttachment],
+      contextWindowId: 'window-1',
+    }
+
+    const events: StoredEvent[] = [
+      makeEvent({
+        seq: 1,
+        type: 'turn.snapshot',
+        data: {
+          mode: 'planner',
+          phase: 'plan',
+          isRunning: false,
+          messages: [snapshotMsg],
+          criteria: [],
+          metadataEntries: {},
+          contextState: {
+            currentTokens: 0,
+            maxTokens: 200000,
+            compactionCount: 0,
+            dangerZone: false,
+            canCompact: true,
+            dynamicContextChanged: false,
+          },
+          currentContextWindowId: 'window-1',
+          todos: [],
+          snapshotSeq: 1,
+          snapshotAt: Date.now(),
+        } satisfies SessionSnapshot,
+      }),
+    ]
+
+    const result = await processContextImages(events, { modelSupportsVision: true })
+
+    expect(result.events).toEqual(events)
+    expect(result.descriptions.size).toBe(0)
+  })
+
+  it('processes snapshot messages without attachments unchanged', async () => {
+    const snapshotMsg: SnapshotMessage = {
+      id: 'msg-1',
+      role: 'user',
+      content: 'Just text, no images',
+      timestamp: Date.now(),
+      contextWindowId: 'window-1',
+    }
+
+    const events: StoredEvent[] = [
+      makeEvent({
+        seq: 1,
+        type: 'turn.snapshot',
+        data: {
+          mode: 'planner',
+          phase: 'plan',
+          isRunning: false,
+          messages: [snapshotMsg],
+          criteria: [],
+          metadataEntries: {},
+          contextState: {
+            currentTokens: 0,
+            maxTokens: 200000,
+            compactionCount: 0,
+            dangerZone: false,
+            canCompact: true,
+            dynamicContextChanged: false,
+          },
+          currentContextWindowId: 'window-1',
+          todos: [],
+          snapshotSeq: 1,
+          snapshotAt: Date.now(),
+        } satisfies SessionSnapshot,
+      }),
+    ]
+
+    const result = await processContextImages(events, {
+      modelSupportsVision: false,
+      visionModel: { baseUrl: 'http://localhost:11434', model: 'llava', timeout: 30000, backend: 'ollama' },
+    })
+
+    expect(result.events[0]).toEqual(events[0])
+    expect(result.descriptions.size).toBe(0)
+  })
+
+  it('preserves image descriptions across snapshot boundary (integration)', async () => {
+    const { buildContextMessagesFromEventHistory } = await import('../events/folding.js')
+
+    const imageMsgEvent = makeEvent({
+      seq: 1,
+      type: 'message.start',
+      data: {
+        messageId: 'msg-1',
+        role: 'user',
+        content: 'What is in this image?',
+        attachments: [imageAttachment],
+        contextWindowId: 'window-1',
+      },
+    })
+    const imageDoneEvent = makeEvent({ seq: 2, type: 'message.done', data: { messageId: 'msg-1' } })
+
+    const snapshotEvent = makeEvent({
+      seq: 3,
+      type: 'turn.snapshot',
+      data: {
+        mode: 'planner',
+        phase: 'plan',
+        isRunning: false,
+        messages: [
+          {
+            id: 'msg-1',
+            role: 'user',
+            content: 'What is in this image?',
+            timestamp: Date.now(),
+            attachments: [imageAttachment],
+            contextWindowId: 'window-1',
+          },
+        ],
+        criteria: [],
+        metadataEntries: {},
+        contextState: {
+          currentTokens: 0,
+          maxTokens: 200000,
+          compactionCount: 0,
+          dangerZone: false,
+          canCompact: true,
+          dynamicContextChanged: false,
+        },
+        currentContextWindowId: 'window-1',
+        todos: [],
+        snapshotSeq: 3,
+        snapshotAt: Date.now(),
+      } satisfies SessionSnapshot,
+    })
+
+    const textMsgEvent = makeEvent({
+      seq: 4,
+      type: 'message.start',
+      data: {
+        messageId: 'msg-2',
+        role: 'user',
+        content: 'Can you explain that further?',
+        contextWindowId: 'window-1',
+      },
+    })
+    const textDoneEvent = makeEvent({ seq: 5, type: 'message.done', data: { messageId: 'msg-2' } })
+
+    const events: StoredEvent[] = [imageMsgEvent, imageDoneEvent, snapshotEvent, textMsgEvent, textDoneEvent]
+
+    const { events: processedEvents } = await processContextImages(events, {
+      modelSupportsVision: false,
+      visionModel: { baseUrl: 'http://localhost:11434', model: 'llava', timeout: 30000, backend: 'ollama' },
+    })
+
+    const contextMessages = buildContextMessagesFromEventHistory(processedEvents, 'window-1')
+
+    // The first message should contain the image description (via convertAttachmentSync)
+    const firstMsg = contextMessages[0]!
+    expect(firstMsg.role).toBe('user')
+    // Content is unchanged, but attachments are preserved with description
+    expect(firstMsg.content).toBe('What is in this image?')
+    // Attachments are present (UI needs them) and have description
+    expect(firstMsg.attachments).toBeDefined()
+    expect(firstMsg.attachments).toHaveLength(1)
+    expect(firstMsg.attachments![0]!.description).toBe('A screenshot showing a terminal with error messages')
+
+    const secondMsg = contextMessages[1]!
+    expect(secondMsg.role).toBe('user')
+    expect(secondMsg.content).toBe('Can you explain that further?')
   })
 
   it('emits vision_fallback.start and vision_fallback.done events', async () => {
