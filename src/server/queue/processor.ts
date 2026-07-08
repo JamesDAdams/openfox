@@ -20,6 +20,7 @@ export class QueueProcessor {
   private deps: QueueProcessorDeps
   private unsubscribe: (() => void) | null = null
   private activeAgents = new Map<string, AbortController>()
+  private abortedSessions = new Set<string>()
 
   constructor(deps: QueueProcessorDeps) {
     this.deps = deps
@@ -57,6 +58,7 @@ export class QueueProcessor {
   }
 
   abortSession(sessionId: string): boolean {
+    this.abortedSessions.add(sessionId)
     const controller = this.activeAgents.get(sessionId)
     if (controller) {
       controller.abort()
@@ -210,6 +212,12 @@ export class QueueProcessor {
           if (!session) {
             sessionManager.setRunning(sessionId, false)
             broadcastForSession(sessionId, createSessionRunningMessage(false))
+            return
+          }
+
+          if (this.abortedSessions.has(sessionId)) {
+            this.abortedSessions.delete(sessionId)
+            finalizeTurnCompletion(sessionId, sessionManager, broadcastForSession)
             return
           }
 

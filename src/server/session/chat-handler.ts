@@ -12,6 +12,7 @@ import { createChatMessageMessage, createSessionRunningMessage, createPhaseChang
 import { finalizeTurnCompletion } from '../utils/session-utils.js'
 
 const activeAgents = new Map<string, AbortController>()
+const abortedSessions = new Set<string>()
 
 export interface ChatHandlerDeps {
   sessionManager: SessionManager
@@ -129,6 +130,13 @@ function startTurnWithCompletionChain(sessionId: string, controller: AbortContro
       }
       activeAgents.delete(sessionId)
 
+      if (abortedSessions.has(sessionId)) {
+        abortedSessions.delete(sessionId)
+        sessionManager.clearMessageQueue(sessionId)
+        finalizeTurnCompletion(sessionId, sessionManager, broadcastForSession)
+        return
+      }
+
       const completionMsgs = sessionManager.drainCompletionMessages(sessionId)
       const next = completionMsgs[0]
       if (next) {
@@ -155,6 +163,7 @@ function startTurnWithCompletionChain(sessionId: string, controller: AbortContro
 }
 
 export function stopSessionExecution(sessionId: string, sessionManager: SessionManager): void {
+  abortedSessions.add(sessionId)
   const controller = activeAgents.get(sessionId)
   if (controller) {
     activeAgents.delete(sessionId)

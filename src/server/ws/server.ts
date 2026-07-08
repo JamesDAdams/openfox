@@ -287,6 +287,7 @@ function processQueueAndRestartTurn(
 
 // Track active agent AbortControllers by sessionId
 const activeAgents = new Map<string, AbortController>()
+const abortedSessions = new Set<string>()
 
 interface ClientConnection {
   ws: WebSocket
@@ -479,6 +480,14 @@ export function createWebSocketServer(
       return
     }
     activeAgents.delete(sessionId)
+
+    if (abortedSessions.has(sessionId)) {
+      abortedSessions.delete(sessionId)
+      sessionManager.clearMessageQueue(sessionId)
+      const contextState = sessionManager.getContextState(sessionId)
+      sendFn(sessionId, createContextStateMessage(contextState))
+      return
+    }
 
     const processed = processQueueAndRestartTurn(
       sessionManager,
@@ -720,6 +729,7 @@ export function createWebSocketServer(
   return {
     wss,
     abortSession: (sessionId: string) => {
+      abortedSessions.add(sessionId)
       const controller = activeAgents.get(sessionId)
       if (controller) {
         activeAgents.delete(sessionId)
