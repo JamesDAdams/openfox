@@ -1,4 +1,5 @@
 import type { Diagnostic } from '../../shared/types.js'
+import type { CodeLocation, SymbolInfo, HoverInfo } from './server.js'
 
 // ============================================================================
 // Language Configuration
@@ -66,6 +67,40 @@ export interface LspManagerInterface {
    * Get installation hint for a file's language server, if it's not installed
    */
   getInstallHint(path: string): string | null
+
+  /**
+   * Find the definition of a symbol at the given position
+   */
+  getDefinition(path: string, line: number, character: number): Promise<CodeLocation[]>
+
+  /**
+   * Find all references to a symbol at the given position
+   */
+  getReferences(path: string, line: number, character: number): Promise<CodeLocation[]>
+
+  /**
+   * Find the type definition of a symbol at the given position
+   */
+  getTypeDefinition(path: string, line: number, character: number): Promise<CodeLocation[]>
+
+  /**
+   * Search workspace for a symbol by name
+   */
+  findWorkspaceSymbol(query: string): Promise<SymbolInfo[]>
+
+  /**
+   * Open a file to seed the LSP server, then search for a workspace symbol.
+   * Some LSP servers (e.g., typescript-language-server) only index projects
+   * after a file is opened via textDocument/didOpen. This method handles
+   * that by opening the given file first, flushing the notification queue,
+   * then querying workspace/symbol.
+   */
+  seedAndFindWorkspaceSymbol(query: string, filePath: string): Promise<SymbolInfo[]>
+
+  /**
+   * Get hover information for a symbol at the given position
+   */
+  getHoverInfo(path: string, line: number, character: number): Promise<HoverInfo | null>
 
   /**
    * Shutdown all LSP servers

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node.js'
 import type { MessageConnection } from 'vscode-jsonrpc'
 import type { Diagnostic } from '../../shared/types.js'
@@ -20,6 +21,11 @@ const LSP = {
   didChange: 'textDocument/didChange',
   didClose: 'textDocument/didClose',
   publishDiagnostics: 'textDocument/publishDiagnostics',
+  definition: 'textDocument/definition',
+  references: 'textDocument/references',
+  typeDefinition: 'textDocument/typeDefinition',
+  hover: 'textDocument/hover',
+  workspaceSymbol: 'workspace/symbol',
 } as const
 
 // LSP diagnostic severity
@@ -51,11 +57,97 @@ interface PublishDiagnosticsParams {
   diagnostics: LspDiagnostic[]
 }
 
+// LSP location types for code navigation
+interface LspLocation {
+  uri: string
+  range: LspRange
+}
+
+interface LspSymbolInfo {
+  name: string
+  kind: number
+  location: LspLocation
+  containerName?: string
+}
+
+interface LspHoverContents {
+  kind: string
+  value: string
+}
+
+interface LspHover {
+  contents: LspHoverContents | LspHoverContents[] | string
+  range?: LspRange
+}
+
+// ============================================================================
+// Exported types for code navigation
+// ============================================================================
+
+export interface CodeLocation {
+  path: string
+  line: number
+  character: number
+  endLine: number
+  endCharacter: number
+}
+
+export interface SymbolInfo {
+  name: string
+  kind: string
+  location: CodeLocation
+  containerName?: string
+}
+
+export interface HoverInfo {
+  contents: string
+  range?: { start: { line: number; character: number }; end: { line: number; character: number } }
+}
+
+/**
+ * Helper to build a HoverInfo with optional range.
+ * Needed because exactOptionalPropertyTypes prevents spreading `range: undefined`.
+ */
+function hoverInfo(contents: string, range?: HoverInfo['range']): HoverInfo {
+  return range ? { contents, range } : { contents }
+}
+
 // ============================================================================
 // Constants
 // ============================================================================
 
 const DIAGNOSTIC_WAIT_MS = 2000
+
+// LSP SymbolKind number to human-readable string
+// See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#symbolKind
+const SYMBOL_KIND_NAMES: Record<number, string> = {
+  1: 'File',
+  2: 'Module',
+  3: 'Namespace',
+  4: 'Package',
+  5: 'Class',
+  6: 'Method',
+  7: 'Property',
+  8: 'Field',
+  9: 'Constructor',
+  10: 'Enum',
+  11: 'Interface',
+  12: 'Function',
+  13: 'Variable',
+  14: 'Constant',
+  15: 'String',
+  16: 'Number',
+  17: 'Boolean',
+  18: 'Array',
+  19: 'Object',
+  20: 'Key',
+  21: 'Null',
+  22: 'EnumMember',
+  23: 'Struct',
+  24: 'Event',
+  25: 'Operator',
+  26: 'TypeParameter',
+}
 
 // Map LSP severity to our severity
 function mapSeverity(severity: DiagnosticSeverityValue | undefined): Diagnostic['severity'] {
@@ -445,6 +537,192 @@ export class LspServer {
   }
 
   // ============================================================================
+  // Code Navigation Queries
+  // ============================================================================
+
+  /**
+   * Convert a file:// URI to a local path.
+   * Handles Windows paths (file:///C:/...) and URL-encoded characters.
+   */
+  private uriToPath(uri: string): string {
+    try {
+      return fileURLToPath(uri)
+    } catch {
+      // Fallback: strip file:// prefix for malformed URIs
+      return uri.replace(/^file:\/\//, '')
+    }
+  }
+
+  /**
+   * Convert a local path to a file:// URI.
+   */
+  private pathToUri(path: string): string {
+    return `file://${path}`
+  }
+
+  /**
+   * Convert an LSP location to our internal CodeLocation.
+   */
+  private toCodeLocation(loc: LspLocation): CodeLocation {
+    return {
+      path: this.uriToPath(loc.uri),
+      line: loc.range.start.line,
+      character: loc.range.start.character,
+      endLine: loc.range.end.line,
+      endCharacter: loc.range.end.character,
+    }
+  }
+
+  /**
+   * Ensure the server is running before making a query.
+   */
+  private requireConnection(): MessageConnection {
+    if (this.state !== 'running' || !this.connection) {
+      throw new Error('LSP server is not running')
+    }
+    return this.connection
+  }
+
+  /**
+   * Normalize a single Location or Location[] response into CodeLocation[].
+   */
+  private normalizeLocations(response: unknown): CodeLocation[] {
+    if (!response) return []
+    if (Array.isArray(response)) {
+      return response.map((loc) => this.toCodeLocation(loc as LspLocation))
+    }
+    return [this.toCodeLocation(response as LspLocation)]
+  }
+
+  /**
+   * Find the definition of a symbol at the given position.
+   * Sends textDocument/definition request.
+   */
+  async getDefinition(path: string, line: number, character: number): Promise<CodeLocation[]> {
+    try {
+      const conn = this.requireConnection()
+      const uri = this.pathToUri(path)
+      const result = await conn.sendRequest(LSP.definition, {
+        textDocument: { uri },
+        position: { line, character },
+      })
+      return this.normalizeLocations(result)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Find all references to a symbol at the given position.
+   * Sends textDocument/references request.
+   */
+  async getReferences(path: string, line: number, character: number): Promise<CodeLocation[]> {
+    try {
+      const conn = this.requireConnection()
+      const uri = this.pathToUri(path)
+      const result = await conn.sendRequest(LSP.references, {
+        textDocument: { uri },
+        position: { line, character },
+        context: { includeDeclaration: true },
+      })
+      return this.normalizeLocations(result)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Find the type definition of a symbol at the given position.
+   * Sends textDocument/typeDefinition request.
+   */
+  async getTypeDefinition(path: string, line: number, character: number): Promise<CodeLocation[]> {
+    try {
+      const conn = this.requireConnection()
+      const uri = this.pathToUri(path)
+      const result = await conn.sendRequest(LSP.typeDefinition, {
+        textDocument: { uri },
+        position: { line, character },
+      })
+      return this.normalizeLocations(result)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Search workspace for a symbol by name.
+   * Sends workspace/symbol request.
+   */
+  async findWorkspaceSymbol(query: string): Promise<SymbolInfo[]> {
+    try {
+      const conn = this.requireConnection()
+      const result = await conn.sendRequest(LSP.workspaceSymbol, { query })
+      if (!Array.isArray(result)) return []
+      return (result as LspSymbolInfo[]).map((sym): SymbolInfo => {
+        const info: SymbolInfo = {
+          name: sym.name,
+          kind: this.symbolKindToString(sym.kind),
+          location: this.toCodeLocation(sym.location),
+        }
+        if (sym.containerName) {
+          info.containerName = sym.containerName
+        }
+        return info
+      })
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Get hover information for a symbol at the given position.
+   * Sends textDocument/hover request.
+   */
+  async getHoverInfo(path: string, line: number, character: number): Promise<HoverInfo | null> {
+    try {
+      const conn = this.requireConnection()
+      const uri = this.pathToUri(path)
+      const result = (await conn.sendRequest(LSP.hover, {
+        textDocument: { uri },
+        position: { line, character },
+      })) as LspHover | null
+
+      if (!result) return null
+
+      const contents = this.extractHoverContents(result.contents)
+      const range = result.range
+        ? {
+            start: { line: result.range.start.line, character: result.range.start.character },
+            end: { line: result.range.end.line, character: result.range.end.character },
+          }
+        : undefined
+      return hoverInfo(contents, range)
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Extract a plain-text string from hover contents (which can be
+   * MarkupContent, MarkedString, or an array of either).
+   */
+  private extractHoverContents(contents: LspHoverContents | LspHoverContents[] | string): string {
+    if (typeof contents === 'string') return contents
+    if (Array.isArray(contents)) {
+      return contents.map((c) => (typeof c === 'string' ? c : c.value)).join('\n\n')
+    }
+    return contents.value
+  }
+
+  /**
+   * Convert LSP SymbolKind number to a human-readable string.
+   * See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#symbolKind
+   */
+  private symbolKindToString(kind: number): string {
+    return SYMBOL_KIND_NAMES[kind] ?? 'Unknown'
+  }
+
+  // ============================================================================
   // Status
   // ============================================================================
 
@@ -458,5 +736,13 @@ export class LspServer {
 
   getLanguage(): string {
     return this.config.id
+  }
+
+  hasOpenDocuments(): boolean {
+    return this.openDocuments.size > 0
+  }
+
+  getExtensions(): string[] {
+    return this.config.extensions
   }
 }

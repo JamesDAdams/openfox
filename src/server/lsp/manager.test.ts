@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { whichMock, detectLanguageMock, nextStartImpls, serverInstances } = vi.hoisted(() => ({
-  whichMock: vi.fn(),
-  detectLanguageMock: vi.fn(),
-  nextStartImpls: [] as Array<(instance: any) => Promise<void>>,
-  serverInstances: [] as any[],
-}))
+const { whichMock, detectLanguageMock, getSupportedLanguagesMock, nextStartImpls, serverInstances } = vi.hoisted(
+  () => ({
+    whichMock: vi.fn(),
+    detectLanguageMock: vi.fn(),
+    getSupportedLanguagesMock: vi.fn(),
+    nextStartImpls: [] as Array<(instance: any) => Promise<void>>,
+    serverInstances: [] as any[],
+  }),
+)
 
 vi.mock('../utils/which.js', () => ({
   which: whichMock,
@@ -13,6 +16,7 @@ vi.mock('../utils/which.js', () => ({
 
 vi.mock('./languages.js', () => ({
   detectLanguage: detectLanguageMock,
+  getSupportedLanguages: getSupportedLanguagesMock,
 }))
 
 vi.mock('./server.js', () => {
@@ -23,6 +27,7 @@ vi.mock('./server.js', () => {
     running = false
     state = 'stopped'
     diagnostics = [] as any[]
+    openDocsCount = 0
     start = vi.fn(async () => {
       const impl = nextStartImpls.shift()
       if (impl) {
@@ -37,10 +42,21 @@ vi.mock('./server.js', () => {
       this.state = 'stopped'
     })
     didChange = vi.fn(async () => {})
+    didOpen = vi.fn(async (_path: string, _content: string) => {
+      this.openDocsCount++
+    })
     getDiagnosticsWithWait = vi.fn(async () => this.diagnostics)
     getDiagnostics = vi.fn(() => this.diagnostics)
     isRunning = vi.fn(() => this.running)
     getState = vi.fn(() => this.state)
+    getLanguage = vi.fn(() => this.config.id ?? 'unknown')
+    hasOpenDocuments = vi.fn(() => this.openDocsCount > 0)
+    getExtensions = vi.fn(() => this.config.extensions ?? [])
+    findWorkspaceSymbol = vi.fn(async (_query: string) => [])
+    getDefinition = vi.fn(async () => [])
+    getReferences = vi.fn(async () => [])
+    getTypeDefinition = vi.fn(async () => [])
+    getHoverInfo = vi.fn(async () => null)
 
     constructor(config: any, workdir: string, commandPath: string) {
       this.config = config
@@ -224,6 +240,78 @@ describe('LspManager', () => {
 
       expect(manager.getInstallHint('/tmp/project/query.sql')).toBe('npm install -g sql-language-server')
       expect(manager.getInstallHint('/tmp/project/query.sql')).toBeNull()
+    })
+  })
+
+  describe('findWorkspaceSymbol', () => {
+    beforeEach(() => {
+      whichMock.mockReset()
+      detectLanguageMock.mockReset()
+      getSupportedLanguagesMock.mockReset()
+      nextStartImpls.length = 0
+      serverInstances.length = 0
+    })
+
+    it('queries existing running server and returns results', async () => {
+      detectLanguageMock.mockReturnValue(tsConfig)
+      whichMock.mockResolvedValue('/usr/bin/typescript-language-server')
+      const manager = new LspManager('/tmp/project', 'session-fws-1')
+
+      // Start a server by opening a file
+      await manager.notifyFileChange('/tmp/project/file.ts', 'const x = 1')
+      const server = serverInstances[0]!
+      server.findWorkspaceSymbol.mockResolvedValueOnce([
+        {
+          name: 'myFunc',
+          kind: 'Function',
+          location: { path: '/tmp/project/file.ts', line: 0, character: 0, endLine: 0, endCharacter: 10 },
+        },
+      ])
+
+      const results = await manager.findWorkspaceSymbol('myFunc')
+      expect(results).toHaveLength(1)
+      expect(results[0]!.name).toBe('myFunc')
+      expect(server.findWorkspaceSymbol).toHaveBeenCalledWith('myFunc')
+    })
+
+    it('seedAndFindWorkspaceSymbol starts server, opens file, and queries', async () => {
+      detectLanguageMock.mockReturnValue(tsConfig)
+      whichMock.mockResolvedValue('/usr/bin/typescript-language-server')
+      const manager = new LspManager('/tmp/project', 'session-fws-2')
+
+      // Create the seed file
+      const fs = await import('node:fs')
+      const path = await import('node:path')
+      fs.mkdirSync(path.join('/tmp/project', 'src'), { recursive: true })
+      fs.writeFileSync('/tmp/project/src/index.ts', 'export const myFunc = () => 42')
+
+      await manager.seedAndFindWorkspaceSymbol('myFunc', '/tmp/project/src/index.ts')
+
+      // Server should have been created
+      expect(serverInstances.length).toBeGreaterThanOrEqual(1)
+      const startedServer = serverInstances.find((s: any) => s.running)
+      expect(startedServer).toBeDefined()
+      // didOpen was called with the seed file
+      expect(startedServer.didOpen).toHaveBeenCalledWith('/tmp/project/src/index.ts', expect.any(String))
+      // findWorkspaceSymbol was called
+      expect(startedServer.findWorkspaceSymbol).toHaveBeenCalledWith('myFunc')
+    })
+
+    it('seedAndFindWorkspaceSymbol returns empty when language not detected', async () => {
+      detectLanguageMock.mockReturnValue(null)
+      const manager = new LspManager('/tmp/project', 'session-fws-3')
+
+      const results = await manager.seedAndFindWorkspaceSymbol('myFunc', '/tmp/project/file.unknown')
+      expect(results).toEqual([])
+    })
+
+    it('seedAndFindWorkspaceSymbol returns empty when server cannot start', async () => {
+      detectLanguageMock.mockReturnValue(tsConfig)
+      whichMock.mockResolvedValue(null) // server not found
+      const manager = new LspManager('/tmp/project', 'session-fws-4')
+
+      const results = await manager.seedAndFindWorkspaceSymbol('myFunc', '/tmp/project/file.ts')
+      expect(results).toEqual([])
     })
   })
 

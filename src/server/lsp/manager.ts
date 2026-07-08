@@ -1,7 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { which } from '../utils/which.js'
 import type { Diagnostic } from '../../shared/types.js'
 import type { LanguageConfig, LspManagerInterface } from './types.js'
-import { LspServer } from './server.js'
+import { LspServer, type CodeLocation, type SymbolInfo, type HoverInfo } from './server.js'
 import { detectLanguage } from './languages.js'
 import { logger } from '../utils/logger.js'
 
@@ -196,6 +197,97 @@ export class LspManager implements LspManagerInterface {
 
     return null
   }
+
+  // ============================================================================
+  // Code Navigation Queries
+  // ============================================================================
+
+  /**
+   * Find the definition of a symbol at the given position.
+   */
+  async getDefinition(path: string, line: number, character: number): Promise<CodeLocation[]> {
+    const server = await this.getServerForFile(path)
+    if (!server) return []
+    return server.getDefinition(path, line, character)
+  }
+
+  /**
+   * Find all references to a symbol at the given position.
+   */
+  async getReferences(path: string, line: number, character: number): Promise<CodeLocation[]> {
+    const server = await this.getServerForFile(path)
+    if (!server) return []
+    return server.getReferences(path, line, character)
+  }
+
+  /**
+   * Find the type definition of a symbol at the given position.
+   */
+  async getTypeDefinition(path: string, line: number, character: number): Promise<CodeLocation[]> {
+    const server = await this.getServerForFile(path)
+    if (!server) return []
+    return server.getTypeDefinition(path, line, character)
+  }
+
+  /**
+   * Search workspace for a symbol by name.
+   * Uses the first available server that supports workspace/symbol.
+   */
+  async findWorkspaceSymbol(query: string): Promise<SymbolInfo[]> {
+    for (const server of this.servers.values()) {
+      if (server.isRunning()) {
+        const results = await server.findWorkspaceSymbol(query)
+        if (results.length > 0) return results
+      }
+    }
+    return []
+  }
+
+  /**
+   * Open a file to seed the LSP server, then search for a workspace symbol.
+   *
+   * Some LSP servers (e.g., typescript-language-server) only index projects
+   * after a file is opened via textDocument/didOpen. This method:
+   * 1. Detects the language from the file and starts the appropriate server
+   * 2. Reads the file from disk and sends didOpen to trigger project indexing
+   * 3. Sends a hover request to flush the notification queue (JSON-RPC processes
+   *    requests sequentially, so the server must finish didOpen before responding)
+   * 4. Queries workspace/symbol for the given symbol
+   */
+  async seedAndFindWorkspaceSymbol(query: string, filePath: string): Promise<SymbolInfo[]> {
+    const server = await this.getServerForFile(filePath)
+    if (!server?.isRunning()) return []
+
+    try {
+      const content = readFileSync(filePath, 'utf-8')
+      await server.didOpen(filePath, content)
+      // Flush: send a harmless request to force sequential processing.
+      // The server must finish didOpen before it can respond to hover.
+      await server.getHoverInfo(filePath, 0, 0)
+    } catch (error) {
+      logger.warn('Failed to seed LSP server', {
+        path: filePath,
+        error: error instanceof Error ? error.message : String(error),
+        sessionId: this.sessionId,
+      })
+      return []
+    }
+
+    return server.findWorkspaceSymbol(query)
+  }
+
+  /**
+   * Get hover information for a symbol at the given position.
+   */
+  async getHoverInfo(path: string, line: number, character: number): Promise<HoverInfo | null> {
+    const server = await this.getServerForFile(path)
+    if (!server) return null
+    return server.getHoverInfo(path, line, character)
+  }
+
+  // ============================================================================
+  // Shutdown
+  // ============================================================================
 
   /**
    * Shutdown all LSP servers.

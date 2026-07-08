@@ -241,6 +241,184 @@ describe('LspServer', () => {
     expect(server.getState()).toBe('error')
   })
 
+  // ============================================================================
+  // LSP Query Methods
+  // ============================================================================
+
+  describe('LSP query methods', () => {
+    async function createStartedServer(connection: any) {
+      const proc = createProcessMock()
+      spawnMock.mockReturnValue(proc)
+      createMessageConnectionMock.mockReturnValue(connection)
+      connection.sendRequest.mockResolvedValue({})
+      connection.sendNotification.mockResolvedValue(undefined)
+      const server = new LspServer(tsConfig, '/tmp/project', '/usr/bin/typescript-language-server')
+      await server.start()
+      return server
+    }
+
+    it('getDefinition returns locations', async () => {
+      const { connection } = createConnectionMock()
+      const server = await createStartedServer(connection)
+
+      connection.sendRequest.mockResolvedValueOnce({
+        uri: 'file:///tmp/project/src/foo.ts',
+        range: { start: { line: 10, character: 5 }, end: { line: 10, character: 20 } },
+      })
+
+      const result = await server.getDefinition('/tmp/project/App.tsx', 0, 10)
+      expect(result).toEqual([
+        { path: '/tmp/project/src/foo.ts', line: 10, character: 5, endLine: 10, endCharacter: 20 },
+      ])
+      expect(connection.sendRequest).toHaveBeenCalledWith(
+        'textDocument/definition',
+        expect.objectContaining({
+          textDocument: { uri: 'file:///tmp/project/App.tsx' },
+          position: { line: 0, character: 10 },
+        }),
+      )
+    })
+
+    it('getDefinition handles null response', async () => {
+      const { connection } = createConnectionMock()
+      const server = await createStartedServer(connection)
+
+      connection.sendRequest.mockResolvedValueOnce(null)
+
+      const result = await server.getDefinition('/tmp/project/App.tsx', 0, 10)
+      expect(result).toEqual([])
+    })
+
+    it('getDefinition handles array response', async () => {
+      const { connection } = createConnectionMock()
+      const server = await createStartedServer(connection)
+
+      connection.sendRequest.mockResolvedValueOnce([
+        {
+          uri: 'file:///tmp/project/a.ts',
+          range: { start: { line: 1, character: 2 }, end: { line: 1, character: 3 } },
+        },
+        {
+          uri: 'file:///tmp/project/b.ts',
+          range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } },
+        },
+      ])
+
+      const result = await server.getDefinition('/tmp/project/App.tsx', 0, 10)
+      expect(result).toHaveLength(2)
+      expect(result[0]!.path).toBe('/tmp/project/a.ts')
+      expect(result[1]!.path).toBe('/tmp/project/b.ts')
+    })
+
+    it('getReferences returns locations', async () => {
+      const { connection } = createConnectionMock()
+      const server = await createStartedServer(connection)
+
+      connection.sendRequest.mockResolvedValueOnce([
+        {
+          uri: 'file:///tmp/project/bar.ts',
+          range: { start: { line: 42, character: 0 }, end: { line: 42, character: 15 } },
+        },
+      ])
+
+      const result = await server.getReferences('/tmp/project/App.tsx', 0, 10)
+      expect(result).toHaveLength(1)
+      expect(result[0]!.path).toBe('/tmp/project/bar.ts')
+      expect(result[0]!.line).toBe(42)
+      expect(connection.sendRequest).toHaveBeenCalledWith(
+        'textDocument/references',
+        expect.objectContaining({
+          textDocument: { uri: 'file:///tmp/project/App.tsx' },
+          position: { line: 0, character: 10 },
+          context: { includeDeclaration: true },
+        }),
+      )
+    })
+
+    it('getTypeDefinition returns locations', async () => {
+      const { connection } = createConnectionMock()
+      const server = await createStartedServer(connection)
+
+      connection.sendRequest.mockResolvedValueOnce({
+        uri: 'file:///tmp/project/types.ts',
+        range: { start: { line: 5, character: 0 }, end: { line: 5, character: 30 } },
+      })
+
+      const result = await server.getTypeDefinition('/tmp/project/App.tsx', 0, 10)
+      expect(result).toHaveLength(1)
+      expect(result[0]!.path).toBe('/tmp/project/types.ts')
+    })
+
+    it('findWorkspaceSymbol returns symbol info', async () => {
+      const { connection } = createConnectionMock()
+      const server = await createStartedServer(connection)
+
+      connection.sendRequest.mockResolvedValueOnce([
+        {
+          name: 'rebuildTools',
+          kind: 12, // Function
+          location: {
+            uri: 'file:///tmp/project/src/tools.ts',
+            range: { start: { line: 42, character: 0 }, end: { line: 42, character: 13 } },
+          },
+          containerName: 'tools',
+        },
+      ])
+
+      const result = await server.findWorkspaceSymbol('rebuildTools')
+      expect(result).toHaveLength(1)
+      expect(result[0]!.name).toBe('rebuildTools')
+      expect(result[0]!.location.path).toBe('/tmp/project/src/tools.ts')
+      expect(result[0]!.location.line).toBe(42)
+      expect(connection.sendRequest).toHaveBeenCalledWith('workspace/symbol', { query: 'rebuildTools' })
+    })
+
+    it('getHoverInfo returns hover content', async () => {
+      const { connection } = createConnectionMock()
+      const server = await createStartedServer(connection)
+
+      connection.sendRequest.mockResolvedValueOnce({
+        contents: {
+          kind: 'markdown',
+          value: '```typescript\nconst rebuildTools: (opts: Options) => Promise<void>\n```',
+        },
+        range: { start: { line: 0, character: 5 }, end: { line: 0, character: 17 } },
+      })
+
+      const result = await server.getHoverInfo('/tmp/project/App.tsx', 0, 10)
+      expect(result).not.toBeNull()
+      expect(result!.contents).toContain('rebuildTools')
+      expect(result!.range).toBeDefined()
+      expect(connection.sendRequest).toHaveBeenCalledWith(
+        'textDocument/hover',
+        expect.objectContaining({
+          textDocument: { uri: 'file:///tmp/project/App.tsx' },
+          position: { line: 0, character: 10 },
+        }),
+      )
+    })
+
+    it('getHoverInfo returns null when no hover data', async () => {
+      const { connection } = createConnectionMock()
+      const server = await createStartedServer(connection)
+
+      connection.sendRequest.mockResolvedValueOnce(null)
+
+      const result = await server.getHoverInfo('/tmp/project/App.tsx', 999, 0)
+      expect(result).toBeNull()
+    })
+
+    it('returns empty array when server not running', async () => {
+      const server = new LspServer(tsConfig, '/tmp/project', '/usr/bin/typescript-language-server')
+
+      await expect(server.getDefinition('/tmp/project/f.ts', 0, 0)).resolves.toEqual([])
+      await expect(server.getReferences('/tmp/project/f.ts', 0, 0)).resolves.toEqual([])
+      await expect(server.getTypeDefinition('/tmp/project/f.ts', 0, 0)).resolves.toEqual([])
+      await expect(server.findWorkspaceSymbol('foo')).resolves.toEqual([])
+      await expect(server.getHoverInfo('/tmp/project/f.ts', 0, 0)).resolves.toBeNull()
+    })
+  })
+
   it('throws start errors for missing stdio and initialize failures', async () => {
     const noStdioProcess = createProcessMock(false)
     spawnMock.mockReturnValueOnce(noStdioProcess)

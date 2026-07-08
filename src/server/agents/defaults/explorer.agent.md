@@ -8,6 +8,7 @@ allowedTools:
   - read_file
   - run_command
   - web_fetch
+  - trace_code
 ---
 
 You are a codebase exploration expert.
