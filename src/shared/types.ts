@@ -571,6 +571,8 @@ export interface Config {
   workdir: string
   /** Active workflow ID (defaults to "default") */
   activeWorkflowId?: string | undefined
+  /** Disable automatic session title generation */
+  disableAutoSessionTitle?: boolean
   /** MCP server configurations */
   mcpServers?:
     | Record<

@@ -18,6 +18,7 @@ import { buildMessagesFromStoredEvents, foldPendingConfirmations } from '../even
 import { createSessionStateMessage } from '../ws/protocol.js'
 import { getPendingQuestionsForSession } from '../tools/index.js'
 import { getSessionMessageCount } from '../utils/session-utils.js'
+import { getRuntimeConfig } from '../runtime-config.js'
 
 // ============================================================================
 // Ultra-Lightweight Prompt
@@ -254,6 +255,11 @@ export async function generateSessionNameForSession(
 
   const session = sessionManager.getSession(sessionId)
   if (!session) return
+
+  if (getRuntimeConfig().disableAutoSessionTitle) {
+    logger.debug('Session name generation disabled by config', { sessionId })
+    return
+  }
 
   const messageCount = getSessionMessageCount(sessionId)
   if (!needsNameGenerationCheck(sessionId, session.metadata.title, messageCount)) return

@@ -5,8 +5,18 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { generateSessionName, needsNameGeneration, SESSION_NAME_PROMPT } from './name-generator.js'
+import {
+  generateSessionName,
+  needsNameGeneration,
+  generateSessionNameForSession,
+  SESSION_NAME_PROMPT,
+} from './name-generator.js'
 import type { LLMCompletionResponse } from '../llm/types.js'
+import type { Session } from '../../shared/types.js'
+
+vi.mock('../runtime-config.js', () => ({
+  getRuntimeConfig: vi.fn(),
+}))
 
 describe('Session Name Generator', () => {
   beforeEach(() => {
@@ -300,6 +310,33 @@ describe('Session Name Generator', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('too short')
+    })
+  })
+
+  describe('generateSessionNameForSession', () => {
+    it('should skip name generation when disableAutoSessionTitle is true', async () => {
+      const { getRuntimeConfig } = await import('../runtime-config.js')
+      ;(getRuntimeConfig as any).mockReturnValue({ disableAutoSessionTitle: true })
+
+      const sessionManager = {
+        getSession: vi.fn().mockReturnValue({ id: 'test', metadata: { title: null } } as unknown as Session),
+      }
+      const providerManager = {
+        getProviders: vi.fn().mockReturnValue([]),
+        getCurrentModel: vi.fn().mockReturnValue(null),
+      }
+      const broadcastForSession = vi.fn()
+      const eventStore = { getEvents: vi.fn().mockReturnValue([]), append: vi.fn() }
+
+      await generateSessionNameForSession('test-session', 'Hello world', {
+        sessionManager: sessionManager as any,
+        providerManager: providerManager as any,
+        broadcastForSession,
+        eventStore: eventStore as any,
+      })
+
+      expect(broadcastForSession).not.toHaveBeenCalled()
+      expect(eventStore.append).not.toHaveBeenCalled()
     })
   })
 

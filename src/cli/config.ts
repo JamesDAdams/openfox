@@ -117,6 +117,7 @@ const configSchema = z
     workspace: workspaceSchema.default(() => ({ workdir: process.cwd() })),
     llm: llmConfigSchema.optional(),
     visionFallback: visionFallbackSchema.optional(),
+    disableAutoSessionTitle: z.boolean().optional(),
   })
   .transform((data) => ({
     providers: data.providers ?? [],
@@ -130,6 +131,7 @@ const configSchema = z
     workspace: data.workspace ?? { workdir: process.cwd() },
     llm: data.llm,
     visionFallback: data.visionFallback ?? defaultVisionFallback,
+    ...(data.disableAutoSessionTitle !== undefined ? { disableAutoSessionTitle: data.disableAutoSessionTitle } : {}),
   }))
 
 // ============================================================================
@@ -176,6 +178,9 @@ export async function saveGlobalConfig(mode: Mode, config: Partial<GlobalConfig>
     workspace: config.workspace ?? { workdir: process.cwd() },
     llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
+    ...(config.disableAutoSessionTitle !== undefined
+      ? { disableAutoSessionTitle: config.disableAutoSessionTitle }
+      : {}),
   }
   await mkdir(dirname(configPath), { recursive: true })
   await writeFile(configPath, JSON.stringify(fullConfig, null, 2))

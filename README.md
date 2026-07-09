@@ -109,25 +109,26 @@ _Vision Fallback — Image processing configuration_
 
 ## Environment Variables
 
-| Variable                    | Default                    | Description                                                     |
-| --------------------------- | -------------------------- | --------------------------------------------------------------- |
-| `OPENFOX_LLM_URL`           | `http://localhost:8000/v1` | LLM API base URL                                                |
-| `OPENFOX_VLLM_URL`          | —                          | Deprecated alias for `OPENFOX_LLM_URL`                          |
-| `OPENFOX_BACKEND`           | `unknown`                  | Backend type: `vllm`, `sglang`, `ollama`, `llamacpp`, `unknown` |
-| `OPENFOX_MODEL_NAME`        | `''`                       | Override default model name                                     |
-| `OPENFOX_MAX_CONTEXT`       | `200000`                   | Max context window in tokens                                    |
-| `OPENFOX_LLM_TIMEOUT`       | `300000`                   | LLM request timeout in ms                                       |
-| `OPENFOX_LLM_IDLE_TIMEOUT`  | `300000`                   | LLM stream idle timeout in ms                                   |
-| `OPENFOX_PORT`              | `10369`                    | Server listen port                                              |
-| `OPENFOX_HOST`              | `127.0.0.1`                | Server bind host                                                |
-| `OPENFOX_WORKDIR`           | `cwd`                      | Working directory                                               |
-| `OPENFOX_DB_PATH`           | `./openfox.db`             | SQLite database path                                            |
-| `OPENFOX_LOG_LEVEL`         | `info`                     | Log level: `debug`, `info`, `warn`, `error`                     |
-| `OPENFOX_REASONING_EFFORT`  | —                          | Reasoning effort (e.g. `none`, `low`, `medium`, `high`)         |
-| `OPENFOX_DEV`               | `false`                    | Enable dev mode                                                 |
-| `OPENFOX_MODE`              | `production`               | Force mode: `production`, `development`, `test`                 |
-| `OPENFOX_SERVICE`           | `false`                    | Run as systemd service (suppresses browser open)                |
-| `OPENFOX_GIT_POLL_INTERVAL` | `10000`                    | Git status poll interval in ms                                  |
+| Variable                             | Default                    | Description                                                     |
+| ------------------------------------ | -------------------------- | --------------------------------------------------------------- |
+| `OPENFOX_LLM_URL`                    | `http://localhost:8000/v1` | LLM API base URL                                                |
+| `OPENFOX_VLLM_URL`                   | —                          | Deprecated alias for `OPENFOX_LLM_URL`                          |
+| `OPENFOX_BACKEND`                    | `unknown`                  | Backend type: `vllm`, `sglang`, `ollama`, `llamacpp`, `unknown` |
+| `OPENFOX_MODEL_NAME`                 | `''`                       | Override default model name                                     |
+| `OPENFOX_MAX_CONTEXT`                | `200000`                   | Max context window in tokens                                    |
+| `OPENFOX_LLM_TIMEOUT`                | `300000`                   | LLM request timeout in ms                                       |
+| `OPENFOX_LLM_IDLE_TIMEOUT`           | `300000`                   | LLM stream idle timeout in ms                                   |
+| `OPENFOX_PORT`                       | `10369`                    | Server listen port                                              |
+| `OPENFOX_HOST`                       | `127.0.0.1`                | Server bind host                                                |
+| `OPENFOX_WORKDIR`                    | `cwd`                      | Working directory                                               |
+| `OPENFOX_DB_PATH`                    | `./openfox.db`             | SQLite database path                                            |
+| `OPENFOX_LOG_LEVEL`                  | `info`                     | Log level: `debug`, `info`, `warn`, `error`                     |
+| `OPENFOX_REASONING_EFFORT`           | —                          | Reasoning effort (e.g. `none`, `low`, `medium`, `high`)         |
+| `OPENFOX_DEV`                        | `false`                    | Enable dev mode                                                 |
+| `OPENFOX_MODE`                       | `production`               | Force mode: `production`, `development`, `test`                 |
+| `OPENFOX_SERVICE`                    | `false`                    | Run as systemd service (suppresses browser open)                |
+| `OPENFOX_GIT_POLL_INTERVAL`          | `10000`                    | Git status poll interval in ms                                  |
+| `OPENFOX_DISABLE_AUTO_SESSION_TITLE` | `false`                    | Disable automatic session title generation                      |
 
 ## License
 

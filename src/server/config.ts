@@ -21,6 +21,7 @@ const envSchema = z.object({
   OPENFOX_LLM_TIMEOUT: z.coerce.number().default(300_000),
   OPENFOX_LLM_IDLE_TIMEOUT: z.coerce.number().default(300_000),
   OPENFOX_DEV: z.coerce.boolean().default(false),
+  OPENFOX_DISABLE_AUTO_SESSION_TITLE: z.coerce.boolean().optional(),
 })
 
 export function loadConfig(): Config {
@@ -64,6 +65,9 @@ export function loadConfig(): Config {
     },
     mode: env.OPENFOX_DEV ? 'development' : 'production',
     workdir,
+    ...(env.OPENFOX_DISABLE_AUTO_SESSION_TITLE !== undefined
+      ? { disableAutoSessionTitle: env.OPENFOX_DISABLE_AUTO_SESSION_TITLE }
+      : {}),
   }
 }
 
