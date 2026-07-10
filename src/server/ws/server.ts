@@ -911,6 +911,15 @@ async function handleClientMessage(
       // Acknowledge immediately
       send({ type: 'ack', payload: {}, id: message.id })
 
+      // Create AbortController so manual compaction is abortable via abortSession()
+      const controller = new AbortController()
+      const existingController = activeAgents.get(sessionId)
+      if (existingController) {
+        logger.warn('Aborting existing agent before compaction', { sessionId })
+        existingController.abort()
+      }
+      activeAgents.set(sessionId, controller)
+
       // Append compaction prompt to event store (shared helper, same as agent-loop.ts auto-compaction trigger)
       appendCompactionPrompt(sessionId, (event) => getEventStore().append(sessionId, event))
 
@@ -920,6 +929,7 @@ async function handleClientMessage(
         sessionId,
         llmClient: llmForSession(sessionId),
         statsIdentity: statsForSession(sessionId),
+        signal: controller.signal,
         onMessage: (msg) => _broadcastForSession(sessionId, msg),
         initialCompacting: true,
       })
@@ -940,11 +950,25 @@ async function handleClientMessage(
         })
         .finally(() => {
           try {
+            // Clean up activeAgents
+            if (activeAgents.get(sessionId) === controller) {
+              activeAgents.delete(sessionId)
+            }
+
+            if (abortedSessions.has(sessionId)) {
+              abortedSessions.delete(sessionId)
+              sessionManager.clearMessageQueue(sessionId)
+            }
+
             // runChatTurn sets isRunning=true but its finally only appends to EventStore.
             // We must update the DB and broadcast so the QueueProcessor can process
             // subsequent messages.
             sessionManager.setRunning(sessionId, false)
             sendForSession(sessionId, createSessionRunningMessage(false))
+
+            // Send fresh context state
+            const contextState = sessionManager.getContextState(sessionId)
+            sendForSession(sessionId, createContextStateMessage(contextState))
           } catch {
             // Session may have been deleted during execution
           }
