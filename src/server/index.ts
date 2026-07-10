@@ -454,7 +454,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     res.json({ success: true })
   })
 
-  // Session provider configuration
+  // Session provider configuration (session-scoped only, does NOT update global default)
   app.post('/api/sessions/:id/provider', async (req, res) => {
     const { getEventStore } = await import('./events/index.js')
     const { buildMessagesFromStoredEvents } = await import('./events/folding.js')
@@ -474,19 +474,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const provider = providerManager.getProviders().find((p) => p.id === providerId)
     const resolvedModel = model ?? provider?.models?.[0]?.id ?? 'auto'
 
-    // Set provider for session
+    // Set provider for session only — does NOT touch global defaultModelSelection
     sessionManager.setSessionProvider(sessionId, providerId, resolvedModel)
-
-    // Persist to global config as defaultModelSelection
-    const { loadGlobalConfig, saveGlobalConfig, setDefaultModelSelection } = await import('../cli/config.js')
-    const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
-    const updatedConfig = setDefaultModelSelection(globalConfig, providerId, resolvedModel)
-    await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
-
-    // Update in-memory config so new sessions inherit the selection
-    config.defaultModelSelection = updatedConfig.defaultModelSelection
-
-    // Invalidate session LLM client cache (handled internally by setSessionProvider)
 
     // Get updated context state
     const contextState = sessionManager.getContextState(sessionId)
@@ -498,6 +487,37 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const updatedSession = sessionManager.getSession(sessionId)
 
     res.json({ session: updatedSession, messages, contextState })
+  })
+
+  // Set global default model (persisted to config, used for new sessions)
+  app.post('/api/default-model', async (req, res) => {
+    const { providerId, model } = req.body
+    if (!providerId || !model) {
+      return res.status(400).json({ error: 'providerId and model are required' })
+    }
+
+    // Validate provider exists
+    const provider = providerManager.getProviders().find((p) => p.id === providerId)
+    if (!provider) {
+      return res.status(404).json({ error: 'Provider not found' })
+    }
+
+    // Set default via providerManager
+    const result = await providerManager.setDefaultModelSelection(providerId, model)
+    if (!result.success) {
+      return res.status(500).json({ error: result.error ?? 'Failed to set default model' })
+    }
+
+    // Persist to global config
+    const { loadGlobalConfig, saveGlobalConfig, setDefaultModelSelection } = await import('../cli/config.js')
+    const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+    const updatedConfig = setDefaultModelSelection(globalConfig, providerId, model)
+    await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+
+    // Update in-memory config
+    config.defaultModelSelection = updatedConfig.defaultModelSelection
+
+    res.json({ success: true, defaultModelSelection: config.defaultModelSelection })
   })
 
   // Session criteria (REST)

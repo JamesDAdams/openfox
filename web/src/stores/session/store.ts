@@ -618,13 +618,6 @@ export const useSessionStore = create<SessionState>((set, get) => {
           messages: data.messages ?? [],
           contextState: data.contextState,
         })
-        if (data.session?.providerId) {
-          const configStore = useConfigStore.getState()
-          const sessionProvider = configStore.providers.find((p) => p.id === data.session.providerId)
-          if (sessionProvider) {
-            configStore.syncFromSession(data.session.providerId, data.session.providerModel ?? '')
-          }
-        }
         return data.session
       } catch {
         return null

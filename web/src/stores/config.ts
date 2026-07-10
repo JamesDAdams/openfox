@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { authFetch } from '../lib/api'
-import { useSessionStore } from './session'
 import type { ModelConfig } from '@shared/types.js'
 
 type LlmStatus = 'connected' | 'disconnected' | 'unknown'
@@ -45,7 +44,7 @@ interface ConfigState {
   fetchConfig: () => Promise<void>
   refreshModel: () => Promise<void>
   activateProvider: (providerId: string) => Promise<boolean>
-  syncFromSession: (providerId: string, model: string) => void
+  setDefaultModel: (providerId: string, model: string) => Promise<boolean>
   startAutoRefresh: () => void
   stopAutoRefresh: () => void
   refreshProviderModels: (providerId: string) => Promise<boolean>
@@ -146,17 +145,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         llmStatus: LlmStatus
         backend: Backend
       }
-
-      // Check if current session has a provider/model override
-      // If yes, preserve the session-specific model and don't overwrite it
-      const sessionStore = useSessionStore.getState()
-      const currentSession = sessionStore.currentSession
-      if (currentSession?.providerId && currentSession.providerModel) {
-        // Session has explicit model selection - preserve it
-        set({ llmStatus: data.llmStatus, backend: data.backend })
-        return
-      }
-
       set({ model: data.model, llmStatus: data.llmStatus, backend: data.backend })
     } catch (error) {
       console.error('Failed to refresh model:', error)
@@ -201,29 +189,30 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }
   },
 
-  syncFromSession: (providerId: string, model: string) => {
-    const { providers, defaultModelSelection } = get()
-    // When model is empty (provider-only switch), preserve the current model
-    // if it belongs to the target provider, otherwise use the first available model
-    let resolvedModel = model
-    if (!resolvedModel) {
-      const currentProvider = defaultModelSelection?.split('/')[0]
-      const currentModel = defaultModelSelection?.split('/').slice(1).join('/')
-      if (currentProvider === providerId && currentModel) {
-        resolvedModel = currentModel
-      } else {
-        resolvedModel = providers.find((p) => p.id === providerId)?.models[0]?.id ?? ''
-      }
+  setDefaultModel: async (providerId: string, model: string) => {
+    const { providers } = get()
+    try {
+      const response = await authFetch('/api/default-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerId, model }),
+      })
+      if (!response.ok) return false
+      const data = (await response.json()) as { success: boolean; defaultModelSelection: string }
+
+      set({
+        activeProviderId: providerId,
+        model,
+        defaultModelSelection: data.defaultModelSelection,
+        providers: providers.map((p) => ({
+          ...p,
+          isActive: p.id === providerId,
+        })),
+      })
+      return true
+    } catch {
+      return false
     }
-    set({
-      activeProviderId: providerId,
-      model: resolvedModel,
-      defaultModelSelection: `${providerId}/${resolvedModel}`,
-      providers: providers.map((p) => ({
-        ...p,
-        isActive: p.id === providerId,
-      })),
-    })
   },
 
   refreshProviderModels: async (providerId: string) => {

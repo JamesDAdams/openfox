@@ -28,7 +28,6 @@ import type {
   QueueStatePayload,
 } from '@shared/protocol.js'
 import { useDevServerStore } from '../dev-server'
-import { useConfigStore } from '../config'
 import { useBackgroundProcessesStore } from '../background-processes'
 import { playNewMessage } from '../../lib/sound'
 import type { AgentType } from '../notifications'
@@ -189,13 +188,6 @@ export function handleServerMessage(
         ...(wasPendingCreate ? { pendingSessionCreate: payload.session.id } : {}),
       })
 
-      if (payload.session.providerId) {
-        const configStore = useConfigStore.getState()
-        const sessionProvider = configStore.providers.find((p) => p.id === payload.session.providerId)
-        if (sessionProvider) {
-          configStore.syncFromSession(payload.session.providerId, payload.session.providerModel ?? '')
-        }
-      }
       break
     }
 

@@ -4,7 +4,7 @@ import { useConfigStore, getBackendDisplayName, type Provider } from '../../stor
 import { useSessionStore } from '../../stores/session'
 import { ProviderModal, type ProviderFormData } from '../shared/ProviderModal'
 import { authFetch } from '../../lib/api'
-import { ChevronDownIcon, ReloadIcon, CheckIcon, EditSmallIcon } from '../shared/icons'
+import { ChevronDownIcon, ReloadIcon, CheckIcon, EditSmallIcon, StarIcon, StarFilledIcon } from '../shared/icons'
 
 function formatContextWindow(context: number): string {
   if (context >= 1000000) return `${(context / 1000000).toFixed(1)}M`
@@ -36,6 +36,23 @@ export function ProviderSelector() {
   const activateProvider = useConfigStore((state) => state.activateProvider)
   const refreshModel = useConfigStore((state) => state.refreshModel)
   const refreshProviderModels = useConfigStore((state) => state.refreshProviderModels)
+  const setDefaultModel = useConfigStore((state) => state.setDefaultModel)
+
+  // Derive effective provider and model: session override wins, else global default
+  const sessionProviderId = currentSession?.providerId ?? null
+  const sessionModel = currentSession?.providerModel ?? null
+  const defaultProviderId = defaultModelSelection?.split('/')[0] ?? null
+  const defaultModel = defaultModelSelection?.split('/').slice(1).join('/') ?? null
+
+  const effectiveProviderId = sessionProviderId ?? defaultProviderId
+  const effectiveModel = sessionModel ?? defaultModel
+  const shortModelName = effectiveModel
+    ? (effectiveModel.split('/').pop()?.replace(/-/g, ' ') ?? effectiveModel)
+    : 'No model'
+  const isSessionScoped = !!(currentSession && sessionModel)
+  const differsFromDefault = isSessionScoped && sessionModel !== defaultModel
+
+  const [settingDefault, setSettingDefault] = useState(false)
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -43,7 +60,6 @@ export function ProviderSelector() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false)
         setExpandedProviderIds([])
-        // Reset loaded providers when closing
         loadedProvidersRef.current = new Set()
       }
     }
@@ -56,7 +72,6 @@ export function ProviderSelector() {
     if (isOpen) {
       const allProviderIds = providers.map((p) => p.id)
       setExpandedProviderIds(allProviderIds)
-      // Load models for all providers (only once per provider per session)
       allProviderIds.forEach((providerId) => {
         if (!loadedProvidersRef.current.has(providerId)) {
           loadedProvidersRef.current.add(providerId)
@@ -66,17 +81,17 @@ export function ProviderSelector() {
     }
   }, [isOpen, providers])
 
-  const activeProvider = providers.find((p) => p.id === activeProviderId)
+  const activeProvider = providers.find((p) => p.id === effectiveProviderId)
   const isLlmOffline = activeProvider?.status === 'disconnected'
 
-  // Parse defaultModelSelection for display and matching
-  const selectedModel = defaultModelSelection ? (defaultModelSelection.split('/').pop() ?? null) : null
-  const shortModelName = selectedModel
-    ? (selectedModel.split('/').pop()?.replace(/-/g, ' ') ?? selectedModel)
-    : 'No model'
+  // Check if a given provider/model pair is the session-active model
+  const isSessionActive = (providerId: string, modelId: string): boolean => {
+    if (!currentSession) return false
+    return currentSession.providerId === providerId && currentSession.providerModel === modelId
+  }
 
-  // Check if a given provider/model pair is the currently selected one
-  const isSelected = (providerId: string, modelId: string): boolean => {
+  // Check if a given provider/model pair is the global default
+  const isDefault = (providerId: string, modelId: string): boolean => {
     if (!defaultModelSelection) return false
     return defaultModelSelection === `${providerId}/${modelId}`
   }
@@ -107,12 +122,9 @@ export function ProviderSelector() {
       return
     }
 
-    // Switch to different provider
     if (currentSession) {
       // Session-scoped: persist provider choice to session (no model specified)
       setSessionProvider(provider.id, undefined)
-      // Optimistically update UI with just the provider
-      useConfigStore.getState().syncFromSession(provider.id, '')
       setIsOpen(false)
       setExpandedProviderIds([])
     } else {
@@ -147,7 +159,6 @@ export function ProviderSelector() {
   }
 
   const handleProviderModalSave = async (formData: ProviderFormData) => {
-    // Send PUT to update provider on server (includes all models)
     try {
       const res = await authFetch(`/api/providers/${formData.id}`, {
         method: 'PUT',
@@ -163,7 +174,6 @@ export function ProviderSelector() {
         }),
       })
       if (!res.ok) throw new Error('Failed to update provider')
-      // Refresh config to get updated providers
       await useConfigStore.getState().fetchConfig()
     } catch {
       // Silently fail
@@ -172,37 +182,38 @@ export function ProviderSelector() {
     setShowProviderModal(false)
   }
 
+  // Handle clicking a model name: set it for the session (if session exists) or globally
   const handleModelClick = async (providerId: string, newModel: string) => {
     if (currentSession) {
-      // Session-scoped: persist model choice to session
+      // Optimistic update: immediately reflect the new model in the header
+      useSessionStore.setState((state) => ({
+        currentSession: state.currentSession ? { ...state.currentSession, providerId, providerModel: newModel } : null,
+      }))
+      // Session-scoped: persist model choice to session only
       setSessionProvider(providerId, newModel)
-      // Optimistically update UI
-      useConfigStore.getState().syncFromSession(providerId, newModel)
       setExpandedProviderIds([])
       setIsOpen(false)
       return
     }
 
-    setLoadingModels('activating')
-    try {
-      // Optimistically update UI
-      useConfigStore.getState().syncFromSession(providerId, newModel)
+    // No session: set globally as default via activateProvider (which persists defaultModelSelection)
+    const success = await activateProvider(providerId)
+    if (success) {
       setExpandedProviderIds([])
       setIsOpen(false)
+    }
+  }
 
-      const response = await authFetch(`/api/providers/${providerId}/activate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: newModel }),
-      })
-      if (response.ok) {
-        const data = (await response.json()) as { activeProviderId: string; model: string; backend: string }
-        useConfigStore.getState().syncFromSession(data.activeProviderId, data.model)
-      }
+  // Handle clicking the star icon: set as global default
+  const handleSetDefault = async (e: React.MouseEvent, providerId: string, modelId: string) => {
+    e.stopPropagation()
+    setSettingDefault(true)
+    try {
+      await setDefaultModel(providerId, modelId)
     } catch {
       // Silently fail
     } finally {
-      setLoadingModels(null)
+      setSettingDefault(false)
     }
   }
 
@@ -213,7 +224,7 @@ export function ProviderSelector() {
         type="button"
         onClick={() => refreshModel()}
         className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors group"
-        title={isLlmOffline ? 'LLM server is offline. Click to retry.' : (selectedModel ?? 'Click to refresh model')}
+        title={isLlmOffline ? 'LLM server is offline. Click to retry.' : (shortModelName ?? 'Click to refresh model')}
       >
         {isLlmOffline ? (
           <span className="text-sm text-accent-error animate-pulse">LLM offline</span>
@@ -248,7 +259,14 @@ export function ProviderSelector() {
           <span className="text-sm text-accent-error animate-pulse">offline</span>
         ) : (
           <>
-            <span className="text-sm text-accent-primary">{shortModelName}</span>
+            <span className={`text-sm ${differsFromDefault ? 'text-accent-primary italic' : 'text-accent-primary'}`}>
+              {shortModelName}
+            </span>
+            {differsFromDefault && (
+              <span className="text-xs text-text-muted ml-0.5" title="Session-scoped model (different from default)">
+                •
+              </span>
+            )}
             <span
               className={`text-xs px-1.5 py-0.5 rounded-full ${
                 activeProvider?.isLocal
@@ -271,7 +289,7 @@ export function ProviderSelector() {
               <div key={provider.id}>
                 <div
                   className={`px-3 py-2 flex items-center justify-between ${
-                    provider.id === activeProviderId ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'
+                    provider.id === effectiveProviderId ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'
                   } ${activating ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
                 >
                   <div
@@ -280,7 +298,7 @@ export function ProviderSelector() {
                   >
                     <span
                       className={`text-sm font-medium truncate ${
-                        provider.id === activeProviderId ? 'text-accent-primary' : 'text-text-primary'
+                        provider.id === effectiveProviderId ? 'text-accent-primary' : 'text-text-primary'
                       }`}
                     >
                       {provider.name}
@@ -290,8 +308,8 @@ export function ProviderSelector() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {provider.id === activeProviderId ? (
-                      <span className="text-accent-success" title="Active">
+                    {provider.id === effectiveProviderId ? (
+                      <span className="text-accent-success" title="Active provider">
                         <CheckIcon className="w-4 h-4" />
                       </span>
                     ) : (
@@ -336,42 +354,71 @@ export function ProviderSelector() {
                     {loadingModels === provider.id ? (
                       <div className="px-4 py-2 text-xs text-text-muted">Loading models...</div>
                     ) : provider.models?.length ? (
-                      provider.models.map((modelConfig) => (
-                        <button
-                          key={modelConfig.id}
-                          type="button"
-                          onClick={() => handleModelClick(provider.id, modelConfig.id)}
-                          disabled={loadingModels === 'activating'}
-                          className={`w-full px-4 py-1.5 text-left hover:bg-bg-tertiary transition-colors text-sm flex items-center justify-between group ${
-                            loadingModels === 'activating' ? 'opacity-50 cursor-wait' : ''
-                          } ${isSelected(provider.id, modelConfig.id) ? 'text-accent-primary' : 'text-text-secondary'}`}
-                        >
-                          <span className="truncate flex-1">
-                            {modelConfig.id.split('/').pop()?.replace(/-/g, ' ') ?? modelConfig.id}
-                          </span>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className="text-xs text-text-muted">
-                              {formatContextWindow(modelConfig.contextWindow)}
-                            </span>
+                      provider.models.map((modelConfig) => {
+                        const isActive = isSessionActive(provider.id, modelConfig.id)
+                        const isDef = isDefault(provider.id, modelConfig.id)
+                        return (
+                          <div
+                            key={modelConfig.id}
+                            className={`flex items-center px-4 py-1.5 text-sm hover:bg-bg-tertiary transition-colors group ${
+                              loadingModels === 'activating' ? 'opacity-50 cursor-wait' : ''
+                            } ${isActive ? 'text-accent-primary' : 'text-text-secondary'}`}
+                          >
+                            {/* Click on model name → session-scoped (or global if no session) */}
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleEditModel(provider.id, modelConfig)
-                              }}
-                              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-bg-tertiary rounded transition-opacity"
-                              title="Edit model context"
+                              onClick={() => handleModelClick(provider.id, modelConfig.id)}
+                              disabled={loadingModels === 'activating'}
+                              className="flex-1 truncate text-left"
                             >
-                              <EditSmallIcon className="w-3 h-3 text-text-muted" />
+                              {modelConfig.id.split('/').pop()?.replace(/-/g, ' ') ?? modelConfig.id}
                             </button>
+
+                            <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                              <span className="text-xs text-text-muted">
+                                {formatContextWindow(modelConfig.contextWindow)}
+                              </span>
+
+                              {/* Star: filled = default, outline = click to set as default. Hidden when no session since model-name click already sets global default. */}
+                              {currentSession && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleSetDefault(e, provider.id, modelConfig.id)}
+                                  disabled={settingDefault}
+                                  className="p-0.5 hover:bg-bg-tertiary rounded transition-colors disabled:opacity-40"
+                                  title={isDef ? 'Default model' : 'Set as default model'}
+                                >
+                                  {isDef ? (
+                                    <StarFilledIcon className="w-3.5 h-3.5 text-accent-warning" />
+                                  ) : (
+                                    <StarIcon className="w-3.5 h-3.5 text-text-muted hover:text-accent-warning" />
+                                  )}
+                                </button>
+                              )}
+
+                              {/* Edit button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleEditModel(provider.id, modelConfig)
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-bg-tertiary rounded transition-opacity"
+                                title="Edit model context"
+                              >
+                                <EditSmallIcon className="w-3 h-3 text-text-muted" />
+                              </button>
+
+                              {/* Checkmark: session-active model */}
+                              {isActive && (
+                                <span className="text-accent-success flex-shrink-0" title="Session model">
+                                  <CheckIcon className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          {isSelected(provider.id, modelConfig.id) && (
-                            <span className="text-accent-success flex-shrink-0 ml-1">
-                              <CheckIcon className="w-3.5 h-3.5" />
-                            </span>
-                          )}
-                        </button>
-                      ))
+                        )
+                      })
                     ) : (
                       <div className="px-4 py-2 text-xs text-text-muted">No models available</div>
                     )}
