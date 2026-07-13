@@ -218,6 +218,11 @@ export function ProviderSelector() {
   }
 
   // If no providers configured, show simple model display
+  function getVisibleModels(provider: Provider) {
+    const hasSelected = provider.models.some((m) => m.selected)
+    return hasSelected ? provider.models.filter((m) => m.selected) : provider.models
+  }
+
   if (providers.length === 0) {
     return (
       <button
@@ -354,7 +359,7 @@ export function ProviderSelector() {
                     {loadingModels === provider.id ? (
                       <div className="px-4 py-2 text-xs text-text-muted">Loading models...</div>
                     ) : provider.models?.length ? (
-                      provider.models.map((modelConfig) => {
+                      getVisibleModels(provider).map((modelConfig) => {
                         const isActive = isSessionActive(provider.id, modelConfig.id)
                         const isDef = isDefault(provider.id, modelConfig.id)
                         return (

@@ -2,19 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { authFetch } from '../../lib/api'
 import type { Backend } from '../../stores/config'
 import type { ModelConfig as SharedModelConfig } from '@shared/types.js'
-import { ChevronDownIcon, GearIcon } from './icons'
-import { getBackendDisplayName } from '../onboarding/types'
+import { ChevronDownIcon } from './icons'
 import { QueryParamsInput } from './QueryParamsInput'
 
 const COMMON_PORTS = [8080, 11434, 8000]
-
-const BACKEND_OPTIONS: { value: Backend; label: string }[] = [
-  { value: 'llamacpp', label: 'llama.cpp' },
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'vllm', label: 'vLLM' },
-  { value: 'sglang', label: 'SGLang' },
-  { value: 'unknown', label: 'Other (APIs)' },
-]
 
 interface ModelInfo {
   id: string
@@ -56,7 +47,7 @@ interface ProviderModalProps {
   isOpen: boolean
   onClose: () => void
   onSave: (provider: ProviderFormData) => void
-  initialStep?: 1 | 2 | 3
+  initialStep?: 1 | 2
   editProvider?: {
     id: string
     name: string
@@ -70,6 +61,251 @@ interface ProviderModalProps {
   editModelId?: string
 }
 
+function ModelConfigPanel({
+  model,
+  modelConfigs,
+  autoConfigState,
+  testResults,
+  onUpdateConfig,
+  onRunAutoConfig,
+  onTestParams,
+  onShowRaw,
+}: {
+  model: ModelInfo
+  modelConfigs: Record<string, ModelConfig>
+  autoConfigState: { loading: boolean; progress: Record<string, 'pending' | 'probing' | 'done' | 'error'> }
+  testResults: Record<string, { loading: boolean; result?: string; error?: string }>
+  onUpdateConfig: (id: string, partial: Partial<ModelConfig>) => void
+  onRunAutoConfig: (id: string) => void
+  onTestParams: (id: string, mode: 'thinking' | 'non-thinking') => void
+  onShowRaw: (data: string) => void
+}) {
+  return (
+    <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => onRunAutoConfig(model.id)}
+          disabled={autoConfigState.progress[model.id] === 'probing'}
+          className="px-4 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-50 transition-colors"
+        >
+          {autoConfigState.progress[model.id] === 'probing' ? 'Probing...' : 'Auto-config'}
+        </button>
+        {autoConfigState.progress[model.id] === 'done' && (
+          <span className="text-sm text-accent-success font-medium">Configured ✓</span>
+        )}
+        {autoConfigState.progress[model.id] === 'error' && (
+          <span className="text-sm text-red-500 font-medium">Failed ✗</span>
+        )}
+      </div>
+
+      <div className="flex gap-3 items-end">
+        <div>
+          <label className="text-xs text-text-secondary block mb-1">Context window (tokens)</label>
+          <input
+            type="number"
+            value={modelConfigs[model.id]?.contextWindow ?? model.contextWindow}
+            onChange={(e) =>
+              onUpdateConfig(model.id, {
+                contextWindow: parseInt(e.target.value) || model.contextWindow,
+              })
+            }
+            className="w-32 px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+          />
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-text-secondary pb-1">
+          <input
+            type="checkbox"
+            checked={modelConfigs[model.id]?.supportsVision ?? false}
+            onChange={(e) => onUpdateConfig(model.id, { supportsVision: e.target.checked })}
+            className="accent-accent-primary"
+          />{' '}
+          Supports vision
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onTestParams(model.id, 'thinking')}
+            disabled={testResults[model.id + '-thinking']?.loading}
+            className="px-3 py-1.5 bg-bg-tertiary border border-border rounded text-xs font-medium hover:bg-bg-secondary disabled:opacity-50 transition-colors"
+          >
+            {testResults[model.id + '-thinking']?.loading ? 'Testing...' : 'Test thinking'}
+          </button>
+          {testResults[model.id + '-thinking']?.result && <span className="text-xs text-accent-success">OK</span>}
+          {testResults[model.id + '-thinking']?.error && (
+            <span className="text-xs text-red-500" title={testResults[model.id + '-thinking']?.error}>
+              Fail
+            </span>
+          )}
+          {testResults[model.id + '-thinking']?.result && (
+            <button
+              onClick={() => onShowRaw(testResults[model.id + '-thinking']!.result!)}
+              className="text-xs text-accent-primary hover:underline"
+            >
+              raw
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onTestParams(model.id, 'non-thinking')}
+            disabled={testResults[model.id + '-non-thinking']?.loading}
+            className="px-3 py-1.5 bg-bg-tertiary border border-border rounded text-xs font-medium hover:bg-bg-secondary disabled:opacity-50 transition-colors"
+          >
+            {testResults[model.id + '-non-thinking']?.loading ? 'Testing...' : 'Test non-thinking'}
+          </button>
+          {testResults[model.id + '-non-thinking']?.result && <span className="text-xs text-accent-success">OK</span>}
+          {testResults[model.id + '-non-thinking']?.error && (
+            <span className="text-xs text-red-500" title={testResults[model.id + '-non-thinking']?.error}>
+              Fail
+            </span>
+          )}
+          {testResults[model.id + '-non-thinking']?.result && (
+            <button
+              onClick={() => onShowRaw(testResults[model.id + '-non-thinking']!.result!)}
+              className="text-xs text-accent-primary hover:underline"
+            >
+              raw
+            </button>
+          )}
+        </div>
+      </div>
+
+      <details className="group">
+        <summary className="text-xs text-text-muted cursor-pointer hover:text-text-secondary list-none flex items-center gap-1 select-none">
+          <ChevronDownIcon className="w-3 h-3 transition-transform group-open:rotate-180" />
+          Advanced: thinking &amp; non-thinking params
+        </summary>
+        <div className="mt-3 space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={modelConfigs[model.id]?.thinkingEnabled ?? false}
+              onChange={(e) => onUpdateConfig(model.id, { thinkingEnabled: e.target.checked })}
+              className="w-4 h-4 rounded border-border bg-bg-tertiary accent-accent-primary"
+            />
+            <span className="text-xs font-medium text-text-primary">Thinking</span>
+          </label>
+          {modelConfigs[model.id]?.thinkingEnabled && (
+            <div className="ml-6 space-y-2 pl-3 border-l-2 border-accent-primary/30">
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">Reasoning effort</label>
+                <input
+                  type="text"
+                  value={modelConfigs[model.id]?.thinkingLevel ?? ''}
+                  onChange={(e) => onUpdateConfig(model.id, { thinkingLevel: e.target.value })}
+                  className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+                />
+              </div>
+              <QueryParamsInput
+                value={modelConfigs[model.id]?.thinkingQueryParams}
+                onChange={(v) => onUpdateConfig(model.id, { thinkingQueryParams: v })}
+              />
+            </div>
+          )}
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={modelConfigs[model.id]?.nonThinkingEnabled ?? false}
+              onChange={(e) => onUpdateConfig(model.id, { nonThinkingEnabled: e.target.checked })}
+              className="w-4 h-4 rounded border-border bg-bg-tertiary accent-accent-primary"
+            />
+            <span className="text-xs font-medium text-text-primary">Non-thinking</span>
+          </label>
+          {modelConfigs[model.id]?.nonThinkingEnabled && (
+            <div className="ml-6 space-y-2 pl-3 border-l-2 border-accent-warning/30">
+              <QueryParamsInput
+                value={modelConfigs[model.id]?.nonThinkingQueryParams}
+                onChange={(v) => onUpdateConfig(model.id, { nonThinkingQueryParams: v })}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-border pt-3 mt-3">
+          <p className="text-xs text-text-muted mb-2">Sampling parameters</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Temperature</label>
+              <input
+                type="number"
+                step="0.1"
+                value={modelConfigs[model.id]?.temperature ?? ''}
+                onChange={(e) =>
+                  onUpdateConfig(model.id, {
+                    temperature: e.target.value ? parseFloat(e.target.value) : undefined,
+                  })
+                }
+                placeholder={modelConfigs[model.id]?.defaultTemperature?.toString() ?? 'Using default'}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+              {modelConfigs[model.id]?.defaultTemperature !== undefined && (
+                <p className="text-xs text-text-muted mt-0.5">default: {modelConfigs[model.id]?.defaultTemperature}</p>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Top P</label>
+              <input
+                type="number"
+                step="0.05"
+                value={modelConfigs[model.id]?.topP ?? ''}
+                onChange={(e) =>
+                  onUpdateConfig(model.id, {
+                    topP: e.target.value ? parseFloat(e.target.value) : undefined,
+                  })
+                }
+                placeholder={modelConfigs[model.id]?.defaultTopP?.toString() ?? 'Using default'}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+              {modelConfigs[model.id]?.defaultTopP !== undefined && (
+                <p className="text-xs text-text-muted mt-0.5">default: {modelConfigs[model.id]?.defaultTopP}</p>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Top K</label>
+              <input
+                type="number"
+                value={modelConfigs[model.id]?.topK ?? ''}
+                onChange={(e) =>
+                  onUpdateConfig(model.id, {
+                    topK: e.target.value ? parseInt(e.target.value) : undefined,
+                  })
+                }
+                placeholder={modelConfigs[model.id]?.defaultTopK?.toString() ?? 'Using default'}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+              {modelConfigs[model.id]?.defaultTopK !== undefined && (
+                <p className="text-xs text-text-muted mt-0.5">default: {modelConfigs[model.id]?.defaultTopK}</p>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Max tokens</label>
+              <input
+                type="number"
+                value={modelConfigs[model.id]?.maxTokens ?? ''}
+                onChange={(e) =>
+                  onUpdateConfig(model.id, {
+                    maxTokens: e.target.value ? parseInt(e.target.value) : undefined,
+                  })
+                }
+                placeholder={modelConfigs[model.id]?.defaultMaxTokens?.toString() ?? 'Using default'}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+              {modelConfigs[model.id]?.defaultMaxTokens !== undefined && (
+                <p className="text-xs text-text-muted mt-0.5">default: {modelConfigs[model.id]?.defaultMaxTokens}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+  )
+}
+
 export function ProviderModal({
   isOpen,
   onClose,
@@ -81,7 +317,7 @@ export function ProviderModal({
   const [formStep, setFormStep] = useState(initialStep)
   const [formName, setFormName] = useState('')
   const [formUrl, setFormUrl] = useState('')
-  const [formBackend, setFormBackend] = useState<string>('')
+  const [formBackend, setFormBackend] = useState<string>('unknown')
   const [formApiKey, setFormApiKey] = useState('')
   const [formIsLocal, setFormIsLocal] = useState(false)
   const [fetchingModels, setFetchingModels] = useState(false)
@@ -99,6 +335,8 @@ export function ProviderModal({
     Record<string, { loading: boolean; result?: string; message?: Record<string, unknown>; error?: string }>
   >({})
   const [rawModalData, setRawModalData] = useState<string | null>(null)
+  const [selectedModelIds, setSelectedModelIds] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState('')
   const urlInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -112,13 +350,19 @@ export function ProviderModal({
     setModelConfigs((prev) => ({ ...prev, [id]: { ...prev[id]!, ...partial } }))
   }
 
+  function filterModels(query: string): ModelInfo[] {
+    if (!query.trim()) return models
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+    return models.filter((m) => terms.every((t) => m.id.toLowerCase().includes(t)))
+  }
+
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setFormStep(initialStep)
       setFormName(editProvider?.name ?? '')
       setFormUrl(editProvider?.url ?? '')
-      setFormBackend(editProvider?.backend ?? '')
+      setFormBackend(editProvider?.backend ?? 'unknown')
       setFormApiKey(editProvider?.apiKey ?? '')
       setFormIsLocal(editProvider?.isLocal ?? false)
       setFetchError(null)
@@ -128,6 +372,7 @@ export function ProviderModal({
 
       if (editProvider?.models?.length) {
         const configs: Record<string, ModelConfig> = {}
+        const selected = new Set<string>()
         for (const m of editProvider.models) {
           configs[m.id] = {
             contextWindow: m.contextWindow,
@@ -142,7 +387,13 @@ export function ProviderModal({
             defaultTopK: m.defaultTopK,
             defaultMaxTokens: m.defaultMaxTokens,
           }
+          if (m.selected) selected.add(m.id)
         }
+        // Auto-select all models if none explicitly selected (legacy / single-model)
+        if (selected.size === 0) {
+          for (const m of editProvider.models) selected.add(m.id)
+        }
+        setSelectedModelIds(selected)
         setModelConfigs(configs)
         setModels(editProvider.models.map((m) => ({ id: m.id, contextWindow: m.contextWindow })))
         setExpandedModelId(editModelId ?? editProvider.models[0]?.id ?? null)
@@ -150,6 +401,7 @@ export function ProviderModal({
         setModels([])
         setModelConfigs({})
         setExpandedModelId(null)
+        setSelectedModelIds(new Set())
       }
     }
   }, [isOpen, initialStep, editProvider?.id, editModelId])
@@ -160,19 +412,6 @@ export function ProviderModal({
       fetchModels(formUrl)
     }
   }, [formStep])
-
-  // Auto-run auto-config when backend type is selected and models are loaded
-  // Only for new providers — editing an existing provider should not trigger auto-config
-  const autoConfigRan = useRef(false)
-  useEffect(() => {
-    if (editProvider) return // never auto-config when editing
-    if (formBackend && models.length > 0 && !autoConfigRan.current && !autoConfigState.loading) {
-      autoConfigRan.current = true
-      for (const m of models) {
-        runAutoConfig(m.id)
-      }
-    }
-  }, [formBackend, models.length])
 
   async function fetchModels(url: string) {
     setFetchingModels(true)
@@ -200,6 +439,11 @@ export function ProviderModal({
             }
           }
           setModelConfigs(configs)
+          if (data.models.length === 1) {
+            setSelectedModelIds(new Set([data.models[0]!.id]))
+            setExpandedModelId(data.models[0]!.id)
+            runAutoConfig(data.models[0]!.id)
+          }
         }
       } else {
         const data = (await response.json()) as { error?: string; url?: string }
@@ -325,7 +569,8 @@ export function ProviderModal({
     setAutoConfigState({ loading: false, progress: {} })
     setTestResults({})
     setRawModalData(null)
-    autoConfigRan.current = false
+    setSelectedModelIds(new Set())
+    setSearchQuery('')
   }
 
   function handleSave() {
@@ -342,6 +587,7 @@ export function ProviderModal({
       models: models.map((m) => ({
         id: m.id,
         contextWindow: modelConfigs[m.id]?.contextWindow ?? m.contextWindow,
+        selected: selectedModelIds.has(m.id) || undefined,
         supportsVision: modelConfigs[m.id]?.supportsVision,
         thinkingEnabled: modelConfigs[m.id]?.thinkingEnabled,
         thinkingLevel: modelConfigs[m.id]?.thinkingLevel,
@@ -377,7 +623,7 @@ export function ProviderModal({
 
         {/* Step indicator */}
         <div className="flex gap-1.5 px-6 pt-4">
-          {[1, 2, 3].map((s) => (
+          {[1, 2].map((s) => (
             <div
               key={s}
               className={`h-1 flex-1 rounded-full transition-colors ${
@@ -397,14 +643,12 @@ export function ProviderModal({
                   key="other"
                   type="button"
                   onClick={() => {
-                    setFormName('')
-                    setFormUrl('')
-                    setFormBackend('')
+                    setFormBackend('unknown')
                     setFormIsLocal(false)
                     setFetchError(null)
                   }}
                   className={`p-2 rounded border text-center text-sm transition-colors ${
-                    !formUrl
+                    formBackend === 'unknown'
                       ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
                       : 'border-border hover:border-text-muted text-text-secondary'
                   }`}
@@ -427,14 +671,14 @@ export function ProviderModal({
                       key={port}
                       type="button"
                       onClick={() => {
-                        setFormName(nameMap[port] ?? '')
-                        setFormUrl(`http://localhost:${port}`)
+                        setFormName((prev) => prev || (nameMap[port] ?? ''))
+                        setFormUrl((prev) => prev || `http://localhost:${port}`)
                         setFormBackend(backendMap[port] ?? '')
                         setFormIsLocal(true)
                         setFetchError(null)
                       }}
                       className={`p-2 rounded border text-center text-sm transition-colors ${
-                        formUrl === `http://localhost:${port}`
+                        formBackend === backendMap[port]
                           ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
                           : 'border-border hover:border-text-muted text-text-secondary'
                       }`}
@@ -505,36 +749,6 @@ export function ProviderModal({
         {/* Step 2: Test & Configure Models */}
         {formStep === 2 && (
           <div className="px-6 py-4 space-y-4">
-            <div>
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <label className="block text-sm text-text-secondary mb-1">Backend type</label>
-                  <select
-                    value={formBackend}
-                    onChange={(e) => setFormBackend(e.target.value)}
-                    data-testid="provider-modal-backend"
-                    className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  >
-                    <option value="" disabled>
-                      -- Select backend type --
-                    </option>
-                    {BACKEND_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  onClick={() => setShowDefaults(true)}
-                  className="px-3 h-[38px] bg-bg-primary border border-border rounded-lg hover:border-text-muted transition-colors flex items-center justify-center"
-                  title="Provider-level defaults"
-                >
-                  <GearIcon className="w-4 h-4 text-text-muted" />
-                </button>
-              </div>
-            </div>
-
             {fetchingModels && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <span className="w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
@@ -564,324 +778,219 @@ export function ProviderModal({
 
             {models.length > 0 && formBackend && (
               <>
-                <div className="mb-3">
-                  <h4 className="text-sm font-medium text-text-primary mb-1">Available Models</h4>
-                  <p className="text-xs text-text-muted">
-                    Configure each model&apos;s thinking behavior and parameters. Models without explicit config use
-                    provider defaults.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  {models.map((model) => (
-                    <div key={model.id} className="bg-bg-primary border border-border rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => setExpandedModelId(expandedModelId === model.id ? null : model.id)}
-                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-bg-tertiary transition-colors text-left"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-medium text-text-primary">{model.id.split('/').pop()}</span>
-                          <span className="text-xs text-text-muted bg-bg-tertiary px-2 py-0.5 rounded">
-                            {(modelConfigs[model.id]?.contextWindow ?? model.contextWindow).toLocaleString()} ctx
-                          </span>
-                        </div>
-                        <ChevronDownIcon
-                          className={`w-4 h-4 text-text-muted transition-transform ${expandedModelId === model.id ? 'rotate-180' : ''}`}
-                        />
-                      </button>
-
-                      {expandedModelId === model.id && (
-                        <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => runAutoConfig(model.id)}
-                              disabled={autoConfigState.progress[model.id] === 'probing'}
-                              className="px-4 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-50 transition-colors"
+                {/* Selected Models — full config panels */}
+                {selectedModelIds.size > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-text-primary mb-1">
+                      Selected Models ({selectedModelIds.size})
+                    </h4>
+                    <p className="text-xs text-text-muted mb-2">
+                      Only selected models will appear in the model selector.
+                    </p>
+                    <div className="space-y-2">
+                      {models
+                        .filter((m) => selectedModelIds.has(m.id))
+                        .map((model) => (
+                          <div key={model.id} className="bg-bg-primary border border-border rounded-lg overflow-hidden">
+                            <div
+                              onClick={() => setExpandedModelId(expandedModelId === model.id ? null : model.id)}
+                              className="w-full flex items-center justify-between px-4 py-3 hover:bg-bg-tertiary transition-colors cursor-pointer"
                             >
-                              {autoConfigState.progress[model.id] === 'probing' ? 'Probing...' : 'Auto-config'}
-                            </button>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-medium text-text-primary">
+                                  {model.id.split('/').pop()}
+                                </span>
+                                <span className="text-xs text-text-muted bg-bg-tertiary px-2 py-0.5 rounded">
+                                  {(modelConfigs[model.id]?.contextWindow ?? model.contextWindow).toLocaleString()} ctx
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {autoConfigState.progress[model.id] === 'probing' ? (
+                                  <span className="w-3 h-3 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
+                                ) : autoConfigState.progress[model.id] === 'done' ? (
+                                  <span className="text-xs text-accent-success font-medium">Configured ✓</span>
+                                ) : autoConfigState.progress[model.id] === 'error' ? (
+                                  <span className="text-xs text-red-500 font-medium">Failed ✗</span>
+                                ) : (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      runAutoConfig(model.id)
+                                    }}
+                                    className="text-xs text-accent-primary hover:underline"
+                                  >
+                                    Auto-config
+                                  </button>
+                                )}
+                                {models.length > 1 && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      const next = new Set(selectedModelIds)
+                                      next.delete(model.id)
+                                      setSelectedModelIds(next)
+                                      if (expandedModelId === model.id) setExpandedModelId(null)
+                                    }}
+                                    className="text-xs text-red-500 hover:text-red-400 px-2 py-1 rounded hover:bg-red-500/10"
+                                  >
+                                    Remove
+                                  </button>
+                                )}
+                                <ChevronDownIcon
+                                  className={`w-4 h-4 text-text-muted transition-transform ${expandedModelId === model.id ? 'rotate-180' : ''}`}
+                                />
+                              </div>
+                            </div>
+
+                            {expandedModelId === model.id && (
+                              <ModelConfigPanel
+                                model={model}
+                                modelConfigs={modelConfigs}
+                                autoConfigState={autoConfigState}
+                                testResults={testResults}
+                                onUpdateConfig={updateModelConfig}
+                                onRunAutoConfig={runAutoConfig}
+                                onTestParams={testParams}
+                                onShowRaw={setRawModalData}
+                              />
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Available Models — search + checkbox list (hidden when single model, already selected) */}
+                {models.length > 1 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-text-primary mb-1">Available Models</h4>
+                    {selectedModelIds.size === 0 && (
+                      <p className="text-xs text-text-muted mb-2">
+                        This provider has many models available. Select the ones you want to use below.
+                      </p>
+                    )}
+
+                    <div className="relative mb-2">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search models..."
+                        className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary text-sm"
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-text-muted">
+                        Showing {filterModels(searchQuery).length} of {models.length} models
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            const next = new Set(selectedModelIds)
+                            const visible = filterModels(searchQuery)
+                            for (const m of visible) next.add(m.id)
+                            setSelectedModelIds(next)
+                            for (const m of visible) {
+                              if (
+                                autoConfigState.progress[m.id] !== 'probing' &&
+                                autoConfigState.progress[m.id] !== 'done'
+                              ) {
+                                runAutoConfig(m.id)
+                              }
+                            }
+                          }}
+                          className="text-xs text-accent-primary hover:underline"
+                        >
+                          Select all
+                        </button>
+                        <button
+                          onClick={() => {
+                            const next = new Set(selectedModelIds)
+                            const visible = filterModels(searchQuery)
+                            for (const m of visible) next.delete(m.id)
+                            setSelectedModelIds(next)
+                          }}
+                          className="text-xs text-text-muted hover:text-text-secondary"
+                        >
+                          Deselect all
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 max-h-48 overflow-y-auto border border-border rounded-lg bg-bg-primary">
+                      {filterModels(searchQuery).map((model) => {
+                        const isChecked = selectedModelIds.has(model.id)
+                        return (
+                          <div
+                            key={model.id}
+                            role="checkbox"
+                            aria-checked={isChecked}
+                            tabIndex={0}
+                            className={`flex items-center gap-3 px-4 py-2 hover:bg-bg-tertiary transition-colors cursor-pointer ${
+                              isChecked ? 'bg-accent-primary/5' : ''
+                            }`}
+                            onClick={() => {
+                              if (isChecked) {
+                                const next = new Set(selectedModelIds)
+                                next.delete(model.id)
+                                setSelectedModelIds(next)
+                              } else {
+                                const next = new Set(selectedModelIds)
+                                next.add(model.id)
+                                setSelectedModelIds(next)
+                                runAutoConfig(model.id)
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                e.currentTarget.click()
+                              }
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}}
+                              className="w-4 h-4 rounded border-border accent-accent-primary pointer-events-none"
+                            />
+                            <span className="text-sm text-text-primary flex-1 truncate">
+                              {model.id.split('/').pop()}
+                            </span>
+                            <span className="text-xs text-text-muted flex-shrink-0">
+                              {(modelConfigs[model.id]?.contextWindow ?? model.contextWindow).toLocaleString()} ctx
+                            </span>
+                            {autoConfigState.progress[model.id] === 'probing' && (
+                              <span className="w-3 h-3 border-2 border-accent-primary border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                            )}
                             {autoConfigState.progress[model.id] === 'done' && (
-                              <span className="text-sm text-accent-success font-medium">Configured ✓</span>
+                              <span className="text-xs text-accent-success flex-shrink-0">✓</span>
                             )}
                             {autoConfigState.progress[model.id] === 'error' && (
-                              <span className="text-sm text-red-500 font-medium">Failed ✗</span>
+                              <span className="text-xs text-red-500 flex-shrink-0">✗</span>
                             )}
                           </div>
-
-                          {/* Context window + Supports vision */}
-                          <div className="flex gap-3 items-end">
-                            <div>
-                              <label className="text-xs text-text-secondary block mb-1">Context window (tokens)</label>
-                              <input
-                                type="number"
-                                value={modelConfigs[model.id]?.contextWindow ?? model.contextWindow}
-                                onChange={(e) =>
-                                  updateModelConfig(model.id, {
-                                    contextWindow: parseInt(e.target.value) || model.contextWindow,
-                                  })
-                                }
-                                className="w-32 px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
-                              />
-                            </div>
-                            <label className="flex items-center gap-1.5 text-xs text-text-secondary pb-1">
-                              <input
-                                type="checkbox"
-                                checked={modelConfigs[model.id]?.supportsVision ?? false}
-                                onChange={(e) => updateModelConfig(model.id, { supportsVision: e.target.checked })}
-                                className="accent-accent-primary"
-                              />{' '}
-                              Supports vision
-                            </label>
-                          </div>
-
-                          {/* Test buttons */}
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => testParams(model.id, 'thinking')}
-                                disabled={testResults[model.id + '-thinking']?.loading}
-                                className="px-3 py-1.5 bg-bg-tertiary border border-border rounded text-xs font-medium hover:bg-bg-secondary disabled:opacity-50 transition-colors"
-                              >
-                                {testResults[model.id + '-thinking']?.loading ? 'Testing...' : 'Test thinking'}
-                              </button>
-                              {testResults[model.id + '-thinking']?.result && (
-                                <span className="text-xs text-accent-success">OK</span>
-                              )}
-                              {testResults[model.id + '-thinking']?.error && (
-                                <span
-                                  className="text-xs text-red-500"
-                                  title={testResults[model.id + '-thinking']?.error}
-                                >
-                                  Fail
-                                </span>
-                              )}
-                              {testResults[model.id + '-thinking']?.result && (
-                                <button
-                                  onClick={() => setRawModalData(testResults[model.id + '-thinking']!.result!)}
-                                  className="text-xs text-accent-primary hover:underline"
-                                >
-                                  raw
-                                </button>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => testParams(model.id, 'non-thinking')}
-                                disabled={testResults[model.id + '-non-thinking']?.loading}
-                                className="px-3 py-1.5 bg-bg-tertiary border border-border rounded text-xs font-medium hover:bg-bg-secondary disabled:opacity-50 transition-colors"
-                              >
-                                {testResults[model.id + '-non-thinking']?.loading ? 'Testing...' : 'Test non-thinking'}
-                              </button>
-                              {testResults[model.id + '-non-thinking']?.result && (
-                                <span className="text-xs text-accent-success">OK</span>
-                              )}
-                              {testResults[model.id + '-non-thinking']?.error && (
-                                <span
-                                  className="text-xs text-red-500"
-                                  title={testResults[model.id + '-non-thinking']?.error}
-                                >
-                                  Fail
-                                </span>
-                              )}
-                              {testResults[model.id + '-non-thinking']?.result && (
-                                <button
-                                  onClick={() => setRawModalData(testResults[model.id + '-non-thinking']!.result!)}
-                                  className="text-xs text-accent-primary hover:underline"
-                                >
-                                  raw
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Thinking modes — collapsed by default, auto-config usually fills them */}
-                          <details className="group">
-                            <summary className="text-xs text-text-muted cursor-pointer hover:text-text-secondary list-none flex items-center gap-1 select-none">
-                              <ChevronDownIcon className="w-3 h-3 transition-transform group-open:rotate-180" />
-                              Advanced: thinking &amp; non-thinking params
-                            </summary>
-                            <div className="mt-3 space-y-2">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={modelConfigs[model.id]?.thinkingEnabled ?? false}
-                                  onChange={(e) => updateModelConfig(model.id, { thinkingEnabled: e.target.checked })}
-                                  className="w-4 h-4 rounded border-border bg-bg-tertiary accent-accent-primary"
-                                />
-                                <span className="text-xs font-medium text-text-primary">Thinking</span>
-                              </label>
-                              {modelConfigs[model.id]?.thinkingEnabled && (
-                                <div className="ml-6 space-y-2 pl-3 border-l-2 border-accent-primary/30">
-                                  <div>
-                                    <label className="text-xs text-text-secondary block mb-1">Reasoning effort</label>
-                                    <input
-                                      type="text"
-                                      value={modelConfigs[model.id]?.thinkingLevel ?? ''}
-                                      onChange={(e) => updateModelConfig(model.id, { thinkingLevel: e.target.value })}
-                                      className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
-                                    />
-                                  </div>
-                                  <QueryParamsInput
-                                    value={modelConfigs[model.id]?.thinkingQueryParams}
-                                    onChange={(v) => updateModelConfig(model.id, { thinkingQueryParams: v })}
-                                  />
-                                </div>
-                              )}
-
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={modelConfigs[model.id]?.nonThinkingEnabled ?? false}
-                                  onChange={(e) =>
-                                    updateModelConfig(model.id, { nonThinkingEnabled: e.target.checked })
-                                  }
-                                  className="w-4 h-4 rounded border-border bg-bg-tertiary accent-accent-primary"
-                                />
-                                <span className="text-xs font-medium text-text-primary">Non-thinking</span>
-                              </label>
-                              {modelConfigs[model.id]?.nonThinkingEnabled && (
-                                <div className="ml-6 space-y-2 pl-3 border-l-2 border-accent-warning/30">
-                                  <QueryParamsInput
-                                    value={modelConfigs[model.id]?.nonThinkingQueryParams}
-                                    onChange={(v) => updateModelConfig(model.id, { nonThinkingQueryParams: v })}
-                                  />
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="border-t border-border pt-3 mt-3">
-                              <p className="text-xs text-text-muted mb-2">Sampling parameters</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <label className="text-xs text-text-secondary block mb-0.5">Temperature</label>
-                                  <input
-                                    type="number"
-                                    step="0.1"
-                                    value={modelConfigs[model.id]?.temperature ?? ''}
-                                    onChange={(e) =>
-                                      updateModelConfig(model.id, {
-                                        temperature: e.target.value ? parseFloat(e.target.value) : undefined,
-                                      })
-                                    }
-                                    placeholder={
-                                      modelConfigs[model.id]?.defaultTemperature?.toString() ?? 'Using default'
-                                    }
-                                    className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
-                                  />
-                                  {modelConfigs[model.id]?.defaultTemperature !== undefined && (
-                                    <p className="text-xs text-text-muted mt-0.5">
-                                      default: {modelConfigs[model.id]?.defaultTemperature}
-                                    </p>
-                                  )}
-                                </div>
-                                <div>
-                                  <label className="text-xs text-text-secondary block mb-0.5">Top P</label>
-                                  <input
-                                    type="number"
-                                    step="0.05"
-                                    value={modelConfigs[model.id]?.topP ?? ''}
-                                    onChange={(e) =>
-                                      updateModelConfig(model.id, {
-                                        topP: e.target.value ? parseFloat(e.target.value) : undefined,
-                                      })
-                                    }
-                                    placeholder={modelConfigs[model.id]?.defaultTopP?.toString() ?? 'Using default'}
-                                    className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
-                                  />
-                                  {modelConfigs[model.id]?.defaultTopP !== undefined && (
-                                    <p className="text-xs text-text-muted mt-0.5">
-                                      default: {modelConfigs[model.id]?.defaultTopP}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2 mt-2">
-                                <div>
-                                  <label className="text-xs text-text-secondary block mb-0.5">Top K</label>
-                                  <input
-                                    type="number"
-                                    value={modelConfigs[model.id]?.topK ?? ''}
-                                    onChange={(e) =>
-                                      updateModelConfig(model.id, {
-                                        topK: e.target.value ? parseInt(e.target.value) : undefined,
-                                      })
-                                    }
-                                    placeholder={modelConfigs[model.id]?.defaultTopK?.toString() ?? 'Using default'}
-                                    className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
-                                  />
-                                  {modelConfigs[model.id]?.defaultTopK !== undefined && (
-                                    <p className="text-xs text-text-muted mt-0.5">
-                                      default: {modelConfigs[model.id]?.defaultTopK}
-                                    </p>
-                                  )}
-                                </div>
-                                <div>
-                                  <label className="text-xs text-text-secondary block mb-0.5">Max tokens</label>
-                                  <input
-                                    type="number"
-                                    value={modelConfigs[model.id]?.maxTokens ?? ''}
-                                    onChange={(e) =>
-                                      updateModelConfig(model.id, {
-                                        maxTokens: e.target.value ? parseInt(e.target.value) : undefined,
-                                      })
-                                    }
-                                    placeholder={
-                                      modelConfigs[model.id]?.defaultMaxTokens?.toString() ?? 'Using default'
-                                    }
-                                    className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
-                                  />
-                                  {modelConfigs[model.id]?.defaultMaxTokens !== undefined && (
-                                    <p className="text-xs text-text-muted mt-0.5">
-                                      default: {modelConfigs[model.id]?.defaultMaxTokens}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </details>
+                        )
+                      })}
+                      {filterModels(searchQuery).length === 0 && (
+                        <div className="px-4 py-6 text-center text-sm text-text-muted">
+                          No models match &ldquo;{searchQuery}&rdquo;
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </>
             )}
-          </div>
-        )}
-
-        {/* Step 3: Review */}
-        {formStep === 3 && (
-          <div className="px-6 py-4 space-y-4">
-            <div className="bg-bg-primary border border-border rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-medium text-text-primary">{formName || 'Provider'}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-accent-primary/20 text-accent-primary">
-                  {getBackendDisplayName((formBackend || 'unknown') as Backend)}
-                </span>
-              </div>
-              <p className="text-xs text-text-muted mb-3">{formUrl}</p>
-              {models.length > 0 && (
-                <div className="border-t border-border pt-3">
-                  <p className="text-xs text-text-secondary mb-2">
-                    Models configured: <strong>{models.length}</strong>
-                  </p>
-                  <div className="space-y-1">
-                    {models.map((m) => (
-                      <div key={m.id} className="text-xs text-text-muted flex items-center gap-2">
-                        <span>• {m.id.split('/').pop()}</span>
-                        <span className="text-text-secondary">
-                          {(modelConfigs[m.id]?.contextWindow ?? m.contextWindow).toLocaleString()} ctx
-                        </span>
-                        {modelConfigs[m.id]?.thinkingEnabled && <span className="text-accent-success">thinking</span>}
-                        {modelConfigs[m.id]?.nonThinkingEnabled && (
-                          <span className="text-accent-warning">non-thinking</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         )}
 
@@ -892,7 +1001,7 @@ export function ProviderModal({
               <button
                 onClick={() => {
                   if (formStep === 2) resetStep2()
-                  setFormStep((formStep - 1) as 1 | 2 | 3)
+                  setFormStep((formStep - 1) as 1 | 2)
                 }}
                 className="text-sm text-text-muted hover:text-text-secondary transition-colors"
               >
@@ -907,22 +1016,23 @@ export function ProviderModal({
             >
               Cancel
             </button>
-            {formStep < 3 ? (
+            {formStep === 1 ? (
               <button
-                onClick={() => setFormStep((formStep + 1) as 2 | 3)}
-                disabled={(formStep === 1 && !formUrl) || (formStep === 2 && autoConfigState.loading)}
+                onClick={() => setFormStep(2)}
+                disabled={!formUrl}
                 data-testid="provider-modal-next"
                 className="px-5 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-50 transition-colors"
               >
-                {formStep === 1 ? 'Next — Test & Configure' : 'Next — Review'}
+                Next — Test &amp; Configure
               </button>
             ) : (
               <button
                 onClick={handleSave}
+                disabled={autoConfigState.loading}
                 data-testid="provider-modal-save"
-                className="px-5 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 transition-colors"
+                className="px-5 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-50 transition-colors"
               >
-                Save Provider
+                {autoConfigState.loading ? 'Configuring...' : 'Save Provider'}
               </button>
             )}
           </div>

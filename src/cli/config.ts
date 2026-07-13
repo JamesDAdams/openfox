@@ -246,9 +246,10 @@ export function addProvider(config: Partial<GlobalConfig>, provider: Omit<Provid
       { ...newProvider, isActive: shouldActivate },
     ],
     mcpServers: config.mcpServers,
-    defaultModelSelection: shouldActivate
-      ? `${newProvider.id}/${newProvider.models?.[0]?.id ?? 'auto'}`
-      : config.defaultModelSelection,
+    defaultModelSelection:
+      shouldActivate && !config.defaultModelSelection
+        ? `${newProvider.id}/${newProvider.models?.find((m) => m.selected)?.id ?? newProvider.models?.[0]?.id ?? 'auto'}`
+        : config.defaultModelSelection,
     activeProviderId: shouldActivate ? newProvider.id : config.activeProviderId,
     activeWorkflowId: config.activeWorkflowId,
     server: config.server ?? { port: 10369, host: '127.0.0.1', openBrowser: true },

@@ -5,12 +5,20 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { unlinkSync } from 'node:fs'
 import { createTestServer, type TestServerHandle } from './utils/index.js'
+import { getGlobalConfigPath } from '../src/cli/paths.js'
 
 describe('Config reload after provider update', () => {
   let server: TestServerHandle
 
   beforeAll(async () => {
+    // Clean any leftover config from previous test runs
+    try {
+      unlinkSync(getGlobalConfigPath('test'))
+    } catch {
+      /* ok */
+    }
     server = await createTestServer()
   })
 

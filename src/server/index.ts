@@ -1025,6 +1025,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       ...(m.topP !== undefined && { topP: m.topP }),
       ...(m.topK !== undefined && { topK: m.topK }),
       ...(m.maxTokens !== undefined && { maxTokens: m.maxTokens }),
+      ...(m.selected !== undefined && { selected: m.selected }),
     }))
   }
 
@@ -1058,19 +1059,23 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     if (!url) return res.status(400).json({ error: 'url is required' })
     try {
       const { fetchModelsWithContext } = await import('./provider-manager.js')
+      const { getModelProfile } = await import('./llm/profiles.js')
       const models = await fetchModelsWithContext(url, apiKey)
       if (models.length === 0) {
         return res.status(404).json({ error: `No models found at ${buildModelsUrl(url)}`, url })
       }
       res.json({
-        models: models.map((m) => ({
-          id: m.id,
-          contextWindow: m.contextWindow,
-          defaultTemperature: m.defaultTemperature,
-          defaultTopP: m.defaultTopP,
-          defaultTopK: m.defaultTopK,
-          defaultMaxTokens: m.defaultMaxTokens,
-        })),
+        models: models.map((m) => {
+          const profile = getModelProfile(m.id)
+          return {
+            id: m.id,
+            contextWindow: m.contextWindow,
+            defaultTemperature: profile.temperature,
+            defaultTopP: profile.topP,
+            defaultTopK: profile.topK,
+            defaultMaxTokens: profile.defaultMaxTokens,
+          }
+        }),
         url,
       })
     } catch (error) {
@@ -1250,12 +1255,15 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         isActive: true,
       })
 
-      const firstModelId = model ?? providerModels[0]?.id ?? 'auto'
-      const finalConfig = setDefaultModelSelection(
-        configWithProvider,
-        configWithProvider.providers[configWithProvider.providers.length - 1]!.id,
-        firstModelId,
-      )
+      const firstModelId = model ?? providerModels.find((m) => m.selected)?.id ?? providerModels[0]?.id ?? 'auto'
+      // Only set default if no existing default
+      const finalConfig = configWithProvider.defaultModelSelection
+        ? configWithProvider
+        : setDefaultModelSelection(
+            configWithProvider,
+            configWithProvider.providers[configWithProvider.providers.length - 1]!.id,
+            firstModelId,
+          )
 
       await saveGlobalConfig(config.mode ?? 'production', finalConfig)
 

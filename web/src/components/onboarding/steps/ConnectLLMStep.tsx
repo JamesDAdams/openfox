@@ -14,6 +14,7 @@ export function ConnectLLMStep({ onNext }: ConnectLLMStepProps) {
   const [showModal, setShowModal] = useState(false)
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null)
 
   useEffect(() => {
     fetchExistingProviders()
@@ -171,20 +172,39 @@ export function ConnectLLMStep({ onNext }: ConnectLLMStepProps) {
                   {provider.model && <p className="text-text-secondary text-xs mt-0.5">Model: {provider.model}</p>}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => openEditModal(provider)}
-                    className="px-2 py-1 text-xs text-text-muted hover:text-text-secondary border border-border rounded transition-colors"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => removeProvider(provider.id)}
-                    disabled={removing === provider.id}
-                    className="p-2 text-text-muted hover:text-red-500 transition-colors disabled:opacity-50"
-                    title="Remove provider"
-                  >
-                    <TrashIcon />
-                  </button>
+                  {confirmingDelete === provider.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => removeProvider(provider.id)}
+                        disabled={removing === provider.id}
+                        className="px-2 py-1 text-xs text-red-500 hover:text-red-400 bg-red-500/10 rounded transition-colors disabled:opacity-50"
+                      >
+                        {removing === provider.id ? 'Deleting...' : 'Confirm'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmingDelete(null)}
+                        className="px-2 py-1 text-xs text-text-muted hover:text-text-secondary transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => openEditModal(provider)}
+                        className="px-2 py-1 text-xs text-text-muted hover:text-text-secondary border border-border rounded transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setConfirmingDelete(provider.id)}
+                        className="p-2 text-text-muted hover:text-red-500 transition-colors"
+                        title="Remove provider"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

@@ -69,7 +69,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       <StepIndicator
         currentStep={step}
         totalSteps={3}
-        labels={['LLM Server', 'Projects Folder', 'Vision']}
+        labels={['LLM Providers', 'Projects Folder', 'Vision']}
         onStepClick={handleStepClick}
       />
       <div className="max-w-xl mx-auto">

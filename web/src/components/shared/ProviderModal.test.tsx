@@ -64,14 +64,7 @@ describe('ProviderModal - thinkingLevel persistence', () => {
       effortInput.dispatchEvent(new Event('input', { bubbles: true }))
     }
 
-    // Click "Next — Review"
-    const nextButton = container.querySelector('[data-testid="provider-modal-next"]') as HTMLButtonElement | null
-    if (nextButton) nextButton.click()
-
-    // Wait for state update
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    // Click "Save Provider"
+    // Click "Save Provider" (no separate review step anymore)
     const saveButton = container.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
     if (saveButton) saveButton.click()
 
@@ -144,15 +137,9 @@ describe('ProviderModal - thinkingLevel persistence', () => {
       setTimeout(resolve, 200)
     })
 
-    // Click "Next — Review" to go to step 3
-    const nextButton = container.querySelector('[data-testid="provider-modal-next"]') as HTMLButtonElement | null
-    expect(nextButton).toBeTruthy()
-    nextButton!.click()
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    // Verify we're on step 3: save button visible
-    const saveButton1 = container.querySelector('[data-testid="provider-modal-save"]')
-    expect(saveButton1).toBeTruthy()
+    // On step 2, the save button is visible (no separate review step)
+    const saveButton = container.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
+    expect(saveButton).toBeTruthy()
     expect(container.querySelector('[data-testid="provider-modal-next"]')).toBeNull()
 
     // Simulate parent re-render with new editProvider reference (identical data)
@@ -168,7 +155,7 @@ describe('ProviderModal - thinkingLevel persistence', () => {
     )
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    // MUST still be on step 3 — save button still visible
+    // MUST still be on step 2 — save button still visible
     expect(container.querySelector('[data-testid="provider-modal-save"]')).toBeTruthy()
     expect(container.querySelector('[data-testid="provider-modal-next"]')).toBeNull()
   })

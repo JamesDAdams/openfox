@@ -482,6 +482,7 @@ export interface ModelConfig {
   id: string // Model ID from backend (e.g., "qwen3.5-27b-int4-autoround")
   contextWindow: number // Context window size in tokens
   source: 'backend' | 'user' | 'default' // Where the value came from
+  selected?: boolean // User explicitly selected this model (for multi-model providers)
   // User-configurable LLM parameters (optional, falls back to profile defaults)
   temperature?: number
   topP?: number
