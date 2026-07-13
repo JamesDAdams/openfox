@@ -150,19 +150,16 @@ test.describe('Full-stack Build & Verify E2E', () => {
     await page.getByTestId('provider-modal-next').click()
 
     // Modal step 2: backend is already selected from the preset.
-    // Auto-config runs automatically for new providers — wait for it to finish
-    // so the "Next" button becomes enabled.
+    // Auto-config runs automatically for single-model providers — wait for it to finish
+    // then save directly (no separate review step).
     await page.waitForFunction(
       () => {
-        const btn = document.querySelector('[data-testid="provider-modal-next"]') as HTMLButtonElement | null
+        const btn = document.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
         return btn && !btn.disabled
       },
       { timeout: 30000 },
     )
 
-    await page.getByTestId('provider-modal-next').click()
-
-    // Modal step 3: review and save
     await page.getByTestId('provider-modal-save').click()
 
     // Wait for provider to appear in list and continue
