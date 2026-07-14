@@ -735,19 +735,40 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       return res.json({ success: false, reason: 'already_warmed' })
     }
 
+    // Activate session provider if configured (same pattern as queue processor)
+    if (session.providerId && session.providerModel) {
+      const currentActiveProviderId = providerManager.getActiveProviderId()
+      const currentModel = providerManager.getCurrentModel()
+
+      if (currentActiveProviderId !== session.providerId || currentModel !== session.providerModel) {
+        const result = await providerManager.activateProvider(session.providerId, { model: session.providerModel })
+        if (!result.success) {
+          logger.error('Failed to activate session provider for warmup', {
+            sessionId,
+            providerId: session.providerId,
+            error: result.error,
+          })
+        }
+      }
+    }
+
+    const llmClient = getLLMClient()
+    const activeProvider = providerManager.getActiveProvider()
+    const statsIdentity = {
+      providerId: activeProvider?.id ?? `provider:${llmClient.getModel()}`,
+      providerName: activeProvider?.name ?? 'Unknown Provider',
+      backend: (activeProvider?.backend ?? llmClient.getBackend()) as import('../shared/types.js').ProviderBackend,
+      model: llmClient.getModel(),
+    }
+
     const { runAgentTurn, TurnMetrics } = await import('./chat/orchestrator.js')
 
     runAgentTurn(
       {
         sessionManager,
         sessionId,
-        llmClient: getLLMClient(),
-        statsIdentity: {
-          providerId: 'warmup',
-          providerName: 'Warmup',
-          backend: getLLMClient().getBackend(),
-          model: getLLMClient().getModel(),
-        },
+        llmClient,
+        statsIdentity,
         onMessage: () => {},
         warmup: true,
       },

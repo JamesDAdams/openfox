@@ -85,9 +85,21 @@ export async function killProcessTree(pid: number): Promise<void> {
  * Kill a ChildProcess and all its descendants.
  * Convenience wrapper around `killProcessTree`.
  */
-export async function terminateProcessTree(proc: ChildProcess, options?: { exited?: () => boolean }): Promise<void> {
+export async function terminateProcessTree(
+  proc: ChildProcess,
+  options?: { exited?: () => boolean; immediate?: boolean },
+): Promise<void> {
   const pid = proc.pid
   if (!pid || options?.exited?.()) {
+    return
+  }
+
+  if (options?.immediate) {
+    const allPids = await getDescendantPids(pid)
+    allPids.push(pid)
+    for (const p of allPids) {
+      killProcess(p, 'SIGKILL')
+    }
     return
   }
 

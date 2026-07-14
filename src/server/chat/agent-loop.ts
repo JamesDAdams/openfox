@@ -188,12 +188,14 @@ export async function runTopLevelAgentLoop(
         ...(skills.length > 0 ? { skills } : {}),
       })
 
+      const modelSettings = sessionManager.getCurrentModelSettings()
+
       await llmClient.complete({
         messages: [{ role: 'system', content: assembledRequest.systemPrompt }],
         tools: assembledRequest.tools,
         maxTokens: 1,
         temperature: 0,
-        skipClientReasoningEffort: true,
+        ...(modelSettings ? { modelSettings } : {}),
       })
 
       return {}
