@@ -89,6 +89,13 @@ npx vitest run protocol.test.ts   # Run specific test
 OPENFOX_TEST_VERBOSE=true npx vitest run
 ```
 
+### Testing Workflow
+
+- During development: `npm run test:unit` for quick feedback
+- Before considering work done: `npm run test` (full suite must pass)
+
+**Important:** Run both commands without piping to `tail` or `grep` — they're already token-efficient and return errors properly. Grepping hides failure context and leads to wasteful re-runs.
+
 ### Git Commands
 
 Precommit hooks take >40s, so always use a 120s timeout when committing:
@@ -187,9 +194,9 @@ Need to trace through a session, understand why the agent did something, or find
 
 ## Database & Config Locations
 
-|                | Production                    | Development                        |
-| -------------- | ----------------------------- | ---------------------------------- |
-| **Config dir** | `~/.config/openfox/`          | `~/.config/openfox-dev/`           |
+|                | Production                           | Development                              |
+| -------------- | ------------------------------------ | ---------------------------------------- |
+| **Config dir** | `~/.config/openfox/`                 | `~/.config/openfox-dev/`                 |
 | **Database**   | `~/.local/share/openfox/sessions.db` | `~/.local/share/openfox-dev/sessions.db` |
 
 **Port-based distinction:** Port **10369** is always production. Dev servers start at **10370** and increment (10371, 10372, ...) depending on project startup order (prod proxifies the dev server on its own port + N).

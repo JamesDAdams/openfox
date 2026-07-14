@@ -100,11 +100,25 @@ export class SessionManager {
     this.providerManager = providerManager
   }
 
-  getCurrentModelSettings():
-    | { temperature?: number; topP?: number; topK?: number; maxTokens?: number; supportsVision?: boolean }
-    | undefined {
-    const model = this.providerManager.getCurrentModel()
-    const providerId = this.providerManager.getActiveProviderId()
+  getCurrentModelSettings(
+    sessionId?: string,
+  ): { temperature?: number; topP?: number; topK?: number; maxTokens?: number; supportsVision?: boolean } | undefined {
+    let providerId: string | undefined
+    let model: string | undefined
+
+    if (sessionId) {
+      const session = this.getSession(sessionId)
+      if (session?.providerId && session?.providerModel) {
+        providerId = session.providerId
+        model = session.providerModel
+      }
+    }
+
+    if (!providerId || !model) {
+      model = this.providerManager.getCurrentModel()
+      providerId = this.providerManager.getActiveProviderId()
+    }
+
     if (!model || !providerId) return undefined
     return this.providerManager.getModelSettings(providerId, model)
   }
