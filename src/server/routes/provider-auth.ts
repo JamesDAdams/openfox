@@ -3,6 +3,7 @@ import type { Config, Provider } from '../../shared/types.js'
 import type { ProviderAuthAdapter } from '../../provider/index.js'
 import type { ProviderManager } from '../provider-manager.js'
 import type { ProviderRegistry } from '../providers/plugins/registry.js'
+import { logger } from '../utils/logger.js'
 
 type AuthContext = { provider: Provider; adapter: ProviderAuthAdapter | undefined }
 
@@ -37,12 +38,18 @@ export function createProviderAuthRoutes(
       void completion
         .then(async ({ credentialRef }) => {
           const { loadGlobalConfig, saveGlobalConfig, updateProvider } = await import('../../cli/config.js')
-          const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+          const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
           const updatedConfig = updateProvider(globalConfig, provider.id, { credentialRef, authAdapter: adapter.id })
-          await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+          await saveGlobalConfig(config.mode ?? 'production', updatedConfig, config.globalConfigPath)
           providerManager.setProviders(updatedConfig.providers, updatedConfig.defaultModelSelection ?? undefined)
         })
-        .catch(() => undefined)
+        .catch((err) => {
+          logger.error('Provider auth completion failed', {
+            providerId: provider.id,
+            authAdapter: adapter.id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
       res.json(challenge)
     } catch (error) {
       res.status(502).json({ error: error instanceof Error ? error.message : 'Unable to start provider login' })
@@ -70,7 +77,7 @@ export function createProviderAuthRoutes(
     if (provider.credentialRef && adapter) await adapter.logout(provider.credentialRef)
 
     const { loadGlobalConfig, saveGlobalConfig } = await import('../../cli/config.js')
-    const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+    const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
     const updatedConfig = {
       ...globalConfig,
       providers: globalConfig.providers.map((item) => {
@@ -80,7 +87,7 @@ export function createProviderAuthRoutes(
         return updated
       }),
     }
-    await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+    await saveGlobalConfig(config.mode ?? 'production', updatedConfig, config.globalConfigPath)
     providerManager.setProviders(updatedConfig.providers, updatedConfig.defaultModelSelection ?? undefined)
     res.json({ success: true })
   })

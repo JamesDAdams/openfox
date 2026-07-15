@@ -404,6 +404,7 @@ export function ProviderModal({
   const [devicePageOpened, setDevicePageOpened] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const codeCopiedTimerRef = useRef<number | null>(null)
+  const draftProviderSaved = useRef(false)
   const urlInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -412,6 +413,14 @@ export function ProviderModal({
       requestAnimationFrame(() => urlInputRef.current?.focus())
     }
   }, [formStep, isOpen])
+
+  useEffect(() => {
+    return () => {
+      if (codeCopiedTimerRef.current !== null) {
+        window.clearTimeout(codeCopiedTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -787,6 +796,15 @@ export function ProviderModal({
     setSearchQuery('')
   }
 
+  function handleClose() {
+    if (draftProviderId && !draftProviderSaved.current) {
+      authFetch(`/api/providers/${draftProviderId}`, { method: 'DELETE' }).catch((err) => {
+        console.warn('Failed to clean up draft provider', err)
+      })
+    }
+    onClose()
+  }
+
   function handleSave() {
     const name = formName || `Provider`
     const providerId = editProvider?.id ?? draftProviderId ?? `temp-${Date.now()}`
@@ -824,6 +842,7 @@ export function ProviderModal({
         defaultTopK: modelConfigs[m.id]?.defaultTopK,
       })),
     })
+    draftProviderSaved.current = true
     onClose()
   }
 
@@ -835,7 +854,7 @@ export function ProviderModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h3 className="text-lg font-semibold text-text-primary">{editProvider ? 'Edit Provider' : 'Add Provider'}</h3>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary text-xl leading-none p-1">
+          <button onClick={handleClose} className="text-text-muted hover:text-text-primary text-xl leading-none p-1">
             &times;
           </button>
         </div>
@@ -1328,7 +1347,7 @@ export function ProviderModal({
           </div>
           <div className="flex gap-2">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 text-sm text-text-muted hover:text-text-secondary transition-colors"
             >
               Cancel

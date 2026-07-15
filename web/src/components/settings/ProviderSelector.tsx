@@ -82,6 +82,14 @@ export function ProviderSelector() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (codeCopiedTimerRef.current !== null) {
+        window.clearTimeout(codeCopiedTimerRef.current)
+      }
+    }
+  }, [])
+
   // Auto-expand all providers when menu opens and load their models (once per session)
   useEffect(() => {
     if (isOpen) {

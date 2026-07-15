@@ -106,11 +106,17 @@ git commit -m "message"   # timeout: 120000ms
 
 ### Release
 
+Features accumulate on `develop` via squash-merges. `main` stays aligned with the latest published version.
+
 ```bash
-npm run patch        # Bump patch version — commits & tags
-npm publish 2>&1 | tail -10   # Build + e2e via prepublishOnly, then publish. timeout: 120000ms
-git push --follow-tags  # Push commit and tag
-gh release create "$(git describe --tags --abbrev=0)" --generate-notes  # Create GitHub Release with auto-generated PR references
+# Ship: merge develop → main, publish, sync back
+git checkout main && git merge develop --ff-only
+git push origin main
+npm run patch                              # Bump patch version — commits & tags
+npm publish 2>&1 | tail -10                # Build + e2e via prepublishOnly, then publish. timeout: 120000ms
+git push --follow-tags                     # Push commit and tag
+gh release create "$(git describe --tags --abbrev=0)" --generate-notes  # Create GitHub Release
+git checkout develop && git merge main --ff-only && git push origin develop  # Sync develop with version bump
 ```
 
 ## Code Conventions
