@@ -12,7 +12,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 import matter from 'gray-matter'
-import { pathExists, getDefaultIds, loadItemsFromDir, deleteItemFromDir } from '../shared/item-loader.js'
+import { pathExists, loadItemsFromDir, deleteItemFromDir } from '../shared/item-loader.js'
 import { getSetting, setSetting, deleteSetting } from '../db/settings.js'
 import type { SkillDefinition, SkillSource } from './types.js'
 
@@ -155,21 +155,9 @@ function getSelectedSkillDirectories(): string[] {
 }
 
 export async function loadDefaultSkills(): Promise<SkillDefinition[]> {
-  let defaults = await loadItemsFromDir<SkillDefinition>(DEFAULTS_DIR, {
-    extension: SKILL_EXTENSION,
-    logName: 'skill',
-  })
-  if (!defaults.length) {
-    defaults = await loadItemsFromDir<SkillDefinition>(DEFAULTS_DIR_ALT, {
-      extension: SKILL_EXTENSION,
-      logName: 'skill',
-    })
-  }
-  return annotateLegacySkills(
-    defaults,
-    defaults.length ? ((await pathExists(DEFAULTS_DIR)) ? DEFAULTS_DIR : DEFAULTS_DIR_ALT) : DEFAULTS_DIR,
-    'bundled',
-  )
+  const defaults = await loadSkillsDirectory(DEFAULTS_DIR, 'bundled')
+  if (defaults.length) return defaults
+  return loadSkillsDirectory(DEFAULTS_DIR_ALT, 'bundled')
 }
 
 export async function loadUserSkills(configDir: string): Promise<SkillDefinition[]> {
@@ -249,9 +237,8 @@ export function setSkillEnabled(skillId: string, enabled: boolean): void {
 }
 
 export async function getDefaultSkillIds(): Promise<string[]> {
-  const ids = await getDefaultIds(DEFAULTS_DIR, SKILL_EXTENSION)
-  if (ids.length) return ids
-  return getDefaultIds(DEFAULTS_DIR_ALT, SKILL_EXTENSION)
+  const defaults = await loadDefaultSkills()
+  return defaults.map((s) => s.metadata.id)
 }
 
 export async function getDefaultSkillContent(skillId: string): Promise<SkillDefinition | null> {
