@@ -486,6 +486,11 @@ describe('path-security', () => {
         expect(paths).not.toContain('/api/auto-update')
       })
 
+      it('excludes paths in git commit -am combined flag', () => {
+        const paths = extractAbsolutePathsFromCommand('git commit -am "fix: update /api/benchmarks/:id endpoint"')
+        expect(paths).not.toContain('/api/benchmarks/:id')
+      })
+
       it('excludes paths in git commit -m messages', () => {
         const paths = extractAbsolutePathsFromCommand(
           'git commit -m "fix: update /api/users endpoint and /api/sessions route"',

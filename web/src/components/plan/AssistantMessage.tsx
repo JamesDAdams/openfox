@@ -219,6 +219,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                   startedAt={tc.startedAt}
                   streamingOutput={tc.streamingOutput}
                   metadata={result?.metadata}
+                  truncated={result?.truncated ?? false}
                   callId={tc.id}
                 />
               )

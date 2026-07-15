@@ -260,8 +260,9 @@ export function extractAbsolutePathsFromCommand(command: string): string[] {
   // Strip git commit -m/--message content to avoid treating commit message
   // text as file paths (e.g. "/api/auto-update" in a commit message).
   // The message argument is a quoted string that should not be scanned for paths.
-  sanitized = sanitized.replace(/git\s+commit\s+(?:-[^-]\s*|--message\s+)(["'])(?:\\?.)*?\1/gi, (match) =>
-    match.replace(/\/[^\s"'|&;<>`()]+/g, ' __COMMIT_MSG__ '),
+  sanitized = sanitized.replace(
+    /git\s+commit\b.*?(?:-(?:[a-zA-Z]*m)(?=\s)|--message)\s+(["'])(?:(?!\1).)*\1/g,
+    (match) => match.replace(/\/[^\s"'|&;<>`()]+/g, ' __COMMIT_MSG__ '),
   )
 
   // Handle file:// URLs specially - extract the path

@@ -5,6 +5,9 @@ import { DiffView, FilePreview, EditContextView, ReadFileView } from './DiffView
 import { DiagnosticsView } from './DiagnosticsView'
 import { RunCommandView } from './RunCommandView'
 import { Markdown } from './Markdown'
+import { TruncatedIndicator } from './TruncatedIndicator'
+import { DevServerView } from './DevServerView'
+import { BackgroundProcessView } from './BackgroundProcessView'
 import { PathConfirmationButtons } from './PathConfirmationButtons'
 import { formatToolArgsFull, formatToolArgsWithMetadata } from '../../lib/formatToolArgs'
 import { useSessionStore, type PendingPathConfirmation } from '../../stores/session'
@@ -34,6 +37,7 @@ interface ToolCallDisplayProps {
   streamingOutput?: StreamingChunk[] // Real-time output chunks
   // For enhanced display with metadata
   metadata?: Record<string, unknown> // Tool-specific metadata
+  truncated?: boolean // Whether the result was truncated
   // For path confirmation matching
   callId?: string
 }
@@ -75,14 +79,11 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   startedAt,
   streamingOutput,
   metadata,
+  truncated,
   callId,
 }: ToolCallDisplayProps) {
   // Auto-expand file operations and running commands so content is immediately visible
-  const isFileOperation = tool === 'edit_file' || tool === 'write_file'
-  const isRunningCommand = tool === 'run_command'
-  const isReadFile = tool === 'read_file'
-  const isReturnValue = tool === 'return_value'
-  const shouldAutoExpand = forceCompact ? false : isFileOperation || isRunningCommand || isReturnValue
+  const shouldAutoExpand = !forceCompact
   const [expanded, setExpanded] = useState(shouldAutoExpand)
   const config = statusConfig[status]
   const showEditorLink = useSettingsStore((s) => s.settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR]) === 'true'
@@ -134,7 +135,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
       {/* Inline path confirmation for pending tools */}
       {pendingConfirmation && <PathConfirmationButtons confirmation={pendingConfirmation} />}
 
-      {(expanded || isReadFile) && (
+      {expanded && (
         <div className="p-2 bg-primary border-t border-border space-y-2 min-w-0">
           {/* Specialized rendering for run_command with streaming output */}
           {tool === 'run_command' && (
@@ -203,19 +204,127 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
               )
             })()}
 
-          {/* Show arguments for other operations or errors */}
+          {/* Specialized rendering for call_sub_agent: show the prompt, not the response */}
+          {tool === 'call_sub_agent' && (
+            <div>
+              <div className="text-[10px] text-accent-primary font-medium mb-1 uppercase tracking-wide">
+                {String(args.subAgentType ?? 'Sub-Agent')} Prompt
+              </div>
+              <div className="text-xs prose prose-invert prose-sm max-w-none max-h-[60vh] overflow-y-auto">
+                <Markdown content={String(args.prompt ?? '')} />
+              </div>
+            </div>
+          )}
+
+          {/* Specialized rendering for web_search */}
+          {tool === 'web_search' && status === 'success' && (
+            <div>
+              <div className="text-xs prose prose-invert prose-sm max-w-none max-h-[60vh] overflow-y-auto">
+                <Markdown content={result ?? ''} />
+              </div>
+              {truncated && <TruncatedIndicator className="mt-1" />}
+            </div>
+          )}
+
+          {/* Specialized rendering for load_skill */}
+          {tool === 'load_skill' && status === 'success' && (
+            <div>
+              <div className="text-[10px] text-accent-primary font-medium mb-1 uppercase tracking-wide">
+                Skill: {String(args.skillId ?? '')}
+              </div>
+              <div className="text-xs prose prose-invert prose-sm max-w-none max-h-[60vh] overflow-y-auto">
+                <Markdown content={result ?? ''} />
+              </div>
+              {truncated && <TruncatedIndicator className="mt-1" />}
+            </div>
+          )}
+
+          {/* Specialized rendering for web_fetch */}
+          {tool === 'web_fetch' && status === 'success' && (
+            <div className="space-y-2">
+              {Boolean(metadata?.url) && (
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <span>Source:</span>
+                  <a
+                    href={String(metadata!.url)}
+                    className="text-accent-primary hover:underline truncate"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {String(metadata!.url)}
+                  </a>
+                  {Boolean(metadata?.contentType) && (
+                    <span className="text-text-muted flex-shrink-0">({String(metadata!.contentType)})</span>
+                  )}
+                  {metadata?.pageCount != null && (
+                    <span className="text-text-muted flex-shrink-0">· {String(metadata!.pageCount)} pages</span>
+                  )}
+                </div>
+              )}
+              <div className="text-xs prose prose-invert prose-sm max-w-none max-h-[60vh] overflow-y-auto">
+                <Markdown content={result ?? ''} />
+              </div>
+              {truncated && <TruncatedIndicator />}
+            </div>
+          )}
+
+          {/* Specialized rendering for trace_code */}
+          {tool === 'trace_code' && status === 'success' && (
+            <div>
+              <div className="text-xs font-mono whitespace-pre-wrap bg-bg-primary p-2 rounded max-h-[60vh] overflow-y-auto break-words">
+                {result ?? ''}
+              </div>
+            </div>
+          )}
+
+          {/* Specialized rendering for dev_server */}
+          {tool === 'dev_server' && status === 'success' && result && (
+            <DevServerView result={result} action={String(args.action ?? '')} />
+          )}
+
+          {/* Specialized rendering for background_process */}
+          {tool === 'background_process' && status === 'success' && result && (
+            <BackgroundProcessView result={result} action={String(args.action ?? '')} />
+          )}
+
+          {/* Specialized rendering for mcp_config */}
+          {tool === 'mcp_config' && status === 'success' && (
+            <div>
+              <div className="text-xs prose prose-invert prose-sm max-w-none max-h-[60vh] overflow-y-auto">
+                <Markdown content={result ?? ''} />
+              </div>
+              {truncated && <TruncatedIndicator className="mt-1" />}
+            </div>
+          )}
+
+          {/* step_done: just the header label is enough, no extra content needed */}
+          {tool === 'step_done' && null}
+
+          {/* Generic fallback for tools without specialized rendering */}
           {tool !== 'edit_file' &&
             tool !== 'write_file' &&
             tool !== 'run_command' &&
             tool !== 'read_file' &&
-            tool !== 'return_value' && (
+            tool !== 'return_value' &&
+            tool !== 'call_sub_agent' &&
+            tool !== 'web_search' &&
+            tool !== 'load_skill' &&
+            tool !== 'web_fetch' &&
+            tool !== 'trace_code' &&
+            tool !== 'dev_server' &&
+            tool !== 'background_process' &&
+            tool !== 'mcp_config' &&
+            tool !== 'step_done' && (
               <>
-                <div>
-                  <div className="text-[10px] text-text-muted mb-0.5">Arguments:</div>
-                  <pre className="text-xs bg-bg-primary p-1.5 rounded overflow-x-auto break-words">
-                    {formatToolArgsFull(args)}
-                  </pre>
-                </div>
+                {/* Show arguments only if there are meaningful keys */}
+                {Object.keys(args).length > 0 && (
+                  <div>
+                    <div className="text-[10px] text-text-muted mb-0.5">Arguments:</div>
+                    <pre className="text-xs bg-bg-primary p-1.5 rounded overflow-x-auto break-words">
+                      {formatToolArgsFull(args)}
+                    </pre>
+                  </div>
+                )}
 
                 {/* Show result for non-specialized operations */}
                 {status === 'success' && result !== undefined && (
@@ -223,9 +332,10 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
                     <div className="text-[10px] text-text-muted mb-0.5">
                       Result{durationMs !== undefined && ` (${durationMs}ms)`}:
                     </div>
-                    <pre className="text-xs bg-bg-primary p-1.5 rounded overflow-x-auto max-h-32 break-words">
+                    <pre className="text-xs bg-bg-primary p-1.5 rounded overflow-x-auto max-h-[60vh] break-words">
                       {result || 'No output'}
                     </pre>
+                    {truncated && <TruncatedIndicator className="mt-1" />}
                   </div>
                 )}
               </>

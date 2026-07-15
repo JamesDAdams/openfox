@@ -30,6 +30,49 @@ export function formatToolArgs(tool: string, args: Record<string, unknown>): str
     return content.length > 60 ? content.slice(0, 60) + '...' : content
   }
 
+  // Sub-agent call - show sub-agent type
+  if (tool === 'call_sub_agent') {
+    return String(args.subAgentType ?? '')
+  }
+
+  // Load skill - show skill ID
+  if (tool === 'load_skill') {
+    return String(args.skillId ?? '')
+  }
+
+  // Web fetch - show URL
+  if (tool === 'web_fetch') {
+    return String(args.url ?? '')
+  }
+
+  // Web search - show query
+  if (tool === 'web_search') {
+    const query = String(args.query ?? '')
+    return query.length > 60 ? query.slice(0, 57) + '...' : query
+  }
+
+  // Dev server - show action
+  if (tool === 'dev_server') {
+    return String(args.action ?? '')
+  }
+
+  // Background process - show action and optional name
+  if (tool === 'background_process') {
+    const action = String(args.action ?? '')
+    const name = args.name ? String(args.name) : ''
+    return name ? `${action}: ${name}` : action
+  }
+
+  // MCP config - show action
+  if (tool === 'mcp_config') {
+    return String(args.action ?? '')
+  }
+
+  // Trace code - show symbol
+  if (tool === 'trace_code') {
+    return String(args.symbol ?? '')
+  }
+
   // Fallback: stringify with truncation
   const str = JSON.stringify(args)
   return str.length > 50 ? str.slice(0, 50) + '...' : str
@@ -42,9 +85,33 @@ export function formatToolArgs(tool: string, args: Record<string, unknown>): str
 export function formatToolArgsWithMetadata(
   tool: string,
   args: Record<string, unknown>,
-  _metadata?: Record<string, unknown>,
+  metadata?: Record<string, unknown>,
 ): string {
-  return formatToolArgs(tool, args)
+  const base = formatToolArgs(tool, args)
+
+  // Enrich with metadata when available
+  if (tool === 'read_file' && metadata) {
+    const format = metadata.format as string | undefined
+    const pageCount = metadata.pageCount as number | undefined
+    if (format === 'pdf' && pageCount != null) {
+      return `${base} (PDF, ${pageCount}p)`
+    }
+    if (format === 'image') {
+      return `${base} (image)`
+    }
+  }
+
+  if (tool === 'web_fetch' && metadata) {
+    const contentType = metadata.contentType as string | undefined
+    if (contentType) {
+      const shortType = contentType.split(';')[0]?.trim() ?? ''
+      if (shortType && shortType !== 'text/html') {
+        return `${base} (${shortType})`
+      }
+    }
+  }
+
+  return base
 }
 
 /**
