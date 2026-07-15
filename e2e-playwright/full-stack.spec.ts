@@ -162,13 +162,11 @@ test.describe('Full-stack Build & Verify E2E', () => {
 
     await page.getByTestId('provider-modal-save').click()
 
-    // Wait for provider to appear in list and continue
-    await page.getByTestId('onboarding-continue-button').waitFor({ state: 'visible', timeout: 15000 })
-    await page.getByTestId('onboarding-continue-button').click()
-    await page.waitForLoadState('networkidle')
+    // Onboarding auto-advances to the workdir step after saving the first provider.
+    // (No separate "Continue" button on the provider step.)
 
     // Step 2: Set workdir
-    await page.getByTestId('onboarding-workdir-input').fill(workdir)
+    await page.getByTestId('onboarding-workdir-input').waitFor({ state: 'visible', timeout: 15000 })
     await page.getByTestId('onboarding-workdir-continue-button').click()
     await page.waitForLoadState('networkidle')
 
