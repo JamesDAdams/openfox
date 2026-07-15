@@ -6,7 +6,7 @@ const SIGKILL_TIMEOUT_MS = 200
 async function getDescendantPids(rootPid: number): Promise<number[]> {
   try {
     const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) => {
-      execFile('ps', ['-eo', 'pid=,ppid='], { timeout: 5000 }, (err, stdout) => {
+      execFile('ps', ['-eo', 'pid=,ppid='], { timeout: 5000, windowsHide: true }, (err, stdout) => {
         if (err) reject(err)
         else resolve({ stdout })
       })
