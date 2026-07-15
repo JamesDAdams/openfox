@@ -574,6 +574,8 @@ export interface Config {
   activeWorkflowId?: string | undefined
   /** Disable automatic session title generation */
   disableAutoSessionTitle?: boolean
+  /** Override path for the global config file (used for test isolation) */
+  globalConfigPath?: string
   /** MCP server configurations */
   mcpServers?:
     | Record<

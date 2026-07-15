@@ -18,7 +18,12 @@ import { createProviderManager, parseDefaultModelSelection } from './provider-ma
 import { createToolRegistry, setMcpTools } from './tools/index.js'
 import { ALWAYS_ALLOWED, ALWAYS_ALLOWED_FOR_SUBAGENTS, TOP_LEVEL_ONLY_TOOLS } from './tools/tool-policy.js'
 import { McpManager, createMcpTools } from './mcp/index.js'
-import { setMcpManagerForTools, setMcpConfigMode, setNotifyMcpServersChanged } from './tools/mcp-config.js'
+import {
+  setMcpManagerForTools,
+  setMcpConfigMode,
+  setMcpConfigPath,
+  setNotifyMcpServersChanged,
+} from './tools/mcp-config.js'
 import { createServerMessage } from '../shared/protocol.js'
 import { createContextStateMessage } from './ws/protocol.js'
 import { createWebSocketServer } from './ws/index.js'
@@ -143,13 +148,13 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       try {
         const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
         const mode = config.mode ?? 'production'
-        const globalConfig = await loadGlobalConfig(mode)
+        const globalConfig = await loadGlobalConfig(mode, config.globalConfigPath)
         const mcpServers = {
           ...((globalConfig.mcpServers ?? {}) as Record<string, import('./mcp/types.js').McpServerConfig>),
         }
         if (mcpServers[name]) {
           mcpServers[name] = { ...mcpServers[name], cachedTools: tools }
-          await saveGlobalConfig(mode, { ...globalConfig, mcpServers })
+          await saveGlobalConfig(mode, { ...globalConfig, mcpServers }, config.globalConfigPath)
         }
       } catch (err) {
         logger.warn('Failed to persist MCP tool cache', { name, error: String(err) })
@@ -158,6 +163,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   })
   setMcpManagerForTools(mcpManager)
   setMcpConfigMode(config.mode ?? 'production')
+  setMcpConfigPath(config.globalConfigPath)
   const mcpServers = (config.mcpServers ?? {}) as Record<string, import('./mcp/types.js').McpServerConfig>
   Promise.all(
     Object.entries(mcpServers).map(([name, serverConfig]) =>
@@ -514,9 +520,9 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
     // Persist to global config
     const { loadGlobalConfig, saveGlobalConfig, setDefaultModelSelection } = await import('../cli/config.js')
-    const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+    const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
     const updatedConfig = setDefaultModelSelection(globalConfig, providerId, model)
-    await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+    await saveGlobalConfig(config.mode ?? 'production', updatedConfig, config.globalConfigPath)
 
     // Update in-memory config
     config.defaultModelSelection = updatedConfig.defaultModelSelection
@@ -970,7 +976,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     let globalWorkdir: string | undefined
     try {
       const { loadGlobalConfig, getVisionFallback } = await import('../cli/config.js')
-      const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+      const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
       const fallback = getVisionFallback(globalConfig)
       if (fallback) {
         visionFallback = {
@@ -1266,7 +1272,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     try {
       const { loadGlobalConfig, saveGlobalConfig, addProvider, setDefaultModelSelection } =
         await import('../cli/config.js')
-      const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+      const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
 
       const providerBackend = backend as ProviderBackend
 
@@ -1297,7 +1303,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
             firstModelId,
           )
 
-      await saveGlobalConfig(config.mode ?? 'production', finalConfig)
+      await saveGlobalConfig(config.mode ?? 'production', finalConfig, config.globalConfigPath)
 
       providerManager.setProviders(finalConfig.providers, finalConfig.defaultModelSelection ?? undefined)
       config.defaultModelSelection = finalConfig.defaultModelSelection
@@ -1325,7 +1331,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
     try {
       const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
-      const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+      const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
 
       const updatedConfig = {
         ...globalConfig,
@@ -1333,7 +1339,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         visionFallback: visionFallback ?? globalConfig.visionFallback,
       }
 
-      await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+      await saveGlobalConfig(config.mode ?? 'production', updatedConfig, config.globalConfigPath)
 
       res.json({ success: true })
     } catch (error) {
@@ -1359,9 +1365,9 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   app.delete('/api/providers/:id', async (req, res) => {
     const { id } = req.params
     const { loadGlobalConfig, saveGlobalConfig, removeProvider } = await import('../cli/config.js')
-    const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+    const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
     const updatedConfig = removeProvider(globalConfig, id)
-    await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+    await saveGlobalConfig(config.mode ?? 'production', updatedConfig, config.globalConfigPath)
 
     providerManager.setProviders(updatedConfig.providers, updatedConfig.defaultModelSelection ?? undefined)
     config.defaultModelSelection = updatedConfig.defaultModelSelection
@@ -1374,7 +1380,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const { isLocal } = req.body as { isLocal?: boolean }
     try {
       const { loadGlobalConfig, saveGlobalConfig, updateProvider } = await import('../cli/config.js')
-      const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+      const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
       const provider = globalConfig.providers.find((p) => p.id === id)
       if (!provider) {
         return res.status(404).json({ error: 'Provider not found' })
@@ -1382,7 +1388,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       const updates: Record<string, unknown> = {}
       if (isLocal !== undefined) updates['isLocal'] = isLocal
       const updatedConfig = updateProvider(globalConfig, id, updates)
-      await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+      await saveGlobalConfig(config.mode ?? 'production', updatedConfig, config.globalConfigPath)
       providerManager.setProviders(updatedConfig.providers, updatedConfig.defaultModelSelection ?? undefined)
       config.defaultModelSelection = updatedConfig.defaultModelSelection
       res.json({ success: true, provider: updatedConfig.providers.find((p) => p.id === id) })
@@ -1413,7 +1419,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
     try {
       const { loadGlobalConfig, saveGlobalConfig, updateProvider } = await import('../cli/config.js')
-      const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+      const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
       const provider = globalConfig.providers.find((p) => p.id === id)
       if (!provider) {
         return res.status(404).json({ error: 'Provider not found' })
@@ -1429,7 +1435,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         updates['models'] = buildModelConfigs(modelConfigs as ModelConfigInput[])
       }
       const updatedConfig = updateProvider(globalConfig, id, updates)
-      await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+      await saveGlobalConfig(config.mode ?? 'production', updatedConfig, config.globalConfigPath)
       providerManager.setProviders(updatedConfig.providers, updatedConfig.defaultModelSelection ?? undefined)
       config.defaultModelSelection = updatedConfig.defaultModelSelection
       res.json({ success: true, provider: updatedConfig.providers.find((p) => p.id === id) })
@@ -1455,9 +1461,9 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     // Persist the model selection to config
     const llmClient = getLLMClient()
     const { loadGlobalConfig, saveGlobalConfig, setDefaultModelSelection } = await import('../cli/config.js')
-    const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+    const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
     const updatedConfig = setDefaultModelSelection(globalConfig, id as string, llmClient.getModel())
-    await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+    await saveGlobalConfig(config.mode ?? 'production', updatedConfig, config.globalConfigPath)
 
     res.json({
       success: true,
@@ -1570,12 +1576,16 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
       // Persist to global config
       const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
-      const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+      const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
       const updatedMcpServers = { ...(globalConfig.mcpServers ?? {}), [name]: serverCfg }
-      await saveGlobalConfig(config.mode ?? 'production', {
-        ...globalConfig,
-        mcpServers: updatedMcpServers as Record<string, import('./mcp/types.js').McpServerConfig>,
-      })
+      await saveGlobalConfig(
+        config.mode ?? 'production',
+        {
+          ...globalConfig,
+          mcpServers: updatedMcpServers as Record<string, import('./mcp/types.js').McpServerConfig>,
+        },
+        config.globalConfigPath,
+      )
 
       await rebuildMcpTools()
 
@@ -1603,13 +1613,17 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
     // Persist to global config
     const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
-    const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+    const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
     const updatedMcpServers = { ...(globalConfig.mcpServers ?? {}) }
     delete updatedMcpServers[name]
-    await saveGlobalConfig(config.mode ?? 'production', {
-      ...globalConfig,
-      mcpServers: updatedMcpServers as Record<string, import('./mcp/types.js').McpServerConfig>,
-    })
+    await saveGlobalConfig(
+      config.mode ?? 'production',
+      {
+        ...globalConfig,
+        mcpServers: updatedMcpServers as Record<string, import('./mcp/types.js').McpServerConfig>,
+      },
+      config.globalConfigPath,
+    )
 
     await rebuildMcpTools()
 
@@ -1635,17 +1649,21 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       const server = mcpManager.getServer(name)
       if (server) {
         const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
-        const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+        const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
         const mcpServers = { ...(globalConfig.mcpServers ?? {}) }
         const serverCfg = mcpServers[name]
         if (serverCfg) {
           const disabledTools = server.tools.filter((t) => !t.enabled).map((t) => t.name)
           const cfg = { ...serverCfg, ...(disabledTools.length > 0 ? { disabledTools } : { disabledTools: undefined }) }
           mcpServers[name] = cfg
-          await saveGlobalConfig(config.mode ?? 'production', {
-            ...globalConfig,
-            mcpServers: mcpServers as Record<string, import('./mcp/types.js').McpServerConfig>,
-          })
+          await saveGlobalConfig(
+            config.mode ?? 'production',
+            {
+              ...globalConfig,
+              mcpServers: mcpServers as Record<string, import('./mcp/types.js').McpServerConfig>,
+            },
+            config.globalConfigPath,
+          )
         }
       }
 
@@ -1964,6 +1982,12 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
           const { cleanupAllProcesses } = await import('./tools/background-process/store.js')
           cleanupAllProcesses()
           viteServer?.close()
+
+          // Clean up isolated config file if one was created
+          if (config.globalConfigPath) {
+            const { unlink } = await import('node:fs/promises')
+            unlink(config.globalConfigPath).catch(() => {})
+          }
 
           // Note: Not closing database here - it's a singleton shared across servers.
           // Database should only be closed when the application exits.

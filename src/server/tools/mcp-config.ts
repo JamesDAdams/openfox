@@ -22,6 +22,7 @@ interface McpConfigArgs {
 
 let mcpManagerForTools: McpManager | null = null
 let mcpConfigMode: Mode = 'production'
+let mcpConfigPath: string | undefined
 let mcpNotifyChanged: ((sessionId: string) => void) | null = null
 
 export function setMcpManagerForTools(manager: McpManager): void {
@@ -30,6 +31,10 @@ export function setMcpManagerForTools(manager: McpManager): void {
 
 export function setMcpConfigMode(mode: Mode): void {
   mcpConfigMode = mode
+}
+
+export function setMcpConfigPath(path: string | undefined): void {
+  mcpConfigPath = path
 }
 
 export function setNotifyMcpServersChanged(fn: (sessionId: string) => void): void {
@@ -119,10 +124,10 @@ export const mcpConfigTool: Tool = createTool<McpConfigArgs>(
     async function persistAndRebuild(
       updater: (config: Record<string, McpServerConfig>) => Record<string, McpServerConfig>,
     ): Promise<void> {
-      const globalConfig = await loadGlobalConfig(mcpConfigMode)
+      const globalConfig = await loadGlobalConfig(mcpConfigMode, mcpConfigPath)
       const mcpServers = { ...((globalConfig.mcpServers ?? {}) as Record<string, McpServerConfig>) }
       const updated = updater(mcpServers)
-      await saveGlobalConfig(mcpConfigMode, { ...globalConfig, mcpServers: updated })
+      await saveGlobalConfig(mcpConfigMode, { ...globalConfig, mcpServers: updated }, mcpConfigPath)
     }
 
     async function rebuildTools(): Promise<void> {
