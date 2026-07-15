@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useLocation } from 'wouter'
 import { useConfigStore, getBackendDisplayName, type Provider } from '../../stores/config'
 import { useSessionStore } from '../../stores/session'
-import { ProviderModal, type ProviderFormData } from '../shared/ProviderModal'
+import { ProviderModal, providerFormPayload, type ProviderFormData } from '../shared/ProviderModal'
 import { authFetch } from '../../lib/api'
 import { ChevronDownIcon, ReloadIcon, CheckIcon, EditSmallIcon, StarIcon, StarFilledIcon } from '../shared/icons'
 
@@ -27,6 +27,20 @@ export function ProviderSelector() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [editingModel, setEditingModel] = useState<{ providerId: string; model: ModelWithConfig } | null>(null)
   const [showProviderModal, setShowProviderModal] = useState(false)
+  const [authStates, setAuthStates] = useState<
+    Record<string, 'disconnected' | 'pending' | 'connected' | 'expired' | 'error'>
+  >({})
+  const [authBusy, setAuthBusy] = useState<string | null>(null)
+  const [deviceChallenge, setDeviceChallenge] = useState<{
+    providerId: string
+    verificationUrl: string
+    directUrl?: string
+    userCode?: string
+    instructions: string
+  } | null>(null)
+  const [codeCopied, setCodeCopied] = useState(false)
+  const codeCopiedTimerRef = useRef<number | null>(null)
+  const [devicePageOpened, setDevicePageOpened] = useState(false)
   const loadedProvidersRef = useRef<Set<string>>(new Set())
 
   const providers = useConfigStore((state) => state.providers)
@@ -37,6 +51,7 @@ export function ProviderSelector() {
   const refreshModel = useConfigStore((state) => state.refreshModel)
   const refreshProviderModels = useConfigStore((state) => state.refreshProviderModels)
   const setDefaultModel = useConfigStore((state) => state.setDefaultModel)
+  const fetchConfig = useConfigStore((state) => state.fetchConfig)
 
   // Derive effective provider and model: session override wins, else global default
   const sessionProviderId = currentSession?.providerId ?? null
@@ -72,6 +87,9 @@ export function ProviderSelector() {
     if (isOpen) {
       const allProviderIds = providers.map((p) => p.id)
       setExpandedProviderIds(allProviderIds)
+      providers
+        .filter((provider) => Boolean(provider.authAdapter))
+        .forEach((provider) => void refreshAuthStatus(provider.id))
       allProviderIds.forEach((providerId) => {
         if (!loadedProvidersRef.current.has(providerId)) {
           loadedProvidersRef.current.add(providerId)
@@ -80,6 +98,32 @@ export function ProviderSelector() {
       })
     }
   }, [isOpen, providers])
+
+  useEffect(() => {
+    if (!deviceChallenge) return
+
+    let cancelled = false
+    const checkConnection = async () => {
+      const state = await refreshAuthStatus(deviceChallenge.providerId)
+      if (cancelled) return
+
+      if (state === 'connected') {
+        setDeviceChallenge(null)
+        setCodeCopied(false)
+        setDevicePageOpened(false)
+        await fetchConfig()
+        loadedProvidersRef.current.delete(deviceChallenge.providerId)
+        await loadProviderModels(deviceChallenge.providerId)
+      }
+    }
+
+    void checkConnection()
+    const interval = window.setInterval(() => void checkConnection(), 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [deviceChallenge])
 
   const activeProvider = providers.find((p) => p.id === effectiveProviderId)
   const isLlmOffline = activeProvider?.status === 'disconnected'
@@ -146,6 +190,74 @@ export function ProviderSelector() {
     await loadProviderModels(providerId)
   }
 
+  const refreshAuthStatus = async (providerId: string) => {
+    const response = await authFetch(`/api/provider-auth/${providerId}/status`)
+    if (!response.ok) return 'error' as const
+    const data = (await response.json()) as { state: 'disconnected' | 'pending' | 'connected' | 'expired' | 'error' }
+    setAuthStates((current) => ({ ...current, [providerId]: data.state }))
+    return data.state
+  }
+
+  const handleConnectAccount = async (event: React.MouseEvent, providerId: string) => {
+    event.stopPropagation()
+    setAuthBusy(providerId)
+    setAuthStates((current) => ({ ...current, [providerId]: 'pending' }))
+    setCodeCopied(false)
+    setDevicePageOpened(false)
+    try {
+      const response = await authFetch(`/api/provider-auth/${providerId}/login`, { method: 'POST' })
+      if (!response.ok) throw new Error('Unable to start provider sign-in')
+      const challenge = (await response.json()) as {
+        verificationUrl: string
+        directUrl?: string
+        userCode?: string
+        instructions: string
+      }
+      setDeviceChallenge({ providerId, ...challenge })
+    } catch {
+      setAuthStates((current) => ({ ...current, [providerId]: 'error' }))
+    } finally {
+      setAuthBusy(null)
+    }
+  }
+
+  const copyDeviceCode = async () => {
+    if (!deviceChallenge?.userCode) return
+    await navigator.clipboard?.writeText(deviceChallenge.userCode)
+    if (codeCopiedTimerRef.current !== null) window.clearTimeout(codeCopiedTimerRef.current)
+    setCodeCopied(false)
+    requestAnimationFrame(() => setCodeCopied(true))
+    codeCopiedTimerRef.current = window.setTimeout(() => {
+      setCodeCopied(false)
+      codeCopiedTimerRef.current = null
+    }, 1500)
+  }
+
+  const openDeviceAuthorization = () => {
+    if (!deviceChallenge) return
+    window.open(deviceChallenge.directUrl ?? deviceChallenge.verificationUrl, '_blank', 'noopener,noreferrer')
+    setDevicePageOpened(true)
+  }
+
+  const closeDeviceChallenge = () => {
+    setDeviceChallenge(null)
+    setCodeCopied(false)
+    setDevicePageOpened(false)
+  }
+
+  const handleDisconnectAccount = async (event: React.MouseEvent, providerId: string) => {
+    event.stopPropagation()
+    setAuthBusy(providerId)
+    try {
+      const response = await authFetch(`/api/provider-auth/${providerId}/logout`, { method: 'POST' })
+      if (!response.ok) throw new Error('Unable to disconnect provider account')
+      setAuthStates((current) => ({ ...current, [providerId]: 'disconnected' }))
+      await fetchConfig()
+    } finally {
+      setAuthBusy(null)
+    }
+  }
+
   const handleEditModel = (providerId: string, model: ModelWithConfig) => {
     setEditingModel({ providerId, model })
     setShowProviderModal(true)
@@ -163,15 +275,7 @@ export function ProviderSelector() {
       const res = await authFetch(`/api/providers/${formData.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          url: formData.url,
-          backend: formData.backend,
-          apiKey: formData.apiKey,
-          isLocal: formData.isLocal,
-          thinkingField: formData.thinkingField,
-          models: formData.models,
-        }),
+        body: JSON.stringify(providerFormPayload(formData)),
       })
       if (!res.ok) throw new Error('Failed to update provider')
       await useConfigStore.getState().fetchConfig()
@@ -313,6 +417,32 @@ export function ProviderSelector() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {Boolean(provider.authAdapter) &&
+                      (authStates[provider.id] === 'connected' || provider.credentialRef ? (
+                        <button
+                          type="button"
+                          onClick={(event) => handleDisconnectAccount(event, provider.id)}
+                          disabled={authBusy === provider.id}
+                          className="text-[10px] px-1.5 py-0.5 rounded border border-accent-success/40 text-accent-success hover:bg-accent-success/10 disabled:opacity-50"
+                          title="Disconnect provider account"
+                        >
+                          Connected
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(event) => handleConnectAccount(event, provider.id)}
+                          disabled={authBusy === provider.id}
+                          className="text-[10px] px-1.5 py-0.5 rounded border border-accent-primary/40 text-accent-primary hover:bg-accent-primary/10 disabled:opacity-50"
+                          title="Connect provider account"
+                        >
+                          {authBusy === provider.id
+                            ? 'Starting…'
+                            : authStates[provider.id] === 'error' || authStates[provider.id] === 'expired'
+                              ? 'Retry'
+                              : 'Connect'}
+                        </button>
+                      ))}
                     {provider.id === effectiveProviderId ? (
                       <span className="text-accent-success" title="Active provider">
                         <CheckIcon className="w-4 h-4" />
@@ -376,7 +506,9 @@ export function ProviderSelector() {
                               disabled={loadingModels === 'activating'}
                               className="flex-1 truncate text-left"
                             >
-                              {modelConfig.id.split('/').pop()?.replace(/-/g, ' ') ?? modelConfig.id}
+                              {modelConfig.name ??
+                                modelConfig.id.split('/').pop()?.replace(/-/g, ' ') ??
+                                modelConfig.id}
                             </button>
 
                             <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
@@ -439,6 +571,75 @@ export function ProviderSelector() {
           </div>
         </div>
       )}
+      {deviceChallenge && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="provider-device-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeDeviceChallenge()
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl border border-border bg-bg-secondary p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="provider-device-title" className="text-lg font-semibold text-text-primary">
+                  Connect provider
+                </h2>
+                <p className="mt-1 text-sm text-text-muted">
+                  Follow the provider instructions to complete authorization.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeDeviceChallenge}
+                className="rounded px-2 py-1 text-xl leading-none text-text-muted hover:bg-bg-tertiary hover:text-text-primary"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={copyDeviceCode}
+              className="mt-6 w-full select-all rounded-lg border border-accent-primary/40 bg-bg-primary px-4 py-5 font-mono text-3xl font-semibold tracking-[0.2em] text-accent-primary hover:bg-bg-tertiary"
+              title="Copy code"
+            >
+              {deviceChallenge.userCode ?? 'Continue'}
+            </button>
+
+            <div className="mt-3 text-center text-xs text-text-muted">
+              {codeCopied ? 'Copied to clipboard' : 'Click the code to copy it'}
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={copyDeviceCode}
+                className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-text-primary hover:bg-bg-tertiary"
+              >
+                {codeCopied ? 'Copied' : 'Copy code'}
+              </button>
+              <button
+                type="button"
+                onClick={openDeviceAuthorization}
+                className="flex-1 rounded-lg bg-accent-primary px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-primary/90"
+              >
+                {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
+              </button>
+            </div>
+
+            <p className="mt-4 text-center text-xs text-text-muted">
+              {devicePageOpened
+                ? 'If the browser blocked or closed the tab, reopen authorization.'
+                : 'OpenFox stays open while you complete authorization in the other tab.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {editingModel && showProviderModal && (
         <ProviderModal
           isOpen={true}
@@ -453,6 +654,8 @@ export function ProviderSelector() {
             apiKey: editingProvider?.apiKey,
             isLocal: editingProvider?.isLocal,
             thinkingField: editingProvider?.thinkingField,
+            authAdapter: editingProvider?.authAdapter,
+            transportAdapter: editingProvider?.transportAdapter,
             models: editingProvider?.models,
           }}
           editModelId={editingModel.model.id}

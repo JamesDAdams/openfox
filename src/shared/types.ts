@@ -479,7 +479,15 @@ export type ProviderBackend = LlmBackend | 'openai' | 'anthropic'
 
 /** Model configuration with context window */
 export interface ModelConfig {
-  id: string // Model ID from backend (e.g., "qwen3.5-27b-int4-autoround")
+  id: string // Model ID exposed in OpenFox (may be a projected mode such as "gpt-5.6-sol-fast")
+  /** Human-readable model name from the provider catalog. */
+  name?: string
+  /** Actual model ID sent to the provider when `id` is a projected catalog mode. */
+  apiModelId?: string
+  /** Extra top-level request body fields attached to this catalog model/mode. */
+  requestBody?: Record<string, unknown>
+  /** Reasoning effort values advertised by the provider catalog. */
+  reasoningEfforts?: string[]
   contextWindow: number // Context window size in tokens
   source: 'backend' | 'user' | 'default' // Where the value came from
   selected?: boolean // User explicitly selected this model (for multi-model providers)
@@ -506,11 +514,19 @@ export interface ModelConfig {
 
 /** LLM provider configuration */
 export interface Provider {
-  id: string // UUID
+  id: string // Stable instance ID
+  /** Plugin preset used to hydrate omitted provider fields. */
+  preset?: string
   name: string // User-defined display name (e.g., "Local vLLM", "Anthropic Claude")
   url: string // API endpoint (e.g., "http://localhost:8000/v1")
   backend: ProviderBackend
   apiKey?: string | undefined // Optional, for cloud providers
+  /** Registered auth adapter id. Credentials are stored separately. */
+  authAdapter?: string
+  /** Registered transport adapter id. Defaults to OpenAI-compatible HTTP. */
+  transportAdapter?: string
+  /** Opaque reference into the credential store. Never contains a token. */
+  credentialRef?: string
   models: ModelConfig[] // Available models with their context windows
   isActive: boolean // Currently selected provider
   createdAt: string // ISO timestamp

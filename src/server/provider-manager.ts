@@ -1,4 +1,6 @@
 import type { Provider, Config, LlmBackend, ModelConfig } from '../shared/types.js'
+import type { ProviderRegistry } from './providers/plugins/registry.js'
+import { createTransportLLMClient } from './providers/adapters/transport-client.js'
 import { createLLMClient, clearModelCache, getModelProfile, type LLMClientWithModel } from './llm/index.js'
 import { logger } from './utils/logger.js'
 import { ensureVersionPrefix, stripVersionPrefix, buildModelsUrl } from './llm/url-utils.js'
@@ -47,21 +49,27 @@ function enrichWithProfileDefaults(model: ModelConfig): ModelConfig {
   }
 }
 
-function mergeModelsWithUserOverrides(backendModels: ModelConfig[], userModels: ModelConfig[]): ModelConfig[] {
+function mergeModelsWithUserOverrides(
+  backendModels: ModelConfig[],
+  userModels: ModelConfig[],
+  preserveMissingUserModels = true,
+): ModelConfig[] {
   const normalizedUserIdMap = new Map(userModels.map((m) => [normalizeModelId(m.id), m]))
 
   const updatedModels = backendModels.map((backendModel) => {
     const existingUserModel = normalizedUserIdMap.get(normalizeModelId(backendModel.id))
     if (existingUserModel) {
-      return enrichWithProfileDefaults({ ...existingUserModel, id: backendModel.id })
+      return enrichWithProfileDefaults({ ...backendModel, ...existingUserModel, id: backendModel.id })
     }
     return enrichWithProfileDefaults(backendModel)
   })
 
-  const normalizedBackendIds = new Set(backendModels.map((m) => normalizeModelId(m.id)))
-  for (const userModel of userModels) {
-    if (!normalizedBackendIds.has(normalizeModelId(userModel.id))) {
-      updatedModels.push(enrichWithProfileDefaults(userModel))
+  if (preserveMissingUserModels) {
+    const normalizedBackendIds = new Set(backendModels.map((m) => normalizeModelId(m.id)))
+    for (const userModel of userModels) {
+      if (!normalizedBackendIds.has(normalizeModelId(userModel.id))) {
+        updatedModels.push(enrichWithProfileDefaults(userModel))
+      }
     }
   }
 
@@ -282,6 +290,8 @@ export interface ModelSettingsUpdate {
 
 export interface ProviderManager {
   getProviders(): Provider[]
+  createClient(providerId: string, model: string): LLMClientWithModel | undefined
+  resolveModel(providerId: string, model?: string): string | undefined
   getActiveProvider(): Provider | undefined
   getActiveProviderId(): string | undefined
   getCurrentModel(): string | undefined
@@ -335,7 +345,11 @@ export function parseDefaultModelSelection(selection?: string): {
   }
 }
 
-export function createProviderManager(config: Config): ProviderManager {
+export interface ProviderManagerOptions {
+  adapters?: ProviderRegistry
+}
+
+export function createProviderManager(config: Config, options: ProviderManagerOptions = {}): ProviderManager {
   let providers: Provider[] = [...(config.providers ?? [])]
   // Enrich all models with profile defaults for display
   providers = providers.map((p) => ({ ...p, models: p.models.map((m) => enrichWithProfileDefaults(m)) }))
@@ -379,17 +393,78 @@ export function createProviderManager(config: Config): ProviderManager {
     }
   }
 
+  function resolveTransportAdapter(provider: Provider): string | undefined {
+    if (provider.transportAdapter) return provider.transportAdapter
+    return undefined
+  }
+
+  function resolveProviderModel(provider: Provider, requestedModel?: string): string {
+    if (requestedModel && requestedModel !== 'auto') return requestedModel
+
+    const activeSelection = parseDefaultModelSelection(defaultModelSelection)
+    if (activeSelection.providerId === provider.id) {
+      const activeClientModel = llmClient.getModel()
+      if (
+        activeClientModel &&
+        activeClientModel !== 'auto' &&
+        provider.models.some((m) => m.id === activeClientModel)
+      ) {
+        return activeClientModel
+      }
+      if (
+        activeSelection.model &&
+        activeSelection.model !== 'auto' &&
+        provider.models.some((m) => m.id === activeSelection.model)
+      ) {
+        return activeSelection.model
+      }
+    }
+
+    return provider.models.find((m) => m.selected)?.id ?? provider.models[0]?.id ?? requestedModel ?? 'auto'
+  }
+
+  function createClientForProvider(provider: Provider, model?: string): LLMClientWithModel {
+    const resolvedModel = resolveProviderModel(provider, model)
+    const transport = options.adapters?.getTransport(resolveTransportAdapter(provider))
+    return transport
+      ? createTransportLLMClient(provider, resolvedModel, transport)
+      : createLLMClient(createConfigForProvider(provider, resolvedModel))
+  }
+
+  async function fetchProviderModels(provider: Provider): Promise<ModelConfig[]> {
+    const transport = options.adapters?.getTransport(resolveTransportAdapter(provider))
+    if (transport) {
+      return transport.listModels({
+        providerId: provider.id,
+        ...(provider.credentialRef && { credentialRef: provider.credentialRef }),
+      })
+    }
+
+    const backend = provider.backend as 'ollama' | 'vllm' | 'sglang' | 'llamacpp' | 'unknown'
+    return fetchModelsWithContext(provider.url, provider.apiKey, backend)
+  }
+
   // Initialize the LLM client with the active provider's config (URL, model, apiKey, etc.)
   // so the global client points to the correct backend from the start.
   const { providerId: activeProviderId, model: activeModel } = parseDefaultModelSelection(defaultModelSelection)
   if (activeProviderId && activeModel) {
     const activeProvider = providers.find((p) => p.id === activeProviderId)
     if (activeProvider) {
-      llmClient = createLLMClient(createConfigForProvider(activeProvider, activeModel))
+      llmClient = createClientForProvider(activeProvider, activeModel)
     }
   }
 
   return {
+    createClient(providerId: string, model: string) {
+      const provider = providers.find((p) => p.id === providerId)
+      return provider ? createClientForProvider(provider, model) : undefined
+    },
+
+    resolveModel(providerId: string, model?: string) {
+      const provider = providers.find((p) => p.id === providerId)
+      return provider ? resolveProviderModel(provider, model) : undefined
+    },
+
     getProviders() {
       return providers.map((p) => ({
         ...p,
@@ -424,17 +499,18 @@ export function createProviderManager(config: Config): ProviderManager {
       }
 
       const currentModel = parseDefaultModelSelection(defaultModelSelection).model
-      let targetModel = options?.model ?? currentModel
-      // Safety net: resolve 'auto' or missing model to first available model
-      if (!targetModel || targetModel === 'auto') {
-        targetModel = provider.models?.[0]?.id ?? 'auto'
-      }
+      const targetModel = resolveProviderModel(provider, options?.model ?? currentModel)
       const isModelSwitch =
         providerId === parseDefaultModelSelection(defaultModelSelection).providerId &&
         options?.model &&
         options.model !== currentModel
 
-      if (providerId === parseDefaultModelSelection(defaultModelSelection).providerId && !isModelSwitch) {
+      if (
+        providerId === parseDefaultModelSelection(defaultModelSelection).providerId &&
+        !isModelSwitch &&
+        llmClient.getModel() === targetModel
+      ) {
+        if (currentModel !== targetModel) defaultModelSelection = `${providerId}/${targetModel}`
         return { success: true }
       }
 
@@ -446,8 +522,7 @@ export function createProviderManager(config: Config): ProviderManager {
         model: targetModel,
       })
 
-      const providerConfig = createConfigForProvider(provider, targetModel)
-      const newClient = createLLMClient(providerConfig)
+      const newClient = createClientForProvider(provider, targetModel)
 
       try {
         const cacheUrl = stripVersionPrefix(provider.url)
@@ -461,7 +536,7 @@ export function createProviderManager(config: Config): ProviderManager {
           url: provider.url,
           backend,
         })
-        const modelsWithContext = await fetchModelsWithContext(provider.url, provider.apiKey, backend)
+        const modelsWithContext = await fetchProviderModels(provider)
 
         const userModels = provider.models.filter((m) => m.source === 'user')
         logger.debug('activateProvider', {
@@ -471,7 +546,11 @@ export function createProviderManager(config: Config): ProviderManager {
         })
 
         if (modelsWithContext.length > 0) {
-          const updatedModels = mergeModelsWithUserOverrides(modelsWithContext, userModels)
+          const updatedModels = mergeModelsWithUserOverrides(
+            modelsWithContext,
+            userModels,
+            !resolveTransportAdapter(provider),
+          )
           providers = providers.map((p) => (p.id === providerId ? { ...p, models: updatedModels } : p))
         } else if (userModels.length > 0) {
           // Backend unavailable but we have user models - preserve them
@@ -553,8 +632,6 @@ export function createProviderManager(config: Config): ProviderManager {
     },
 
     setProviders(newProviders, newDefaultModelSelection) {
-      const wasActiveProviderId = this.getActiveProviderId()
-
       providers = [...newProviders]
       defaultModelSelection = newDefaultModelSelection
 
@@ -563,16 +640,18 @@ export function createProviderManager(config: Config): ProviderManager {
         providerStatus.set(p.id, 'unknown')
       }
 
-      // Recreate LLM client when active provider changes
-      const newActiveProviderId = this.getActiveProviderId()
-      if (newActiveProviderId && newActiveProviderId !== wasActiveProviderId) {
-        const activeProvider = providers.find((p) => p.id === newActiveProviderId)
+      // Provider metadata can change without changing the active provider ID. Always rebuild
+      // the active client so it receives the latest auth and transport context.
+      const activeProviderId = this.getActiveProviderId()
+      if (activeProviderId) {
+        const activeProvider = providers.find((p) => p.id === activeProviderId)
         if (activeProvider) {
-          const providerConfig = createConfigForProvider(activeProvider, this.getCurrentModel() ?? 'auto')
-          llmClient = createLLMClient(providerConfig)
-          logger.info('setProviders: recreated LLM client for new active provider', {
-            providerId: newActiveProviderId,
+          llmClient = createClientForProvider(activeProvider, this.getCurrentModel())
+          logger.info('setProviders: recreated LLM client for active provider', {
+            providerId: activeProviderId,
             url: activeProvider.url,
+            hasCredential: Boolean(activeProvider.credentialRef),
+            transportAdapter: resolveTransportAdapter(activeProvider),
           })
         }
       }
@@ -594,8 +673,7 @@ export function createProviderManager(config: Config): ProviderManager {
       }
 
       // Fallback: fetch from backend if no stored models
-      const backend = provider.backend as 'ollama' | 'vllm' | 'sglang' | 'llamacpp' | 'lmstudio' | 'unknown'
-      return fetchModelsWithContext(provider.url, provider.apiKey, backend)
+      return fetchProviderModels(provider)
     },
 
     async setDefaultModelSelection(providerId: string, model: string) {
@@ -801,7 +879,7 @@ export function createProviderManager(config: Config): ProviderManager {
         url: provider.url,
         backend,
       })
-      const modelsWithContext = await fetchModelsWithContext(provider.url, provider.apiKey, backend)
+      const modelsWithContext = await fetchProviderModels(provider)
 
       // Preserve user-set models even if backend fetch fails or returns empty
       const userModels = provider.models.filter((m) => m.source === 'user')
@@ -827,7 +905,11 @@ export function createProviderManager(config: Config): ProviderManager {
 
       providerStatus.set(providerId, 'connected')
 
-      const updatedModels = mergeModelsWithUserOverrides(modelsWithContext, userModels)
+      const updatedModels = mergeModelsWithUserOverrides(
+        modelsWithContext,
+        userModels,
+        !resolveTransportAdapter(provider),
+      )
       providers = providers.map((p) => (p.id === providerId ? { ...p, models: updatedModels } : p))
 
       // Update defaultModelSelection if the model ID was changed due to fuzzy matching

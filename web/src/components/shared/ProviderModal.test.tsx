@@ -19,6 +19,7 @@ describe('ProviderModal - thinkingLevel persistence', () => {
   afterEach(() => {
     root.unmount()
     document.body.removeChild(container)
+    vi.unstubAllGlobals()
   })
 
   function makeEditProvider() {
@@ -92,6 +93,93 @@ describe('ProviderModal - thinkingLevel persistence', () => {
     expect(savedModel?.thinkingLevel).toBeUndefined()
   })
 
+  it('uses a constrained reasoning effort selector with medium as the provider default', async () => {
+    await new Promise<void>((resolve) => {
+      root.render(
+        <ProviderModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={onSaveMock as (provider: ProviderFormData) => void}
+          initialStep={2}
+          editProvider={{
+            id: 'external-provider',
+            name: 'External Account Provider',
+            url: 'http://localhost:8000/v1',
+            backend: 'openai',
+            models: [
+              {
+                id: 'reasoning-model',
+                contextWindow: 1_050_000,
+                thinkingEnabled: true,
+                reasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+              },
+            ],
+          }}
+          editModelId="reasoning-model"
+        />,
+      )
+      setTimeout(resolve, 200)
+    })
+
+    const effortSelect = container.querySelector('select[aria-label="Reasoning effort"]') as HTMLSelectElement | null
+    expect(effortSelect).toBeTruthy()
+    expect(effortSelect?.value).toBe('medium')
+    expect(Array.from(effortSelect?.options ?? []).map((option) => option.value)).toEqual([
+      'none',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ])
+
+    const saveButton = container.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
+    saveButton?.click()
+
+    const savedData: ProviderFormData = onSaveMock.mock.calls[0]![0]!
+    expect(savedData.models.find((model) => model.id === 'reasoning-model')?.thinkingLevel).toBe('medium')
+  })
+
+  it('saves a provider reasoning effort selected from the catalog values', async () => {
+    await new Promise<void>((resolve) => {
+      root.render(
+        <ProviderModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={onSaveMock as (provider: ProviderFormData) => void}
+          initialStep={2}
+          editProvider={{
+            id: 'external-provider',
+            name: 'External Account Provider',
+            url: 'http://localhost:8000/v1',
+            backend: 'openai',
+            models: [
+              {
+                id: 'reasoning-model',
+                contextWindow: 1_050_000,
+                thinkingEnabled: true,
+                reasoningEfforts: ['low', 'medium', 'high'],
+              },
+            ],
+          }}
+          editModelId="reasoning-model"
+        />,
+      )
+      setTimeout(resolve, 200)
+    })
+
+    const effortSelect = container.querySelector('select[aria-label="Reasoning effort"]') as HTMLSelectElement
+    const nativeSelectValueSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set
+    nativeSelectValueSetter?.call(effortSelect, 'high')
+    effortSelect.dispatchEvent(new Event('change', { bubbles: true }))
+
+    const saveButton = container.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
+    saveButton?.click()
+
+    const savedData: ProviderFormData = onSaveMock.mock.calls[0]![0]!
+    expect(savedData.models.find((model) => model.id === 'reasoning-model')?.thinkingLevel).toBe('high')
+  })
+
   it('includes all model fields in save payload', async () => {
     const { modelId } = await renderAndSave(undefined)
 
@@ -158,5 +246,63 @@ describe('ProviderModal - thinkingLevel persistence', () => {
     // MUST still be on step 2 — save button still visible
     expect(container.querySelector('[data-testid="provider-modal-save"]')).toBeTruthy()
     expect(container.querySelector('[data-testid="provider-modal-next"]')).toBeNull()
+  })
+  it('prefills the catalog context window when a model is selected', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ state: 'connected' }), { status: 200 })),
+    )
+    await new Promise<void>((resolve) => {
+      root.render(
+        <ProviderModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={onSaveMock as (provider: ProviderFormData) => void}
+          initialStep={2}
+          editProvider={{
+            id: 'provider-1',
+            name: 'External Provider',
+            url: 'https://provider.example/v1',
+            backend: 'openai',
+            transportAdapter: 'example-transport',
+            models: [
+              { id: 'selected-model', contextWindow: 1050000, selected: true },
+              {
+                id: 'catalog-model',
+                name: 'Catalog model',
+                apiModelId: 'catalog-model',
+                requestBody: { service_tier: 'priority' },
+                reasoningEfforts: ['low', 'high'],
+                contextWindow: 400000,
+              },
+            ],
+          }}
+        />,
+      )
+      setTimeout(resolve, 200)
+    })
+
+    const availableRows = Array.from(container.querySelectorAll('[role="checkbox"]'))
+    const catalogRow = availableRows.find((row) => row.textContent?.includes('Catalog model')) as
+      | HTMLElement
+      | undefined
+    expect(catalogRow).toBeTruthy()
+    catalogRow?.click()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const saveButton = container.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
+    saveButton?.click()
+
+    const savedData: ProviderFormData = onSaveMock.mock.calls[0]![0]!
+    expect(savedData.models.find((model) => model.id === 'catalog-model')).toEqual(
+      expect.objectContaining({
+        name: 'Catalog model',
+        apiModelId: 'catalog-model',
+        requestBody: { service_tier: 'priority' },
+        reasoningEfforts: ['low', 'high'],
+        contextWindow: 400000,
+        selected: true,
+      }),
+    )
   })
 })

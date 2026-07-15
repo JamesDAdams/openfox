@@ -28,6 +28,9 @@ interface Provider {
   status?: ProviderStatus
   isLocal?: boolean
   thinkingField?: string
+  authAdapter?: string
+  transportAdapter?: string
+  credentialRef?: string
 }
 
 interface ConfigState {

@@ -13,8 +13,6 @@ import { getEventStore } from '../events/index.js'
 
 import type { Message, Provider, ProviderBackend, StatsIdentity, Attachment } from '../../shared/types.js'
 import type { ProviderManager } from '../provider-manager.js'
-import { createLLMClient } from '../llm/index.js'
-import { ensureVersionPrefix } from '../llm/url-utils.js'
 import { runChatTurn } from '../chat/orchestrator.js'
 
 import { runOrchestrator } from '../runner/index.js'
@@ -335,7 +333,7 @@ const MAX_SEND_QUEUE_SIZE = 1000 // Maximum messages to queue before dropping
 
 export function createWebSocketServer(
   httpServer: Server,
-  config: Config,
+  _config: Config,
   getLLMClient: () => LLMClientWithModel,
   getActiveProvider: (() => Provider | undefined) | undefined,
   sessionManager: SessionManager,
@@ -354,7 +352,9 @@ export function createWebSocketServer(
       return getLLMClient()
     }
 
-    const cacheKey = `${session.providerId}:${session.providerModel}`
+    const resolvedModel = providerManager.resolveModel(session.providerId, session.providerModel)
+    const effectiveModel = resolvedModel ?? session.providerModel
+    const cacheKey = `${session.providerId}:${effectiveModel}`
     const cached = sessionLLMClients.get(sessionId)
     if (cached && cached.key === cacheKey) {
       return cached.client
@@ -373,32 +373,23 @@ export function createWebSocketServer(
       return getLLMClient()
     }
 
-    // Resolve reasoning effort from model config
-    const modelConfig = provider.models.find((m) => m.id === session.providerModel)
-    const reasoningEffort =
-      modelConfig?.thinkingEnabled && modelConfig?.thinkingLevel ? modelConfig.thinkingLevel : undefined
-
-    // Create a new LLM client for this session
-    const baseUrl = ensureVersionPrefix(provider.url)
-    const sessionConfig: Config = {
-      ...config,
-      llm: {
-        ...config.llm,
-        baseUrl,
-        model: session.providerModel!,
-        ...(provider.apiKey && { apiKey: provider.apiKey }),
-        ...(provider.thinkingField && { thinkingField: provider.thinkingField }),
-        ...(reasoningEffort && { reasoningEffort }),
-      },
+    // Let ProviderManager create the session client so provider-specific
+    // transports (for example External Provider custom) and auth context are preserved.
+    const client = providerManager.createClient(session.providerId, effectiveModel)
+    if (!client) {
+      logger.warn('Could not create session provider client, falling back to global', {
+        sessionId,
+        providerId: session.providerId,
+        model: session.providerModel,
+      })
+      return getLLMClient()
     }
-    const client = createLLMClient(sessionConfig)
-    // Set backend from provider
-    if (provider.backend !== 'unknown') {
-      client.setBackend(provider.backend as import('../llm/index.js').Backend)
-    }
-    client.setModel(session.providerModel!)
 
-    sessionLLMClients.set(sessionId, { key: cacheKey, client })
+    const concreteModel = client.getModel()
+    if (session.providerModel !== concreteModel) {
+      sessionManager.setSessionProvider(sessionId, session.providerId, concreteModel)
+    }
+    sessionLLMClients.set(sessionId, { key: `${session.providerId}:${concreteModel}`, client })
     return client
   }
 

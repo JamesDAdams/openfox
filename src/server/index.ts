@@ -39,8 +39,10 @@ import { createTerminalRoutes } from './routes/terminals.js'
 import { createDirectoryRoutes } from './routes/directories.js'
 import { createFileSearchRoutes } from './routes/file-search.js'
 import { createAutoUpdateRoutes } from './routes/auto-update.js'
+import { createProviderAuthRoutes } from './routes/provider-auth.js'
 import { devServerManager } from './dev-server/manager.js'
 import { getGlobalConfigDir } from '../cli/paths.js'
+import { ProviderRegistry, loadProviderPlugins } from './providers/plugins/index.js'
 import { logger, setLogLevel } from './utils/logger.js'
 import { VERSION } from '../constants.js'
 import {
@@ -80,8 +82,21 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   // Get config directory for loading user items
   const configDir = getGlobalConfigDir(config.mode ?? 'production')
 
+  // Discover provider plugins before creating transport-aware clients.
+  const providerAdapters = new ProviderRegistry({
+    mode: config.mode === 'development' ? 'development' : 'production',
+    configDirectory: configDir,
+  })
+  const pluginDiagnostics = await loadProviderPlugins({ registry: providerAdapters, configDirectory: configDir })
+  for (const diagnostic of pluginDiagnostics) {
+    if (!diagnostic.loaded) logger.warn('Provider plugin failed to load', { ...diagnostic })
+  }
+
+  // Hydrate concise preset-backed provider entries after plugins are loaded.
+  config.providers = providerAdapters.resolveProviders(config.providers ?? [])
+
   // Create Provider Manager (handles LLM client lifecycle)
-  const providerManager = createProviderManager(config)
+  const providerManager = createProviderManager(config, { adapters: providerAdapters })
 
   // Create SessionManager instance (not singleton!)
   const sessionManager = new SessionManager(providerManager)
@@ -94,6 +109,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   // For mock mode, we bypass the provider manager
   const getMockClient = useMock ? createMockLLMClient : null
   const getLLMClient = () => (getMockClient ? getMockClient() : providerManager.getLLMClient())
+  const getLLMClientForProvider = (providerId: string, model: string) =>
+    getMockClient ? getMockClient() : providerManager.createClient(providerId, model)
 
   if (useMock) {
     logger.info('Using MOCK LLM client - deterministic responses for testing')
@@ -1046,6 +1063,10 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       id: m.id,
       contextWindow: m.contextWindow ?? 200000,
       source: 'user' as const,
+      ...(m.name !== undefined && { name: m.name }),
+      ...(m.apiModelId !== undefined && { apiModelId: m.apiModelId }),
+      ...(m.requestBody !== undefined && { requestBody: m.requestBody }),
+      ...(m.reasoningEfforts !== undefined && { reasoningEfforts: m.reasoningEfforts }),
       ...(m.supportsVision !== undefined && { supportsVision: m.supportsVision }),
       ...(m.thinkingEnabled !== undefined && { thinkingEnabled: m.thinkingEnabled }),
       ...(m.thinkingLevel !== undefined && { thinkingLevel: m.thinkingLevel }),
@@ -1212,31 +1233,51 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
   // Test params: probe a model with the exact same param-building pipeline as the agentic loop
   app.post('/api/providers/test-params', async (req, res) => {
-    const { url, model, apiKey, backend, thinkingField, mode, modelConfig } = req.body as {
-      url: string
-      model: string
-      apiKey?: string
-      backend?: string
-      thinkingField?: string
-      mode: 'thinking' | 'non-thinking'
-      modelConfig?: {
-        temperature?: number
-        topP?: number
-        topK?: number
-        maxTokens?: number
-        supportsVision?: boolean
-        thinkingEnabled?: boolean
-        thinkingLevel?: string
-        nonThinkingEnabled?: boolean
-        thinkingQueryParams?: string
-        nonThinkingQueryParams?: string
+    const { url, providerId, transportAdapter, model, apiKey, backend, thinkingField, mode, modelConfig } =
+      req.body as {
+        url: string
+        providerId?: string
+        transportAdapter?: string
+        model: string
+        apiKey?: string
+        backend?: string
+        thinkingField?: string
+        mode: 'thinking' | 'non-thinking'
+        modelConfig?: {
+          temperature?: number
+          topP?: number
+          topK?: number
+          maxTokens?: number
+          supportsVision?: boolean
+          thinkingEnabled?: boolean
+          thinkingLevel?: string
+          nonThinkingEnabled?: boolean
+          thinkingQueryParams?: string
+          nonThinkingQueryParams?: string
+        }
       }
-    }
     if (!url) return res.status(400).json({ error: 'url is required' })
     if (!model) return res.status(400).json({ error: 'model is required' })
     if (!mode) return res.status(400).json({ error: 'mode is required' })
 
     try {
+      if (transportAdapter && providerId) {
+        const provider = providerManager.getProviders().find((item) => item.id === providerId)
+        if (!provider) return res.status(404).json({ error: 'Provider not found' })
+        const client = providerManager.createClient(providerId, model)
+        if (!client) return res.status(424).json({ error: `Missing provider transport plugin: ${transportAdapter}` })
+        const response = await client.complete({
+          messages: [{ role: 'user', content: 'say hi in one word' }],
+          tools: [],
+          ...(mode === 'thinking'
+            ? { reasoningEffort: (modelConfig?.thinkingLevel ?? 'medium') as import('./llm/types.js').ReasoningEffort }
+            : {}),
+          ...(modelConfig?.maxTokens ? { maxTokens: modelConfig.maxTokens } : {}),
+          signal: AbortSignal.timeout(30_000),
+        })
+        return res.json({ success: true, message: { content: response.content }, raw: response })
+      }
+
       const { getModelProfile } = await import('./llm/profiles.js')
       const { getBackendCapabilities } = await import('./llm/backend.js')
       const { buildNonStreamingCreateParams } = await import('./llm/client-pure.js')
@@ -1315,6 +1356,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       isLocal,
       thinkingField,
       models: modelConfigs,
+      authAdapter,
+      transportAdapter,
     } = req.body as {
       name: string
       url: string
@@ -1324,6 +1367,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       isLocal?: boolean
       thinkingField?: string
       models?: Record<string, unknown>[]
+      authAdapter?: string
+      transportAdapter?: string
     }
 
     if (!name || !url || !backend) {
@@ -1350,6 +1395,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         apiKey,
         ...(isLocal !== undefined ? { isLocal } : {}),
         ...(thinkingField ? { thinkingField } : {}),
+        ...(authAdapter ? { authAdapter } : {}),
+        ...(transportAdapter ? { transportAdapter } : {}),
         models: providerModels,
         isActive: true,
       })
@@ -1411,6 +1458,16 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
   })
 
+  app.get('/api/plugins', (_req, res) => res.json({ plugins: pluginDiagnostics }))
+  app.get('/api/provider-presets', (_req, res) => res.json({ presets: providerAdapters.getPresets() }))
+  app.get('/api/provider-adapters', (_req, res) =>
+    res.json({
+      authAdapters: providerAdapters.listAuthAdapters(),
+      transportAdapters: providerAdapters.listTransportAdapters(),
+    }),
+  )
+  app.use('/api/provider-auth', createProviderAuthRoutes(config, providerManager, providerAdapters))
+
   // Provider endpoints
   app.get('/api/providers', (_req, res) => {
     const providers = providerManager.getProviders().map((p) => ({
@@ -1469,6 +1526,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       isLocal,
       thinkingField,
       models: modelConfigs,
+      authAdapter,
+      transportAdapter,
     } = req.body as {
       name?: string
       url?: string
@@ -1477,6 +1536,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       isLocal?: boolean
       thinkingField?: string | null
       models?: Record<string, unknown>[]
+      authAdapter?: string | null
+      transportAdapter?: string | null
     }
     try {
       const { loadGlobalConfig, saveGlobalConfig, updateProvider } = await import('../cli/config.js')
@@ -1492,6 +1553,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       if (apiKey !== undefined) updates['apiKey'] = apiKey || undefined
       if (isLocal !== undefined) updates['isLocal'] = isLocal
       if (thinkingField !== undefined) updates['thinkingField'] = thinkingField || undefined
+      if (authAdapter !== undefined) updates['authAdapter'] = authAdapter || undefined
+      if (transportAdapter !== undefined) updates['transportAdapter'] = transportAdapter || undefined
       if (modelConfigs !== undefined) {
         updates['models'] = buildModelConfigs(modelConfigs as ModelConfigInput[])
       }
@@ -1991,6 +2054,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     sessionManager,
     providerManager,
     getLLMClient,
+    getLLMClientForProvider,
     getActiveProvider: () => providerManager.getActiveProvider(),
     broadcastForSession: wssExports.broadcastForSession,
   })

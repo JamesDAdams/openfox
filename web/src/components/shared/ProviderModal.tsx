@@ -7,9 +7,25 @@ import { QueryParamsInput } from './QueryParamsInput'
 
 const COMMON_PORTS = [8080, 11434, 8000, 1234]
 
-interface ModelInfo {
+interface ProviderPreset {
   id: string
-  contextWindow: number
+  name: string
+  description: string
+  documentationUrl?: string
+  requiresAuth: boolean
+  authAdapter?: string
+  transportAdapter?: string
+  defaults: { name?: string; url: string; backend: string; models?: ModelInfo[] }
+  connectLabel?: string
+  disconnectLabel?: string
+  missingPluginMessage?: string
+}
+
+type ModelInfo = Omit<SharedModelConfig, 'source'>
+
+function defaultReasoningEffort(efforts: string[] | undefined): string | undefined {
+  if (!efforts?.length) return undefined
+  return efforts.includes('medium') ? 'medium' : efforts[0]
 }
 
 interface ModelConfig {
@@ -40,7 +56,23 @@ export interface ProviderFormData {
   apiKey?: string
   isLocal?: boolean
   thinkingField?: string
+  authAdapter?: string
+  transportAdapter?: string
   models: Array<Omit<SharedModelConfig, 'source'>>
+}
+
+export function providerFormPayload(formData: ProviderFormData) {
+  return {
+    name: formData.name,
+    url: formData.url,
+    backend: formData.backend,
+    apiKey: formData.apiKey,
+    isLocal: formData.isLocal,
+    thinkingField: formData.thinkingField,
+    authAdapter: formData.authAdapter,
+    transportAdapter: formData.transportAdapter,
+    models: formData.models,
+  }
 }
 
 interface ProviderModalProps {
@@ -56,6 +88,8 @@ interface ProviderModalProps {
     apiKey?: string
     isLocal?: boolean
     thinkingField?: string
+    authAdapter?: string
+    transportAdapter?: string
     models?: Array<Omit<SharedModelConfig, 'source'>>
   }
   editModelId?: string
@@ -191,12 +225,28 @@ function ModelConfigPanel({
             <div className="ml-6 space-y-2 pl-3 border-l-2 border-accent-primary/30">
               <div>
                 <label className="text-xs text-text-secondary block mb-1">Reasoning effort</label>
-                <input
-                  type="text"
-                  value={modelConfigs[model.id]?.thinkingLevel ?? ''}
-                  onChange={(e) => onUpdateConfig(model.id, { thinkingLevel: e.target.value })}
-                  className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
-                />
+                {model.reasoningEfforts?.length ? (
+                  <select
+                    aria-label="Reasoning effort"
+                    value={modelConfigs[model.id]?.thinkingLevel ?? defaultReasoningEffort(model.reasoningEfforts)}
+                    onChange={(e) => onUpdateConfig(model.id, { thinkingLevel: e.target.value })}
+                    className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+                  >
+                    {model.reasoningEfforts.map((effort) => (
+                      <option key={effort} value={effort}>
+                        {effort}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    aria-label="Reasoning effort"
+                    value={modelConfigs[model.id]?.thinkingLevel ?? ''}
+                    onChange={(e) => onUpdateConfig(model.id, { thinkingLevel: e.target.value })}
+                    className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+                  />
+                )}
               </div>
               <QueryParamsInput
                 value={modelConfigs[model.id]?.thinkingQueryParams}
@@ -320,6 +370,8 @@ export function ProviderModal({
   const [formBackend, setFormBackend] = useState<string>('unknown')
   const [formApiKey, setFormApiKey] = useState('')
   const [formIsLocal, setFormIsLocal] = useState(false)
+  const [formAuthAdapter, setFormAuthAdapter] = useState<string | undefined>()
+  const [formTransportAdapter, setFormTransportAdapter] = useState<string | undefined>()
   const [fetchingModels, setFetchingModels] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -337,6 +389,21 @@ export function ProviderModal({
   const [rawModalData, setRawModalData] = useState<string | null>(null)
   const [selectedModelIds, setSelectedModelIds] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
+  const [draftProviderId, setDraftProviderId] = useState<string | null>(null)
+  const [providerAuthState, setProviderAuthState] = useState<'disconnected' | 'pending' | 'connected' | 'error'>(
+    'disconnected',
+  )
+  const [providerAuthBusy, setProviderAuthBusy] = useState(false)
+  const [deviceChallenge, setDeviceChallenge] = useState<{
+    verificationUrl: string
+    directUrl?: string
+    userCode?: string
+    instructions: string
+  } | null>(null)
+  const [providerPresets, setProviderPresets] = useState<ProviderPreset[]>([])
+  const [devicePageOpened, setDevicePageOpened] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
+  const codeCopiedTimerRef = useRef<number | null>(null)
   const urlInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -346,8 +413,29 @@ export function ProviderModal({
     }
   }, [formStep, isOpen])
 
+  useEffect(() => {
+    if (!isOpen) return
+    void authFetch('/api/provider-presets')
+      .then(async (response) =>
+        response.ok ? ((await response.json()) as { presets: ProviderPreset[] }) : { presets: [] },
+      )
+      .then((data) => setProviderPresets(data.presets))
+      .catch(() => setProviderPresets([]))
+  }, [isOpen])
+
   function updateModelConfig(id: string, partial: Partial<ModelConfig>) {
     setModelConfigs((prev) => ({ ...prev, [id]: { ...prev[id]!, ...partial } }))
+  }
+
+  function selectModel(model: ModelInfo) {
+    setSelectedModelIds((current) => new Set(current).add(model.id))
+    setModelConfigs((current) => ({
+      ...current,
+      [model.id]: {
+        contextWindow: model.contextWindow,
+        ...current[model.id],
+      },
+    }))
   }
 
   function filterModels(query: string): ModelInfo[] {
@@ -365,10 +453,17 @@ export function ProviderModal({
       setFormBackend(editProvider?.backend ?? 'unknown')
       setFormApiKey(editProvider?.apiKey ?? '')
       setFormIsLocal(editProvider?.isLocal ?? false)
+      setFormAuthAdapter(editProvider?.authAdapter)
+      setFormTransportAdapter(editProvider?.transportAdapter)
       setFetchError(null)
       setThinkingField(editProvider?.thinkingField ?? '')
       setTestResults({})
       setRawModalData(null)
+      setDraftProviderId(null)
+      setProviderAuthState('disconnected')
+      setDeviceChallenge(null)
+      setDevicePageOpened(false)
+      setCodeCopied(false)
 
       if (editProvider?.models?.length) {
         const configs: Record<string, ModelConfig> = {}
@@ -378,7 +473,7 @@ export function ProviderModal({
             contextWindow: m.contextWindow,
             supportsVision: m.supportsVision,
             thinkingEnabled: m.thinkingEnabled,
-            thinkingLevel: m.thinkingLevel,
+            thinkingLevel: m.thinkingLevel ?? defaultReasoningEffort(m.reasoningEfforts),
             nonThinkingEnabled: m.nonThinkingEnabled,
             thinkingQueryParams: m.thinkingQueryParams,
             nonThinkingQueryParams: m.nonThinkingQueryParams,
@@ -395,7 +490,7 @@ export function ProviderModal({
         }
         setSelectedModelIds(selected)
         setModelConfigs(configs)
-        setModels(editProvider.models.map((m) => ({ id: m.id, contextWindow: m.contextWindow })))
+        setModels(editProvider.models)
         setExpandedModelId(editModelId ?? editProvider.models[0]?.id ?? null)
       } else {
         setModels([])
@@ -408,10 +503,124 @@ export function ProviderModal({
 
   // Auto-fetch models when entering step 2
   useEffect(() => {
-    if (formStep === 2 && formUrl && models.length === 0 && !fetchingModels && !fetchError) {
+    const requiresAuthentication = Boolean(formAuthAdapter)
+    if (
+      formStep === 2 &&
+      formUrl &&
+      models.length === 0 &&
+      !fetchingModels &&
+      !fetchError &&
+      (!requiresAuthentication || providerAuthState === 'connected')
+    ) {
       fetchModels(formUrl)
     }
-  }, [formStep])
+  }, [formStep, providerAuthState])
+
+  useEffect(() => {
+    if (!isOpen || !formAuthAdapter || !editProvider?.id) return
+    void refreshProviderAuthStatus(editProvider.id)
+  }, [isOpen, formTransportAdapter, editProvider?.id])
+
+  useEffect(() => {
+    if (!deviceChallenge) return
+    const providerId = editProvider?.id ?? draftProviderId
+    if (!providerId) return
+
+    let cancelled = false
+    const checkConnection = async () => {
+      const state = await refreshProviderAuthStatus(providerId)
+      if (cancelled || state !== 'connected') return
+      setDeviceChallenge(null)
+      setDevicePageOpened(false)
+      setCodeCopied(false)
+      await fetchModels(formUrl)
+    }
+
+    void checkConnection()
+    const interval = window.setInterval(() => void checkConnection(), 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [deviceChallenge, draftProviderId, editProvider?.id])
+
+  async function ensureDraftProvider(): Promise<string> {
+    if (editProvider?.id) return editProvider.id
+    if (draftProviderId) return draftProviderId
+
+    const response = await authFetch('/api/providers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: formName || 'Provider',
+        url: formUrl,
+        backend: formBackend,
+        authAdapter: formAuthAdapter,
+        transportAdapter: formTransportAdapter,
+        isLocal: false,
+        models: [],
+      }),
+    })
+    if (!response.ok) throw new Error('Unable to create provider')
+    const data = (await response.json()) as { provider: { id: string } }
+    setDraftProviderId(data.provider.id)
+    return data.provider.id
+  }
+
+  async function refreshProviderAuthStatus(providerId: string) {
+    const response = await authFetch(`/api/provider-auth/${providerId}/status`)
+    if (!response.ok) return 'error' as const
+    const data = (await response.json()) as { state: 'disconnected' | 'pending' | 'connected' | 'expired' | 'error' }
+    const state =
+      data.state === 'connected'
+        ? 'connected'
+        : data.state === 'pending'
+          ? 'pending'
+          : data.state === 'error'
+            ? 'error'
+            : 'disconnected'
+    setProviderAuthState(state)
+    return state
+  }
+
+  async function connectProvider() {
+    setProviderAuthBusy(true)
+    setProviderAuthState('pending')
+    try {
+      const providerId = await ensureDraftProvider()
+      const response = await authFetch(`/api/provider-auth/${providerId}/login`, { method: 'POST' })
+      if (!response.ok) throw new Error('Unable to start provider sign-in')
+      const challenge = (await response.json()) as {
+        verificationUrl: string
+        directUrl?: string
+        userCode?: string
+        instructions: string
+      }
+      setDeviceChallenge(challenge)
+    } catch {
+      setProviderAuthState('error')
+    } finally {
+      setProviderAuthBusy(false)
+    }
+  }
+
+  async function copyDeviceCode() {
+    if (!deviceChallenge?.userCode) return
+    await navigator.clipboard?.writeText(deviceChallenge.userCode)
+    if (codeCopiedTimerRef.current !== null) window.clearTimeout(codeCopiedTimerRef.current)
+    setCodeCopied(false)
+    requestAnimationFrame(() => setCodeCopied(true))
+    codeCopiedTimerRef.current = window.setTimeout(() => {
+      setCodeCopied(false)
+      codeCopiedTimerRef.current = null
+    }, 1500)
+  }
+
+  function openDeviceAuthorization() {
+    if (!deviceChallenge) return
+    window.open(deviceChallenge.directUrl ?? deviceChallenge.verificationUrl, '_blank', 'noopener,noreferrer')
+    setDevicePageOpened(true)
+  }
 
   async function fetchModels(url: string) {
     setFetchingModels(true)
@@ -421,7 +630,9 @@ export function ProviderModal({
       const params = new URLSearchParams({ url })
       if (formApiKey) params.set('apiKey', formApiKey)
       if (formBackend) params.set('backend', formBackend)
-      const response = await authFetch(`/api/providers/models?${params.toString()}`)
+      const response = formTransportAdapter
+        ? await authFetch(`/api/providers/${await ensureDraftProvider()}/models`)
+        : await authFetch(`/api/providers/models?${params.toString()}`)
       if (response.ok) {
         const data = (await response.json()) as { models: ModelInfo[]; url: string }
         if (data.models?.length) {
@@ -432,7 +643,7 @@ export function ProviderModal({
             configs[m.id] = {
               contextWindow: m.contextWindow,
               thinkingEnabled: true,
-              thinkingLevel: undefined,
+              thinkingLevel: defaultReasoningEffort(m.reasoningEfforts),
               defaultTemperature: (m as { defaultTemperature?: number }).defaultTemperature,
               defaultTopP: (m as { defaultTopP?: number }).defaultTopP,
               defaultTopK: (m as { defaultTopK?: number }).defaultTopK,
@@ -528,6 +739,8 @@ export function ProviderModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: formUrl,
+          providerId: editProvider?.id ?? draftProviderId ?? undefined,
+          transportAdapter: formTransportAdapter,
           model: modelId,
           apiKey: formApiKey || undefined,
           backend: formBackend || 'unknown',
@@ -576,7 +789,7 @@ export function ProviderModal({
 
   function handleSave() {
     const name = formName || `Provider`
-    const providerId = editProvider?.id ?? `temp-${Date.now()}`
+    const providerId = editProvider?.id ?? draftProviderId ?? `temp-${Date.now()}`
     onSave({
       id: providerId,
       name,
@@ -585,8 +798,14 @@ export function ProviderModal({
       apiKey: formApiKey || undefined,
       isLocal: formIsLocal || undefined,
       thinkingField: thinkingField || undefined,
+      authAdapter: formAuthAdapter,
+      transportAdapter: formTransportAdapter,
       models: models.map((m) => ({
         id: m.id,
+        name: m.name,
+        apiModelId: m.apiModelId,
+        requestBody: m.requestBody,
+        reasoningEfforts: m.reasoningEfforts,
         contextWindow: modelConfigs[m.id]?.contextWindow ?? m.contextWindow,
         selected: selectedModelIds.has(m.id) || undefined,
         supportsVision: modelConfigs[m.id]?.supportsVision,
@@ -599,6 +818,10 @@ export function ProviderModal({
         topP: modelConfigs[m.id]?.topP,
         topK: modelConfigs[m.id]?.topK,
         maxTokens: modelConfigs[m.id]?.maxTokens,
+        defaultMaxTokens: modelConfigs[m.id]?.defaultMaxTokens,
+        defaultTemperature: modelConfigs[m.id]?.defaultTemperature,
+        defaultTopP: modelConfigs[m.id]?.defaultTopP,
+        defaultTopK: modelConfigs[m.id]?.defaultTopK,
       })),
     })
     onClose()
@@ -635,6 +858,30 @@ export function ProviderModal({
             <div>
               <label className="block text-sm text-text-secondary mb-2">Inference engine</label>
               <div className="grid grid-cols-5 gap-2">
+                {providerPresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => {
+                      setFormName(preset.defaults.name ?? preset.name)
+                      setFormUrl(preset.defaults.url)
+                      setFormBackend(preset.defaults.backend)
+                      setFormIsLocal(false)
+                      setFormApiKey('')
+                      setFormAuthAdapter(preset.authAdapter)
+                      setFormTransportAdapter(preset.transportAdapter)
+                      setFetchError(null)
+                      resetStep2()
+                    }}
+                    className={`p-2 rounded border text-center text-sm transition-colors ${
+                      formTransportAdapter && formTransportAdapter === preset.transportAdapter
+                        ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
+                        : 'border-border hover:border-text-muted text-text-secondary'
+                    }`}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
                 <button
                   key="other"
                   type="button"
@@ -688,23 +935,25 @@ export function ProviderModal({
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-1">Provider URL</label>
-              <input
-                ref={urlInputRef}
-                type="text"
-                value={formUrl}
-                data-testid="provider-modal-url"
-                onChange={(e) => {
-                  setFormUrl(e.target.value)
-                  setFetchError(null)
-                  setModels([])
-                  setModelConfigs({})
-                }}
-                placeholder="http://localhost:8000"
-                className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
-              />
-            </div>
+            {!formAuthAdapter && (
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">Provider URL</label>
+                <input
+                  ref={urlInputRef}
+                  type="text"
+                  value={formUrl}
+                  data-testid="provider-modal-url"
+                  onChange={(e) => {
+                    setFormUrl(e.target.value)
+                    setFetchError(null)
+                    setModels([])
+                    setModelConfigs({})
+                  }}
+                  placeholder="http://localhost:8000"
+                  className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-sm text-text-secondary mb-1">Provider name</label>
@@ -718,35 +967,95 @@ export function ProviderModal({
               />
             </div>
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-1">
-                API key <span className="text-text-muted">(optional)</span>
-              </label>
-              <input
-                type="text"
-                autoComplete="off"
-                value={formApiKey}
-                onChange={(e) => setFormApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
-              />
-            </div>
+            {!formAuthAdapter && (
+              <div>
+                <label className="block text-sm text-text-secondary mb-1">
+                  API key <span className="text-text-muted">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={formApiKey}
+                  onChange={(e) => setFormApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
+                />
+              </div>
+            )}
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formIsLocal}
-                onChange={(e) => setFormIsLocal(e.target.checked)}
-                className="w-4 h-4 rounded border-border bg-bg-primary accent-accent-primary"
-              />
-              <span className="text-sm text-text-secondary">This is a local provider</span>
-            </label>
+            {!formAuthAdapter && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formIsLocal}
+                  onChange={(e) => setFormIsLocal(e.target.checked)}
+                  className="w-4 h-4 rounded border-border bg-bg-primary accent-accent-primary"
+                />
+                <span className="text-sm text-text-secondary">This is a local provider</span>
+              </label>
+            )}
           </div>
         )}
 
         {/* Step 2: Test & Configure Models */}
         {formStep === 2 && (
           <div className="px-6 py-4 space-y-4">
+            {Boolean(formAuthAdapter) && (
+              <div className="rounded-lg border border-border bg-bg-primary p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-sm font-medium text-text-primary">Connect provider</h4>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Connect this provider before choosing available models.
+                    </p>
+                  </div>
+                  {providerAuthState === 'connected' ? (
+                    <span className="text-sm font-medium text-accent-success">Connected ✓</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void connectProvider()}
+                      disabled={providerAuthBusy || providerAuthState === 'pending'}
+                      className="rounded-lg bg-accent-primary px-4 py-2 text-sm font-medium text-text-primary disabled:opacity-50"
+                    >
+                      {providerAuthBusy || providerAuthState === 'pending'
+                        ? 'Connecting...'
+                        : providerAuthState === 'error'
+                          ? 'Retry'
+                          : 'Connect'}
+                    </button>
+                  )}
+                </div>
+                {deviceChallenge && (
+                  <div className="mt-4 border-t border-border pt-4">
+                    <p className="text-xs text-text-muted">Use this code to complete authorization:</p>
+                    <button
+                      type="button"
+                      onClick={() => void copyDeviceCode()}
+                      className="mt-3 w-full rounded-lg border border-accent-primary/40 px-4 py-4 font-mono text-2xl font-semibold tracking-[0.2em] text-accent-primary"
+                    >
+                      {deviceChallenge.userCode ?? 'Continue'}
+                    </button>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void copyDeviceCode()}
+                        className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-text-primary"
+                      >
+                        {codeCopied ? 'Copied' : 'Copy code'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openDeviceAuthorization}
+                        className="flex-1 rounded-lg bg-accent-primary px-3 py-2 text-sm font-medium text-text-primary"
+                      >
+                        {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {fetchingModels && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <span className="w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
@@ -774,7 +1083,7 @@ export function ProviderModal({
               </div>
             )}
 
-            {models.length > 0 && formBackend && (
+            {models.length > 0 && formBackend && (!formAuthAdapter || providerAuthState === 'connected') && (
               <>
                 {/* Selected Models — full config panels */}
                 {selectedModelIds.size > 0 && (
@@ -796,7 +1105,7 @@ export function ProviderModal({
                             >
                               <div className="flex items-center gap-3">
                                 <span className="text-sm font-medium text-text-primary">
-                                  {model.id.split('/').pop()}
+                                  {model.name ?? model.id.split('/').pop()}
                                 </span>
                                 <span className="text-xs text-text-muted bg-bg-tertiary px-2 py-0.5 rounded">
                                   {(modelConfigs[model.id]?.contextWindow ?? model.contextWindow).toLocaleString()} ctx
@@ -809,7 +1118,7 @@ export function ProviderModal({
                                   <span className="text-xs text-accent-success font-medium">Configured ✓</span>
                                 ) : autoConfigState.progress[model.id] === 'error' ? (
                                   <span className="text-xs text-red-500 font-medium">Failed ✗</span>
-                                ) : (
+                                ) : !formAuthAdapter ? (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -819,7 +1128,7 @@ export function ProviderModal({
                                   >
                                     Auto-config
                                   </button>
-                                )}
+                                ) : null}
                                 {models.length > 1 && (
                                   <button
                                     onClick={(e) => {
@@ -897,12 +1206,24 @@ export function ProviderModal({
                             const visible = filterModels(searchQuery)
                             for (const m of visible) next.add(m.id)
                             setSelectedModelIds(next)
-                            for (const m of visible) {
-                              if (
-                                autoConfigState.progress[m.id] !== 'probing' &&
-                                autoConfigState.progress[m.id] !== 'done'
-                              ) {
-                                runAutoConfig(m.id)
+                            setModelConfigs((current) => {
+                              const updated = { ...current }
+                              for (const model of visible) {
+                                updated[model.id] = {
+                                  contextWindow: model.contextWindow,
+                                  ...updated[model.id],
+                                }
+                              }
+                              return updated
+                            })
+                            if (!formAuthAdapter) {
+                              for (const m of visible) {
+                                if (
+                                  autoConfigState.progress[m.id] !== 'probing' &&
+                                  autoConfigState.progress[m.id] !== 'done'
+                                ) {
+                                  runAutoConfig(m.id)
+                                }
                               }
                             }
                           }}
@@ -942,10 +1263,8 @@ export function ProviderModal({
                                 next.delete(model.id)
                                 setSelectedModelIds(next)
                               } else {
-                                const next = new Set(selectedModelIds)
-                                next.add(model.id)
-                                setSelectedModelIds(next)
-                                runAutoConfig(model.id)
+                                selectModel(model)
+                                if (!formAuthAdapter) runAutoConfig(model.id)
                               }
                             }}
                             onKeyDown={(e) => {
@@ -962,7 +1281,7 @@ export function ProviderModal({
                               className="w-4 h-4 rounded border-border accent-accent-primary pointer-events-none"
                             />
                             <span className="text-sm text-text-primary flex-1 truncate">
-                              {model.id.split('/').pop()}
+                              {model.name ?? model.id.split('/').pop()}
                             </span>
                             <span className="text-xs text-text-muted flex-shrink-0">
                               {(modelConfigs[model.id]?.contextWindow ?? model.contextWindow).toLocaleString()} ctx

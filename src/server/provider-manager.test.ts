@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createProviderManager } from './provider-manager.js'
+import { createLLMClient } from './llm/index.js'
 import type { Config, Provider } from '../shared/types.js'
 
 // Mock the LLM client
@@ -15,6 +16,8 @@ vi.mock('./llm/index.js', () => ({
   setLlmStatus: vi.fn(),
   getModelProfile: vi.fn(() => ({ reasoning: false })),
 }))
+
+const createLLMClientMock = vi.mocked(createLLMClient)
 
 // Mock fetch
 const mockFetch = vi.fn()
@@ -334,6 +337,46 @@ describe('ProviderManager - Model Selection', () => {
       ])
     })
 
+    it('drops stale user models for an authoritative transport catalog', async () => {
+      const transport = {
+        id: 'example-transport',
+        listModels: vi.fn(async () => [
+          { id: 'gpt-5.4', contextWindow: 1050000, source: 'backend' as const },
+          { id: 'gpt-5.5', contextWindow: 1050000, source: 'backend' as const },
+        ]),
+        complete: vi.fn(),
+        stream: vi.fn(),
+      }
+      const adapters = { getTransport: vi.fn((id?: string) => (id === 'example-transport' ? transport : undefined)) }
+      const chatConfig: Config = {
+        ...config,
+        providers: [
+          {
+            id: 'external',
+            name: 'External Provider',
+            url: 'https://provider.example/v1',
+            backend: 'openai',
+            transportAdapter: 'example-transport',
+            models: [
+              { id: 'model-large', contextWindow: 1050000, source: 'user' },
+              { id: 'gpt-5.4', contextWindow: 900000, source: 'user' },
+            ],
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        defaultModelSelection: 'external/gpt-5.4',
+      }
+      const manager = createProviderManager(chatConfig, { adapters: adapters as never })
+
+      const result = await manager.refreshProviderModels('external')
+
+      expect(result).toEqual({ success: true })
+      const models = manager.getProviders()[0]!.models
+      expect(models.map((model) => model.id)).toEqual(['gpt-5.4', 'gpt-5.5'])
+      expect(models[0]!.contextWindow).toBe(900000)
+    })
+
     it('preserves user overrides during refresh', async () => {
       await providerManager.updateModelContext('provider-1', 'model-a', 150000)
 
@@ -504,6 +547,145 @@ describe('ProviderManager - Model Selection', () => {
 
       const settings = providerManager.getModelSettings('provider-1', 'model-b')
       expect(settings).toBeUndefined()
+    })
+  })
+
+  describe('automatic model resolution', () => {
+    it('exposes the same concrete resolution for all callers', () => {
+      const chatConfig: Config = {
+        ...config,
+        providers: [
+          {
+            id: 'external',
+            name: 'External Provider',
+            url: 'https://provider.example/v1',
+            backend: 'openai',
+            models: [{ id: 'model-large', contextWindow: 1050000, source: 'backend', selected: true }],
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        defaultModelSelection: 'external/auto',
+      }
+      const manager = createProviderManager(chatConfig)
+
+      expect(manager.resolveModel('external', 'auto')).toBe('model-large')
+    })
+
+    it('resolves auto to the active concrete model for session clients', async () => {
+      const chatConfig: Config = {
+        ...config,
+        providers: [
+          {
+            id: 'external',
+            name: 'External Provider',
+            url: 'https://provider.example/v1',
+            backend: 'openai',
+            models: [{ id: 'model-large', contextWindow: 1050000, source: 'backend' }],
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        defaultModelSelection: 'external/model-large',
+      }
+      const manager = createProviderManager(chatConfig)
+
+      manager.createClient('external', 'auto')
+
+      expect(createLLMClientMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ llm: expect.objectContaining({ model: 'model-large' }) }),
+      )
+    })
+
+    it('resolves auto to the selected model before falling back to the first model', () => {
+      const chatConfig: Config = {
+        ...config,
+        providers: [
+          {
+            id: 'external',
+            name: 'External Provider',
+            url: 'https://provider.example/v1',
+            backend: 'openai',
+            models: [{ id: 'model-large', contextWindow: 1050000, source: 'backend', selected: true }],
+            isActive: false,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        defaultModelSelection: undefined,
+      }
+      const manager = createProviderManager(chatConfig)
+
+      manager.createClient('external', 'auto')
+
+      expect(createLLMClientMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ llm: expect.objectContaining({ model: 'model-large' }) }),
+      )
+    })
+
+    it('resolves an active auto selection to the provider first model instead of sending auto', () => {
+      const chatConfig: Config = {
+        ...config,
+        providers: [
+          {
+            id: 'external',
+            name: 'External Provider',
+            url: 'https://provider.example/v1',
+            backend: 'openai',
+            models: [
+              { id: 'model-large', contextWindow: 1050000, source: 'backend' },
+              { id: 'gpt-5.4', contextWindow: 1050000, source: 'backend' },
+            ],
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        defaultModelSelection: 'external/auto',
+      }
+      const manager = createProviderManager(chatConfig)
+
+      manager.createClient('external', 'auto')
+
+      expect(createLLMClientMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ llm: expect.objectContaining({ model: 'model-large' }) }),
+      )
+    })
+  })
+
+  describe('setProviders', () => {
+    it('recreates the active transport client when credentialRef is added', () => {
+      const transport = {
+        id: 'example-transport',
+        listModels: vi.fn(),
+        complete: vi.fn(),
+        stream: vi.fn(),
+      }
+      const adapters = { getTransport: vi.fn((id?: string) => (id === 'example-transport' ? transport : undefined)) }
+      const chatConfig: Config = {
+        ...config,
+        providers: [
+          {
+            id: 'external',
+            name: 'External Provider',
+            url: 'https://provider.example/v1',
+            backend: 'openai',
+            authAdapter: 'example-auth',
+            transportAdapter: 'example-transport',
+            models: [{ id: 'model-large', contextWindow: 1050000, source: 'backend' }],
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        defaultModelSelection: 'external/model-large',
+      }
+      const manager = createProviderManager(chatConfig, { adapters: adapters as never })
+      const before = manager.getLLMClient()
+
+      manager.setProviders(
+        [{ ...chatConfig.providers![0]!, credentialRef: 'credential-1' }],
+        chatConfig.defaultModelSelection,
+      )
+
+      expect(manager.getLLMClient()).not.toBe(before)
     })
   })
 })
