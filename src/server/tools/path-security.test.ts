@@ -1312,4 +1312,191 @@ describe('path-security', () => {
       await expect(promise).resolves.toBeUndefined()
     })
   })
+
+  // ===========================================================================
+  // Sub-agent path access (deny by default, allow in dangerous mode)
+  // ===========================================================================
+
+  describe('sub-agent path access', () => {
+    it('denies outside workdir immediately when isSubAgent and normal mode', async () => {
+      const onEvent = vi.fn()
+      const promise = requestPathAccess(
+        ['/etc/passwd'],
+        WORKDIR,
+        'session-sub-normal',
+        'call-sub-normal',
+        'read_file',
+        onEvent,
+        'normal',
+        undefined,
+        true, // isSubAgent
+      )
+
+      await expect(promise).rejects.toMatchObject({
+        name: 'PathAccessDeniedError',
+        reason: 'outside_workdir',
+        tool: 'read_file',
+        paths: [CANONICAL_PASSWD],
+      })
+      // Should NOT have emitted any confirmation event
+      expect(onEvent).not.toHaveBeenCalled()
+      // Should NOT have registered a pending confirmation
+      expect(hasPendingPathConfirmation('call-sub-normal')).toBe(false)
+    })
+
+    it('denies sensitive file immediately when isSubAgent and normal mode', async () => {
+      const onEvent = vi.fn()
+      const promise = requestPathAccess(
+        [join(WORKDIR, '.env')],
+        WORKDIR,
+        'session-sub-sensitive',
+        'call-sub-sensitive',
+        'read_file',
+        onEvent,
+        'normal',
+        undefined,
+        true, // isSubAgent
+      )
+
+      await expect(promise).rejects.toMatchObject({
+        name: 'PathAccessDeniedError',
+        reason: 'sensitive_file',
+        tool: 'read_file',
+      })
+      expect(onEvent).not.toHaveBeenCalled()
+      expect(hasPendingPathConfirmation('call-sub-sensitive')).toBe(false)
+    })
+
+    it('denies mixed paths immediately when isSubAgent and normal mode', async () => {
+      const onEvent = vi.fn()
+      const promise = requestPathAccess(
+        ['/etc/passwd', join(WORKDIR, '.env')],
+        WORKDIR,
+        'session-sub-mixed',
+        'call-sub-mixed',
+        'read_file',
+        onEvent,
+        'normal',
+        undefined,
+        true, // isSubAgent
+      )
+
+      await expect(promise).rejects.toMatchObject({
+        name: 'PathAccessDeniedError',
+        reason: 'both',
+        tool: 'read_file',
+      })
+      expect(onEvent).not.toHaveBeenCalled()
+      expect(hasPendingPathConfirmation('call-sub-mixed')).toBe(false)
+    })
+
+    it('allows outside workdir when isSubAgent and dangerous mode', async () => {
+      const onEvent = vi.fn()
+      const promise = requestPathAccess(
+        ['/etc/passwd'],
+        WORKDIR,
+        'session-sub-dangerous',
+        'call-sub-dangerous',
+        'read_file',
+        onEvent,
+        'dangerous',
+        undefined,
+        true, // isSubAgent
+      )
+
+      await expect(promise).resolves.toBeUndefined()
+      // Should NOT have emitted any confirmation event
+      expect(onEvent).not.toHaveBeenCalled()
+      // Path should be in allowlist
+      expect(isPathAllowed('session-sub-dangerous', CANONICAL_PASSWD)).toBe(true)
+      // Cleanup
+      clearAllowedPaths('session-sub-dangerous')
+    })
+
+    it('allows paths inside workdir when isSubAgent (no confirmation needed)', async () => {
+      const onEvent = vi.fn()
+      const promise = requestPathAccess(
+        [join(WORKDIR, 'file.txt')],
+        WORKDIR,
+        'session-sub-inside',
+        'call-sub-inside',
+        'read_file',
+        onEvent,
+        'normal',
+        undefined,
+        true, // isSubAgent
+      )
+
+      await expect(promise).resolves.toBeUndefined()
+      expect(onEvent).not.toHaveBeenCalled()
+    })
+
+    it('auto-approves git --no-verify when isSubAgent and dangerous mode', async () => {
+      const onEvent = vi.fn()
+      const promise = requestPathAccess(
+        [WORKDIR],
+        WORKDIR,
+        'session-sub-git-dangerous',
+        'call-sub-git-dangerous',
+        'run_command',
+        onEvent,
+        'dangerous',
+        'git commit --no-verify -m "skip"',
+        true, // isSubAgent
+      )
+
+      // Should auto-approve without prompting
+      await expect(promise).resolves.toBeUndefined()
+      expect(onEvent).not.toHaveBeenCalled()
+      expect(hasPendingPathConfirmation('call-sub-git-dangerous')).toBe(false)
+    })
+
+    it('skips git --no-verify check entirely when isSubAgent (paths win)', async () => {
+      // For sub-agents, the git --no-verify and dangerous command checks are
+      // skipped entirely. Only path access is evaluated. If paths are within
+      // the sandbox, the operation proceeds regardless of --no-verify.
+      const onEvent = vi.fn()
+      const promise = requestPathAccess(
+        [WORKDIR],
+        WORKDIR,
+        'session-sub-git-normal',
+        'call-sub-git-normal',
+        'run_command',
+        onEvent,
+        'normal',
+        'git commit --no-verify -m "skip"',
+        true, // isSubAgent
+      )
+
+      // WORKDIR is inside /tmp (allowed root), so paths are fine → allowed
+      await expect(promise).resolves.toBeUndefined()
+      expect(onEvent).not.toHaveBeenCalled()
+      expect(hasPendingPathConfirmation('call-sub-git-normal')).toBe(false)
+    })
+
+    it('denies outside path even with harmless command when isSubAgent and normal mode', async () => {
+      // Sub-agent in normal mode: outside paths are denied even if the
+      // command itself is harmless. The path check dominates.
+      const onEvent = vi.fn()
+      const promise = requestPathAccess(
+        ['/etc/passwd'],
+        WORKDIR,
+        'session-sub-cmd-normal',
+        'call-sub-cmd-normal',
+        'read_file',
+        onEvent,
+        'normal',
+        'echo hello',
+        true, // isSubAgent
+      )
+
+      await expect(promise).rejects.toMatchObject({
+        name: 'PathAccessDeniedError',
+        reason: 'outside_workdir',
+        tool: 'read_file',
+      })
+      expect(onEvent).not.toHaveBeenCalled()
+      expect(hasPendingPathConfirmation('call-sub-cmd-normal')).toBe(false)
+    })
+  })
 })

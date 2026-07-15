@@ -19,6 +19,7 @@ export interface ToolBatchContext {
   sessionId: string
   workdir: string
   dangerLevel?: DangerLevel
+  isSubAgent?: boolean
   turnMetrics: TurnMetrics
   signal?: AbortSignal | undefined
   onMessage?: ((msg: ServerMessage) => void) | undefined
@@ -157,6 +158,9 @@ export async function executeTools(
     }
     if (ctx.dangerLevel) {
       toolContext.dangerLevel = ctx.dangerLevel
+    }
+    if (ctx.isSubAgent) {
+      toolContext.isSubAgent = true
     }
 
     const startTime = Date.now()

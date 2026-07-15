@@ -462,6 +462,9 @@ ${COMPACTION_PROMPT}`,
         if (session.dangerLevel) {
           batchContext.dangerLevel = session.dangerLevel
         }
+        if (config.subAgentMetadata) {
+          batchContext.isSubAgent = true
+        }
         batchContext.agentTimeout = getRuntimeConfig().agent.toolTimeout
         const batchResult = await executeTools(assistantMsgId, result.toolCalls, batchContext, append)
         if (batchResult.stepDoneCalled) {

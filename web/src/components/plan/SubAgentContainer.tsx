@@ -1,4 +1,4 @@
-import { memo, useRef, useState, useCallback, useEffect } from 'react'
+import { memo, useRef, useState, useCallback } from 'react'
 import type { Message, ContextState } from '@shared/types.js'
 import { AssistantMessage } from './AssistantMessage'
 import { ChatMessage } from './ChatMessage'
@@ -59,7 +59,7 @@ export const SubAgentContainer = memo(function SubAgentContainer({
   messages,
   subAgentType,
   subAgentId,
-  isStreaming,
+  isStreaming: _isStreaming,
 }: SubAgentContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -71,12 +71,6 @@ export const SubAgentContainer = memo(function SubAgentContainer({
   const { showThinking, showVerboseToolOutput } = useDisplaySettings()
 
   const { isAutoScrollActive, setAutoScroll } = useAutoScroll(scrollRef, null)
-
-  useEffect(() => {
-    if (!isStreaming) {
-      setAutoScroll(true)
-    }
-  }, [isStreaming])
 
   const handleToggleExpand = useCallback(() => {
     const willExpand = !expanded

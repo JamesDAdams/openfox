@@ -11,6 +11,7 @@ export interface ToolContext {
   sessionId: string
   sessionManager: SessionManager // Injected dependency (replaces singleton import)
   dangerLevel?: DangerLevel // When 'dangerous', bypass path confirmations
+  isSubAgent?: boolean // When true, sub-agent path restrictions apply (deny outside workdir unless dangerous)
   signal?: AbortSignal | undefined // For cancelling long-running operations (e.g., shell commands)
   onProgress?: ((message: string) => void) | undefined
   onEvent?: ((event: ServerMessage) => void) | undefined // For sending events to client (e.g., path confirmation)

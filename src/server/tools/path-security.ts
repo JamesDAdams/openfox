@@ -537,7 +537,29 @@ export async function requestPathAccess(
   onEvent: (event: ServerMessage) => void,
   dangerLevel?: string,
   command?: string,
+  isSubAgent?: boolean,
 ): Promise<void> {
+  // Sub-agent shortcut: skip all confirmation dialogs since they don't render
+  // properly in the small sub-agent window. Fail closed in normal mode;
+  // auto-approve everything in dangerous mode.
+  if (isSubAgent) {
+    const result = await checkPathsAccess(paths, workdir, sessionId)
+    if (!result.needsConfirmation) return
+
+    if (dangerLevel === 'dangerous') {
+      const allPaths = [...new Set([...result.deniedPaths, ...result.sensitivePaths])]
+      addAllowedPaths(sessionId, allPaths)
+      return
+    }
+
+    const allPaths = [...new Set([...result.deniedPaths, ...result.sensitivePaths])]
+    const hasDenied = result.deniedPaths.length > 0
+    const hasSensitive = result.sensitivePaths.length > 0
+    const reason: PathDenialReason =
+      hasDenied && hasSensitive ? 'both' : hasDenied ? 'outside_workdir' : 'sensitive_file'
+    throw new PathAccessDeniedError(allPaths, tool, reason)
+  }
+
   // Helper to emit path.confirmation_pending event
   const emitPendingEvent = (
     confirmationPaths: string[],
