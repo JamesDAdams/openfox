@@ -5,6 +5,7 @@ import type { Server } from 'node:http'
 import type { ServerMessage } from '../../shared/protocol.js'
 import type { GitDiffFile } from '../../shared/protocol.js'
 import { createServerMessage } from '../../shared/protocol.js'
+import { createSessionStateMessage } from './protocol.js'
 import { handleTerminalMessage, unsubscribeAllFromTerminal } from './terminal.js'
 import type { Config } from '../config.js'
 import type { LLMClientWithModel } from '../llm/client.js'
@@ -22,6 +23,8 @@ import { provideAnswer } from '../tools/index.js'
 import { logger } from '../utils/logger.js'
 import { devServerManager } from '../dev-server/manager.js'
 import { onProcessEvent } from '../tools/background-process/manager.js'
+import { buildMessagesFromStoredEvents, foldPendingConfirmations } from '../events/folding.js'
+import { getPendingQuestionsForSession } from '../tools/index.js'
 
 // Resolved once initial MCP connections settle — checkDynamic awaits this
 let resolveMcpReady: (() => void) | null = null
@@ -34,6 +37,7 @@ export function signalMcpReady(): void {
 }
 
 import { getAuthConfig, isValidToken } from '../auth.js'
+import { gitSpawnEnv } from '../git/env.js'
 import {
   parseClientMessage,
   serializeServerMessage,
@@ -53,6 +57,7 @@ function moduleGitBranch(cwd: string): Promise<string | null> {
   return new Promise((resolve) => {
     const proc = spawn('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
       cwd,
+      env: gitSpawnEnv(),
       stdio: ['ignore', 'pipe', 'ignore'],
       windowsHide: true,
     })
@@ -77,13 +82,16 @@ function hashContent(content: string): string {
 
 function moduleGitDiff(cwd: string): Promise<{ hash: string; files: GitDiffFile[] }> {
   return new Promise((resolve) => {
+    const env = gitSpawnEnv()
     const diffProc = spawn('git', ['diff', '--name-status', 'HEAD'], {
       cwd,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
     const statusProc = spawn('git', ['status', '--porcelain'], {
       cwd,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
@@ -580,6 +588,49 @@ export function createWebSocketServer(
     )
   })
 
+  // Session update events — broadcast session.state to session-specific clients
+  sessionManager.subscribe((event) => {
+    if (event.type === 'session_updated') {
+      const updatedSession = event.session
+      const eventStore = getEventStore()
+      const events = eventStore.getEvents(updatedSession.id)
+      const messages = buildMessagesFromStoredEvents(events)
+      const pendingConfirmations = foldPendingConfirmations(events)
+      const pendingQuestions = getPendingQuestionsForSession(updatedSession.id)
+
+      // Update activeWorkdir when worktree changed so git polling picks up the right dir
+      const effectiveWorkdir = updatedSession.worktree ?? updatedSession.workdir
+      let worktreeChanged = false
+
+      for (const [, client] of clients) {
+        if (client.activeSessionId === updatedSession.id && client.activeWorkdir !== effectiveWorkdir) {
+          worktreeChanged = true
+          const prevWorkdir = client.activeWorkdir
+          client.activeWorkdir = effectiveWorkdir
+          if (prevWorkdir) moduleStopGitPolling(prevWorkdir)
+        }
+      }
+      if (effectiveWorkdir) moduleStartGitPolling(effectiveWorkdir)
+
+      // Broadcast session.state immediately — synchronous, no await
+      broadcastForSession(
+        updatedSession.id,
+        createSessionStateMessage(updatedSession, messages, pendingConfirmations, pendingQuestions),
+      )
+
+      // If worktree changed, fetch git status in background and push as git.status message
+      // This avoids blocking session.state broadcast on git IO
+      if (worktreeChanged && effectiveWorkdir) {
+        ;(async () => {
+          const branch = await moduleGitBranch(effectiveWorkdir)
+          if (!branch) return
+          const { files } = await moduleGitDiff(effectiveWorkdir)
+          broadcastForSession(updatedSession.id, createGitStatusMessage(branch, files))
+        })()
+      }
+    }
+  })
+
   // Background process event listeners — broadcast to session-specific clients
   onProcessEvent((_processId, msg) => {
     const sessionId = msg.sessionId
@@ -837,15 +888,16 @@ async function handleClientMessage(
 
       // Tab model: set active session for event routing
       client.activeSessionId = session.id
-      client.activeWorkdir = session.workdir
+      const effectiveWorkdir = session.worktree ?? session.workdir
+      client.activeWorkdir = effectiveWorkdir
 
       // Send initial git status immediately
-      if (session.workdir) {
-        const branch = await moduleGitBranch(session.workdir)
-        const { files } = await moduleGitDiff(session.workdir)
+      if (effectiveWorkdir) {
+        const branch = await moduleGitBranch(effectiveWorkdir)
+        const { files } = await moduleGitDiff(effectiveWorkdir)
         const msg = createGitStatusMessage(branch, files)
         send(msg)
-        if (branch) moduleStartGitPolling(session.workdir)
+        if (branch) moduleStartGitPolling(effectiveWorkdir)
       }
 
       ensureEventStoreSubscription(session.id)
@@ -1147,7 +1199,6 @@ async function handleClientMessage(
         sessionId,
         llmClient: llmForSession(sessionId),
         statsIdentity: statsForSession(sessionId),
-        injectWorkflowKickoff: !hasUserMessage,
         ...(launchPayload?.workflowId ? { workflowId: launchPayload.workflowId } : {}),
         ...(launchPayload?.subGroup ? { subGroup: launchPayload.subGroup } : {}),
         ...(hasUserMessage

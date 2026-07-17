@@ -29,14 +29,18 @@ import {
   updateSessionDangerLevel,
   updateSessionRunning,
   updateSessionCachedPrompt,
+  updateSessionWorkdir,
   getSessionCachedPrompt,
   type DangerLevel,
 } from '../db/sessions.js'
 import { getProject } from '../db/projects.js'
+import { ensureWorktree, syncIgnoredAssets } from '../git/worktree.js'
+import { loadWorktreeConfig } from '../git/worktree-config.js'
 import { SessionNotFoundError } from '../utils/errors.js'
 import { logger } from '../utils/logger.js'
 import { EventEmitter, type Unsubscribe } from '../utils/async.js'
 import { getLspManager as getOrCreateLspManager, shutdownLspManager, type LspManager } from '../lsp/index.js'
+import { devServerManager } from '../dev-server/manager.js'
 import { getEventStore } from '../events/store.js'
 import {
   getSessionState,
@@ -135,7 +139,13 @@ export class SessionManager {
    * Create a new session. Emits session.initialized event.
    * Note: maxTokens is no longer stored in the session - it comes from the current model config
    */
-  createSession(projectId: string, title?: string, providerId?: string | null, providerModel?: string | null): Session {
+  createSession(
+    projectId: string,
+    title?: string,
+    providerId?: string | null,
+    providerModel?: string | null,
+    worktree?: string,
+  ): Session {
     const project = getProject(projectId)
     if (!project) {
       throw new Error(`Project not found: ${projectId}`)
@@ -148,15 +158,17 @@ export class SessionManager {
       sessionTitle = `Session ${existingSessions.sessions.length + 1}`
     }
 
-    logger.debug('Creating session', { projectId, workdir: project.workdir, title: sessionTitle })
+    const effectiveWorkdir = worktree ?? project.workdir
+
+    logger.debug('Creating session', { projectId, workdir: effectiveWorkdir, title: sessionTitle })
 
     // Create session in DB (minimal: id, projectId, workdir, title, timestamps)
-    const dbSession = dbCreateSession(projectId, project.workdir, sessionTitle, providerId, providerModel)
+    const dbSession = dbCreateSession(projectId, effectiveWorkdir, sessionTitle, providerId, providerModel, worktree)
 
     // Emit session.initialized event to EventStore
     // maxTokens is NOT stored here - it comes from providerManager.getCurrentModelContext() at query time
     const contextWindowId = crypto.randomUUID()
-    emitSessionInitialized(dbSession.id, projectId, project.workdir, contextWindowId, sessionTitle)
+    emitSessionInitialized(dbSession.id, projectId, effectiveWorkdir, contextWindowId, sessionTitle)
 
     // Build full session object
     const session = this.buildSessionFromDb(dbSession)
@@ -411,6 +423,7 @@ export class SessionManager {
       attachments?: Attachment[] // Optional image attachments
       subAgentId?: string
       subAgentType?: string
+      metadata?: { type: string; name: string; color: string; kind?: 'definition' | 'reminder' }
     } = {}
     if (contextWindowId !== undefined) options.contextWindowId = contextWindowId
     if (message.isSystemGenerated !== undefined) options.isSystemGenerated = message.isSystemGenerated
@@ -419,6 +432,7 @@ export class SessionManager {
     if (message.attachments !== undefined) options.attachments = message.attachments
     if (message.subAgentId !== undefined) options.subAgentId = message.subAgentId
     if (message.subAgentType !== undefined) options.subAgentType = message.subAgentType
+    if (message.metadata !== undefined) options.metadata = message.metadata
 
     // Emit message events
     const messageId = emitUserMessage(sessionId, message.content, options)
@@ -436,6 +450,7 @@ export class SessionManager {
     if (message.attachments !== undefined) result.attachments = message.attachments
     if (message.subAgentId !== undefined) result.subAgentId = message.subAgentId
     if (message.subAgentType !== undefined) result.subAgentType = message.subAgentType
+    if (message.metadata !== undefined) result.metadata = message.metadata
 
     // Emit internal event for subscribers
     this.emit({ type: 'message_added', sessionId, message: result })
@@ -621,15 +636,6 @@ export class SessionManager {
   // ============================================================================
   // Execution State (runtime tracking, not persisted to events)
   // ============================================================================
-
-  /**
-   * Record that a file was modified.
-   */
-  addModifiedFile(sessionId: string, filePath: string): void {
-    // In event model, this could be tracked via file.modified events
-    // For now, this is a no-op - modifications are tracked per-tool
-    logger.debug('addModifiedFile called', { sessionId, filePath })
-  }
 
   /**
    * Add a criterion. Returns the updated criteria list.
@@ -959,10 +965,142 @@ export class SessionManager {
 
   /**
    * Get the LSP manager for a session.
+   * Uses worktree path when active, otherwise the project workdir.
    */
   getLspManager(sessionId: string): LspManager {
     const session = this.requireSession(sessionId)
-    return getOrCreateLspManager(sessionId, session.workdir)
+    const effectiveWorkdir = session.worktree ?? session.workdir
+    return getOrCreateLspManager(sessionId, effectiveWorkdir)
+  }
+
+  // ============================================================================
+  // Worktree Lifecycle
+  // ============================================================================
+
+  /**
+   * Create a git worktree for an existing session and move the session into it.
+   * Keeps session.workdir as the project root (stable system prompt).
+   * Sets session.worktree to the worktree path for tool execution.
+   * Restarts LSP to pick up the new workdir.
+   * Injects a system reminder to inform the agent about the worktree.
+   */
+  async createSessionWorktree(sessionId: string, name: string): Promise<Session> {
+    const session = this.requireSession(sessionId)
+    const project = getProject(session.projectId)
+    if (!project) throw new Error(`Project not found: ${session.projectId}`)
+    if (session.worktree) throw new Error('Session already has a worktree')
+
+    const result = await ensureWorktree(project.workdir, name)
+
+    // Apply worktree asset strategy from config
+    const wtConfig = await loadWorktreeConfig(project.workdir)
+    if (wtConfig) {
+      await syncIgnoredAssets(project.workdir, result.path, wtConfig)
+    }
+
+    // Keep workdir as project root — only set worktree
+    updateSessionWorkdir(sessionId, project.workdir, result.path)
+
+    try {
+      await shutdownLspManager(sessionId)
+    } catch (err) {
+      logger.error('Error shutting down LSP for worktree switch', { sessionId, error: err })
+    }
+
+    // Inject system reminder so the agent knows it's in a worktree
+    const reminderContent = `<system-reminder>\nThis session is now operating in a git worktree at ${result.path}.\nAll file and git operations should use this directory.\n</system-reminder>`
+    this.addMessage(sessionId, {
+      role: 'user',
+      content: reminderContent,
+      isSystemGenerated: true,
+      messageKind: 'auto-prompt',
+      metadata: { type: 'worktree', name: 'Worktree', color: '#22c55e', kind: 'definition', branchName: name },
+    })
+
+    const updated = this.requireSession(sessionId)
+    this.emit({ type: 'session_updated', session: updated })
+    return updated
+  }
+
+  /**
+   * Attach session to an existing worktree by path.
+   * Sets session.worktree to the given path without creating a new worktree.
+   * Restarts LSP to pick up the new workdir.
+   */
+  async attachSessionWorktree(sessionId: string, wtPath: string): Promise<Session> {
+    const session = this.requireSession(sessionId)
+    if (session.worktree) throw new Error('Session already has a worktree')
+
+    updateSessionWorkdir(sessionId, session.workdir, wtPath)
+
+    try {
+      await shutdownLspManager(sessionId)
+    } catch (err) {
+      logger.error('Error shutting down LSP for worktree attach', { sessionId, error: err })
+    }
+
+    const branchName = wtPath.includes('/worktrees/') ? (wtPath.split('/worktrees/')[1] ?? wtPath) : wtPath
+    const reminderContent = `<system-reminder>\nThis session is now operating in a git worktree at ${wtPath}.\nAll file and git operations should use this directory.\n</system-reminder>`
+    this.addMessage(sessionId, {
+      role: 'user',
+      content: reminderContent,
+      isSystemGenerated: true,
+      messageKind: 'auto-prompt',
+      metadata: { type: 'worktree', name: 'Worktree', color: '#22c55e', kind: 'definition', branchName },
+    })
+
+    const updated = this.requireSession(sessionId)
+    this.emit({ type: 'session_updated', session: updated })
+    return updated
+  }
+
+  /**
+   * Close the worktree for a session and move it back to the project root.
+   * Clears session.worktree — session.workdir stays as project root.
+   * Restarts LSP to pick up the original workdir.
+   * Injects a system reminder to inform the agent the worktree is closed.
+   */
+  async closeSessionWorktree(sessionId: string): Promise<Session> {
+    const session = this.requireSession(sessionId)
+    if (!session.worktree) throw new Error('Session does not have a worktree')
+
+    const project = getProject(session.projectId)
+    if (!project) throw new Error(`Project not found: ${session.projectId}`)
+
+    const closedPath = session.worktree
+    const branchName = closedPath.includes('/worktrees/')
+      ? (closedPath.split('/worktrees/')[1] ?? closedPath)
+      : closedPath
+
+    // Stop the worktree's dev server if running
+    try {
+      await devServerManager.stop(closedPath)
+    } catch (err) {
+      logger.error('Error stopping dev server for worktree close', { sessionId, worktree: closedPath, error: err })
+    }
+
+    // Just clear worktree — workdir was never changed from project root
+    updateSessionWorkdir(sessionId, project.workdir, null)
+
+    try {
+      await shutdownLspManager(sessionId)
+    } catch (err) {
+      logger.error('Error shutting down LSP for worktree close', { sessionId, error: err })
+    }
+
+    // Inject system reminder that worktree is closed
+    const reminderContent = `<system-reminder>\nThe worktree at ${closedPath} has been closed.\nOperating in the original project directory at ${project.workdir}.\n</system-reminder>`
+    this.addMessage(sessionId, {
+      role: 'user',
+      content: reminderContent,
+      isSystemGenerated: true,
+      messageKind: 'auto-prompt',
+      metadata: { type: 'worktree', name: 'Worktree', color: '#ef4444', kind: 'reminder', branchName },
+    })
+
+    const updated = this.requireSession(sessionId)
+    this.emit({ type: 'session_updated', session: updated })
+    return updated
   }
 
   // ============================================================================
@@ -1063,10 +1201,24 @@ export class SessionManager {
       contextWindows: [], // Derived from events, not stored separately
       executionState:
         eventState.cachedSystemPrompt || cachedPrompt
-          ? ({
-              cachedSystemPrompt: cachedPrompt?.systemPrompt ?? eventState.cachedSystemPrompt,
-              dynamicContextHash: cachedPrompt?.hash ?? eventState.dynamicContextHash,
-            } as import('../../shared/types.js').ExecutionState)
+          ? {
+              iteration: 0,
+              readFiles: {},
+              consecutiveFailures: 0,
+              currentTokenCount: 0,
+              messageCountAtLastUpdate: messages.length,
+              compactionCount: 0,
+              startedAt: new Date().toISOString(),
+              lastActivityAt: new Date().toISOString(),
+              ...(cachedPrompt?.systemPrompt ? { cachedSystemPrompt: cachedPrompt.systemPrompt } : {}),
+              ...(eventState.cachedSystemPrompt && !cachedPrompt?.systemPrompt
+                ? { cachedSystemPrompt: eventState.cachedSystemPrompt }
+                : {}),
+              ...(cachedPrompt?.hash ? { dynamicContextHash: cachedPrompt.hash } : {}),
+              ...(eventState.dynamicContextHash && !cachedPrompt?.hash
+                ? { dynamicContextHash: eventState.dynamicContextHash }
+                : {}),
+            }
           : null,
     }
   }

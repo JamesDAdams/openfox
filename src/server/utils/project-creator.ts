@@ -76,8 +76,16 @@ export async function createDirectoryWithGit(projectName: string, workdir: strin
   }
 
   if (!(await directoryExists(join(fullPath, '.git')))) {
+    const cleanExecEnv = (): Record<string, string | undefined> => {
+      const env = { ...process.env }
+      delete env['GIT_DIR']
+      delete env['GIT_INDEX_FILE']
+      delete env['GIT_WORK_TREE']
+      delete env['GIT_PREFIX']
+      return env
+    }
     try {
-      execSync('git init', { cwd: fullPath, stdio: 'pipe', windowsHide: true })
+      execSync('git init', { cwd: fullPath, stdio: 'pipe', windowsHide: true, env: cleanExecEnv() })
     } catch (gitErr) {
       const errMsg = gitErr instanceof Error ? gitErr.message : 'Unknown'
       const exitCode = (gitErr as { status?: number }).status ?? (gitErr as { exitCode?: number }).exitCode
@@ -88,7 +96,12 @@ export async function createDirectoryWithGit(projectName: string, workdir: strin
       if (isPermission) {
         try {
           const currentUser = execSync('id -un', { encoding: 'utf-8', windowsHide: true }).trim()
-          execSync(`sudo -u ${currentUser} git init`, { cwd: fullPath, stdio: 'pipe', windowsHide: true })
+          execSync(`sudo -u ${currentUser} git init`, {
+            cwd: fullPath,
+            stdio: 'pipe',
+            windowsHide: true,
+            env: cleanExecEnv(),
+          })
           sudoSuccess = true
         } catch {
           // sudo also failed, fall through to error

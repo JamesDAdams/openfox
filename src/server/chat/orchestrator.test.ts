@@ -233,9 +233,6 @@ function createSessionManager(state: Record<string, any>) {
         criterion.id === criterionId ? { ...criterion, attempts: [...criterion.attempts, attempt] } : criterion,
       )
     }),
-    addModifiedFile: vi.fn((_: string, path: string) => {
-      state['current'].executionState = { ...(state['current'].executionState ?? {}), modifiedFiles: [path] }
-    }),
     addMessage: vi.fn((_: string, __: any) => ({
       id: crypto.randomUUID(),
       role: 'user',
@@ -713,7 +710,7 @@ describe('chat orchestrator', () => {
         phase: 'build',
         isRunning: true,
         criteria: [{ id: 'tests-pass', description: 'Tests pass', status: { type: 'pending' }, attempts: [] }],
-        executionState: { modifiedFiles: [] },
+        executionState: {},
         messages: [{ id: 'user-1', role: 'user', content: 'Build it' }],
       },
     }
@@ -787,11 +784,8 @@ describe('chat orchestrator', () => {
       'builder',
       appendMock,
       {
-        onToolExecuted: (toolCall, toolResult) => {
-          if (toolResult.success && ['write_file', 'edit_file'].includes(toolCall.name)) {
-            const path = toolCall.arguments['path'] as string
-            sessionManager.addModifiedFile('session-1', path)
-          }
+        onToolExecuted: (_toolCall, _toolResult) => {
+          // Hook for verifying tool execution in tests
         },
       },
     )
@@ -801,7 +795,6 @@ describe('chat orchestrator', () => {
     expect(appendedTypes).toContain('tool.call')
     expect(appendedTypes).toContain('tool.result')
     expect(appendedTypes).toContain('chat.done')
-    expect(sessionManager.addModifiedFile).toHaveBeenCalledWith('session-1', 'src/index.ts')
   })
 
   it('handles builder path denial and rethrows unexpected builder tool errors', async () => {
@@ -817,7 +810,7 @@ describe('chat orchestrator', () => {
         phase: 'build',
         isRunning: true,
         criteria: [{ id: 'tests-pass', description: 'Tests pass', status: { type: 'pending' }, attempts: [] }],
-        executionState: { modifiedFiles: [] },
+        executionState: {},
         messages: [{ id: 'user-1', role: 'user', content: 'Build it' }],
       },
     }
@@ -893,7 +886,7 @@ describe('chat orchestrator', () => {
         phase: 'build',
         isRunning: true,
         criteria: [{ id: 'tests-pass', description: 'Tests pass', status: { type: 'pending' }, attempts: [] }],
-        executionState: { modifiedFiles: [] },
+        executionState: {},
         messages: [{ id: 'user-1', role: 'user', content: 'Build it' }],
       },
     }
@@ -999,7 +992,7 @@ describe('chat orchestrator', () => {
         phase: 'build',
         isRunning: true,
         criteria: [{ id: 'tests-pass', description: 'Tests pass', status: { type: 'pending' }, attempts: [] }],
-        executionState: { modifiedFiles: [] },
+        executionState: {},
         messages: [{ id: 'user-1', role: 'user', content: 'Do something' }],
       },
     })
@@ -1084,7 +1077,7 @@ describe('chat orchestrator', () => {
         phase: 'build',
         isRunning: true,
         criteria: [{ id: 'c1', description: 'Test', status: { type: 'pending' }, attempts: [] }],
-        executionState: { modifiedFiles: [] },
+        executionState: {},
         messages: [{ id: 'user-1', role: 'user', content: 'Do something' }],
       },
     })
@@ -1156,7 +1149,7 @@ describe('chat orchestrator', () => {
         phase: 'build',
         isRunning: true,
         criteria: [{ id: 'c1', description: 'Test', status: { type: 'pending' }, attempts: [] }],
-        executionState: { modifiedFiles: [] },
+        executionState: {},
         messages: [{ id: 'user-1', role: 'user', content: 'Do something' }],
       },
     })
@@ -1205,7 +1198,7 @@ describe('chat orchestrator', () => {
         phase: 'build',
         isRunning: true,
         criteria: [{ id: 'c1', description: 'Test', status: { type: 'pending' }, attempts: [] }],
-        executionState: { modifiedFiles: [] },
+        executionState: {},
         messages: [{ id: 'user-1', role: 'user', content: 'Rename the helper function' }],
       },
     })
@@ -1259,7 +1252,7 @@ describe('chat orchestrator', () => {
         phase: 'build',
         isRunning: true,
         criteria: [{ id: 'c1', description: 'Test', status: { type: 'pending' }, attempts: [] }],
-        executionState: { modifiedFiles: [] },
+        executionState: {},
         messages: [{ id: 'user-1', role: 'user', content: 'Rename the helper function' }],
       },
     })
@@ -1394,7 +1387,7 @@ describe('chat orchestrator', () => {
           phase: 'build',
           isRunning: true,
           criteria: [{ id: 'c1', description: 'Test', status: { type: 'pending' }, attempts: [] }],
-          executionState: { modifiedFiles: [] },
+          executionState: {},
           messages: [],
         },
       })
@@ -1461,7 +1454,7 @@ describe('chat orchestrator', () => {
           phase: 'build',
           isRunning: true,
           criteria: [{ id: 'c1', description: 'Test', status: { type: 'pending' }, attempts: [] }],
-          executionState: { modifiedFiles: [] },
+          executionState: {},
           messages: [],
         },
       })
@@ -1540,7 +1533,7 @@ describe('chat orchestrator', () => {
           phase: 'build',
           isRunning: true,
           criteria: [{ id: 'c1', description: 'Test', status: { type: 'pending' }, attempts: [] }],
-          executionState: { modifiedFiles: [] },
+          executionState: {},
           messages: [],
         },
       })
@@ -1618,7 +1611,7 @@ describe('chat orchestrator', () => {
           phase: 'build',
           isRunning: true,
           criteria: [{ id: 'c1', description: 'Test', status: { type: 'pending' }, attempts: [] }],
-          executionState: { modifiedFiles: [] },
+          executionState: {},
           messages: [],
         },
       })

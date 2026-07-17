@@ -31,6 +31,7 @@ export interface Session {
   id: string
   projectId: string
   workdir: string
+  worktree?: string // Optional git worktree path
   mode: SessionMode
   phase: SessionPhase // Current workflow phase
   isRunning: boolean // Is the agent actively working?
@@ -81,6 +82,7 @@ export interface SessionSummary {
   projectId: string
   title?: string
   workdir: string
+  worktree?: string // Optional git worktree path
   mode: SessionMode
   phase: SessionPhase // Current workflow phase
   isRunning: boolean
@@ -245,9 +247,10 @@ export interface PreparingToolCall {
 export interface Attachment {
   id: string
   filename: string
-  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp' | 'image/svg+xml'
+  /** MIME type of the file (e.g. image/png, application/pdf, text/plain, application/json, etc.) */
+  mimeType: string
   size: number
-  data: string // base64-encoded image data
+  data: string // Raw UTF-8 text for text-based types; data: URL (base64) for images and PDFs
   description?: string // Vision fallback description (for non-vision models)
 }
 
@@ -277,7 +280,7 @@ export interface Message {
   subAgentId?: string // If set, this message belongs to a sub-agent process
   subAgentType?: string // Sub-agent ID from agent registry
   attachments?: Attachment[] // Optional image attachments
-  metadata?: { type: string; name: string; color: string; kind?: 'definition' | 'reminder' } // For auto-prompt messages
+  metadata?: { type: string; name: string; color: string; kind?: 'definition' | 'reminder'; branchName?: string } // For auto-prompt messages
 }
 
 // ============================================================================
@@ -406,7 +409,6 @@ export interface FileReadEntry {
 
 export interface ExecutionState {
   iteration: number
-  modifiedFiles: string[]
   readFiles: Record<string, FileReadEntry> // path → hash/timestamp for read-before-write validation
   consecutiveFailures: number
   lastFailedTool?: string

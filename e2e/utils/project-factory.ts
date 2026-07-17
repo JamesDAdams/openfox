@@ -192,11 +192,17 @@ export async function createTestProject(options: TestProjectOptions = {}): Promi
 
   // Initialize git repository if requested or using git-repo template
   if (initGit || template === 'git-repo') {
-    execSync('git init', { cwd: projectPath, stdio: 'ignore' })
-    execSync('git config user.email "test@example.com"', { cwd: projectPath, stdio: 'ignore' })
-    execSync('git config user.name "Test User"', { cwd: projectPath, stdio: 'ignore' })
-    execSync('git add -A', { cwd: projectPath, stdio: 'ignore' })
-    execSync('git commit -m "Initial commit"', { cwd: projectPath, stdio: 'ignore' })
+    const cleanEnv = { ...process.env }
+    delete cleanEnv['GIT_DIR']
+    delete cleanEnv['GIT_INDEX_FILE']
+    delete cleanEnv['GIT_WORK_TREE']
+    delete cleanEnv['GIT_PREFIX']
+    const execOpts = { cwd: projectPath, stdio: 'ignore' as const, env: cleanEnv }
+    execSync('git init --initial-branch=main', execOpts)
+    execSync('git config user.email "test@example.com"', execOpts)
+    execSync('git config user.name "Test User"', execOpts)
+    execSync('git add -A', execOpts)
+    execSync('git commit -m "Initial commit"', execOpts)
   }
 
   return {

@@ -36,17 +36,21 @@ interface ProxyInstance {
 const proxyPool = new Map<string, ProxyInstance>()
 let nextOffset = 0
 
-function getAvailablePort(): number {
-  const base = Number(process.env['OPENFOX_PORT'] ?? 10369)
-  const used = new Set<number>()
-  for (const instance of proxyPool.values()) {
-    const addr = instance.server.address()
-    if (addr && typeof addr === 'object') used.add(addr.port)
+async function getAvailablePort(proxyBase: number): Promise<number> {
+  for (let port = proxyBase; port < proxyBase + 200; port++) {
+    if (await tryBind(port)) return port
   }
-  for (let port = base + 1; port < base + 200; port++) {
-    if (!used.has(port)) return port
-  }
-  return base + ((nextOffset++ % 200) + 1)
+  return proxyBase + (nextOffset++ % 200)
+}
+
+function tryBind(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer()
+    server.on('error', () => resolve(false))
+    server.listen(port, '127.0.0.1', () => {
+      server.close(() => resolve(true))
+    })
+  })
 }
 
 function parseReqHeaders(str: string): { method: string; url: string; headers: Record<string, string> } {
@@ -104,12 +108,14 @@ function dechunk(buf: Buffer): Buffer {
   return Buffer.concat(parts)
 }
 
-export function startInspectProxy(
+export async function startInspectProxy(
   target: string,
   sessionManager: SessionManager,
+  devServerPort: number,
   workdir?: string,
-): { port: number; cleanup: () => void } {
-  const port = getAvailablePort()
+): Promise<{ port: number; cleanup: () => void }> {
+  // Place the proxy at devServerPort + 1000 to avoid colliding with the dev server's port range
+  const port = await getAvailablePort(devServerPort + 1000)
 
   const server = net.createServer((client) => {
     let clientHead = ''

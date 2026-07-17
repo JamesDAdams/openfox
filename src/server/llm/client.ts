@@ -17,6 +17,7 @@ import {
   buildStreamingCreateParams,
   mapFinishReason,
   getThinking,
+  parseToolArguments,
 } from './client-pure.js'
 import { OpenAIHttpClient } from './http-client.js'
 
@@ -119,11 +120,10 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
         const content = message.content ?? ''
         const thinkingContent = getThinking(message as Record<string, string | null>, thinkingField) ?? ''
 
-        const toolCalls = message.tool_calls?.map((tc) => ({
-          id: tc.id,
-          name: tc.function.name,
-          arguments: JSON.parse(tc.function.arguments) as Record<string, unknown>,
-        }))
+        const toolCalls = message.tool_calls?.map((tc) => {
+          const { arguments: args, parseError } = parseToolArguments(tc.function.arguments, { id: tc.id, name: tc.function.name })
+          return { id: tc.id, name: tc.function.name, arguments: args, ...(parseError ? { parseError } : {}) }
+        })
 
         return {
           id: httpResponse.id,
@@ -301,21 +301,21 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
         // Parse tool calls
         const parsedToolCalls: ToolCall[] = []
         for (const [, tc] of toolCalls) {
-          try {
+          const { arguments: args, parseError } = parseToolArguments(tc.arguments, { id: tc.id, name: tc.name })
+          if (parseError) {
+            logger.warn('Failed to parse tool call arguments', { name: tc.name, arguments: tc.arguments, parseError })
             parsedToolCalls.push({
               id: tc.id,
               name: tc.name,
-              arguments: JSON.parse(tc.arguments) as Record<string, unknown>,
-            })
-          } catch (error) {
-            logger.warn('Failed to parse tool call arguments', { name: tc.name, arguments: tc.arguments })
-            // Include the failed tool call with error metadata so the LLM can retry
-            parsedToolCalls.push({
-              id: tc.id,
-              name: tc.name,
-              arguments: {},
-              parseError: error instanceof Error ? error.message : 'Unknown JSON parse error',
+              arguments: args,
+              parseError,
               rawArguments: tc.arguments,
+            })
+          } else {
+            parsedToolCalls.push({
+              id: tc.id,
+              name: tc.name,
+              arguments: args,
             })
           }
         }

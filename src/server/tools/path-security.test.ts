@@ -36,8 +36,16 @@ let CANONICAL_PASSWD: string
 let CANONICAL_VAR_LOG_SYSLOG: string
 let CANONICAL_ETC_ENV: string
 
+const REAL_PLATFORM = process.platform
+
+/** Pin process.platform so platform-dependent extraction logic is deterministic. */
+function mockPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+}
+
 describe('path-security', () => {
   beforeEach(async () => {
+    mockPlatform('linux')
     CANONICAL_TMP = await realpath(tmpdir())
     CANONICAL_PASSWD = await realpath('/etc/passwd')
     CANONICAL_VAR_LOG_SYSLOG = join(await realpath('/var'), 'log', 'syslog')
@@ -52,6 +60,7 @@ describe('path-security', () => {
   })
 
   afterEach(async () => {
+    mockPlatform(REAL_PLATFORM)
     // Cleanup
     await rm(TEST_DIR, { recursive: true, force: true })
   })
@@ -697,6 +706,93 @@ describe('path-security', () => {
 
         // Note: To test session allowlist, we'd need to add to allowlist first
         // This is tested in the full flow integration tests
+      })
+    })
+
+    describe('worktree paths', () => {
+      it('allows cd to worktree path when workdir is the worktree itself', async () => {
+        // Simulate a session in a git worktree:
+        //   session.worktree = /project/worktrees/my-feature
+        //   context.workdir = session.worktree (the effective workdir)
+        // Command: cd /project/worktrees/my-feature && npx vitest run some/test.ts
+        //
+        // The cd path IS the workdir — should be auto-allowed without confirmation.
+        const worktreeDir = join(TEST_DIR, 'worktrees', 'my-feature')
+        await mkdir(worktreeDir, { recursive: true })
+
+        const command = `cd ${worktreeDir} && npx vitest run src/server/providers/plugins/registry.test.ts 2>&1`
+        const extractedPaths = extractAbsolutePathsFromCommand(command)
+
+        // The cd path should be extracted
+        expect(extractedPaths).toContain(worktreeDir)
+
+        // Simulate what shell.ts does: check workdir + extracted paths
+        const pathsToCheck = [worktreeDir, ...extractedPaths]
+        const result = await checkPathsAccess(pathsToCheck, worktreeDir)
+
+        // The worktree path IS the workdir — should be allowed
+        expect(result.needsConfirmation).toBe(false)
+        expect(result.deniedPaths).toEqual([])
+        expect(result.sensitivePaths).toEqual([])
+      })
+
+      it('allows paths inside worktree subdirectory', async () => {
+        // When workdir is a worktree path, subdirectory paths should be allowed
+        const worktreeDir = join(TEST_DIR, 'worktrees', 'subdir-test')
+        const subDir = join(worktreeDir, 'packages', 'plugin-a')
+        await mkdir(subDir, { recursive: true })
+
+        const result = await checkPathsAccess([subDir], worktreeDir)
+        expect(result.needsConfirmation).toBe(false)
+        expect(result.deniedPaths).toEqual([])
+      })
+
+      it('denies path outside worktree even when workdir is worktree', async () => {
+        // When workdir is a worktree path, paths outside should still be denied
+        const worktreeDir = join(TEST_DIR, 'worktrees', 'outside-test')
+        await mkdir(worktreeDir, { recursive: true })
+
+        const result = await checkPathsAccess(['/etc/passwd'], worktreeDir)
+        expect(result.needsConfirmation).toBe(true)
+        expect(result.deniedPaths).toContain(CANONICAL_PASSWD)
+      })
+
+      it('allows cd to worktree path even when it has trailing slash differences', async () => {
+        // Trailing slashes should be normalized away
+        const worktreeDir = join(TEST_DIR, 'worktrees', 'trailing-slash')
+        await mkdir(worktreeDir, { recursive: true })
+
+        const command = `cd ${worktreeDir}/ && npx vitest run test.ts`
+        const extractedPaths = extractAbsolutePathsFromCommand(command)
+
+        const pathsToCheck = [worktreeDir, ...extractedPaths]
+        const result = await checkPathsAccess(pathsToCheck, worktreeDir)
+
+        expect(result.needsConfirmation).toBe(false)
+      })
+
+      it('allows cd to worktree path when command uses resolved canonical path', async () => {
+        // If workdir is stored as a realpath-resolved path and the command
+        // uses the unresolved path (or vice versa), they should still match
+        // because isPathWithinSandbox resolves both sides.
+        const worktreeDir = join(TEST_DIR, 'worktrees', 'canonical-test')
+        await mkdir(worktreeDir, { recursive: true })
+        const canonicalWorktree = await realpath(worktreeDir)
+
+        // Use a symlink to the worktree (simulates accessing via a different path)
+        const symlinkDir = join(TEST_DIR, 'worktrees', 'canonical-link')
+        await mkdir(join(TEST_DIR, 'worktrees'), { recursive: true })
+        await symlink(worktreeDir, symlinkDir)
+
+        const command = `cd ${symlinkDir} && npx vitest run test.ts`
+        const extractedPaths = extractAbsolutePathsFromCommand(command)
+
+        // Workdir is the canonical path, command uses symlink path
+        const pathsToCheck = [canonicalWorktree, ...extractedPaths]
+        const result = await checkPathsAccess(pathsToCheck, canonicalWorktree)
+
+        // Both resolve to the same canonical path — should be allowed
+        expect(result.needsConfirmation).toBe(false)
       })
     })
   })
@@ -1498,5 +1594,57 @@ describe('path-security', () => {
       expect(onEvent).not.toHaveBeenCalled()
       expect(hasPendingPathConfirmation('call-sub-cmd-normal')).toBe(false)
     })
+  })
+})
+
+// Standalone: no fs fixtures needed, so it runs on any host (the main suite's
+// fixtures assume Unix paths like /etc/passwd).
+describe('extractAbsolutePathsFromCommand on Windows (cmd.exe shell)', () => {
+  beforeEach(() => {
+    mockPlatform('win32')
+  })
+
+  afterEach(() => {
+    mockPlatform(REAL_PLATFORM)
+  })
+
+  it('treats /tokens as cmd switches, not paths', () => {
+    expect(extractAbsolutePathsFromCommand('dir /s /b')).toEqual([])
+    expect(extractAbsolutePathsFromCommand('findstr /i /n "error" log.txt')).toEqual([])
+  })
+
+  it('extracts drive-letter absolute paths (the pre-fix security gap)', () => {
+    const paths = extractAbsolutePathsFromCommand('type C:\\secrets\\creds.txt')
+    expect(paths).toEqual(['C:\\secrets\\creds.txt'])
+  })
+
+  it('extracts drive-letter paths written with forward slashes', () => {
+    const paths = extractAbsolutePathsFromCommand('type C:/secrets/creds.txt')
+    expect(paths).toHaveLength(1)
+    // normalize() separator conversion depends on the host platform
+    expect(paths[0]).toMatch(/^C:[\\/]secrets[\\/]creds\.txt$/)
+  })
+
+  it('extracts quoted drive-letter paths with spaces', () => {
+    const paths = extractAbsolutePathsFromCommand('type "C:\\path with spaces\\file.txt"')
+    expect(paths).toEqual(['C:\\path with spaces\\file.txt'])
+  })
+
+  it('extracts the path but not the switches in a mixed command', () => {
+    expect(extractAbsolutePathsFromCommand('dir /s C:\\projects')).toEqual(['C:\\projects'])
+  })
+
+  it('deduplicates and handles multiple drive paths', () => {
+    const paths = extractAbsolutePathsFromCommand('copy D:\\a.txt E:\\b.txt & type D:\\a.txt')
+    expect(paths).toEqual(['D:\\a.txt', 'E:\\b.txt'])
+  })
+
+  it('does not extract unix-style quoted strings', () => {
+    expect(extractAbsolutePathsFromCommand('echo "/etc/passwd"')).toEqual([])
+  })
+
+  it('still expands tilde paths', () => {
+    const paths = extractAbsolutePathsFromCommand('cat ~/file.txt')
+    expect(paths).toContain(join(homedir(), 'file.txt'))
   })
 })

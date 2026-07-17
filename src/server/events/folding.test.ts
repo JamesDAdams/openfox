@@ -902,9 +902,11 @@ describe('event folding', () => {
       criteria: [],
       metadataEntries: {},
       contextState: {
-        currentTokens: 100,
+        // Note: currentTokens and compactionCount come from folded events,
+        // not from executionState (which is a legacy cache that's never updated)
+        currentTokens: 0,
         maxTokens: 200000,
-        compactionCount: 2,
+        compactionCount: 0,
         dangerZone: false,
         canCompact: false,
         dynamicContextChanged: false,

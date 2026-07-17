@@ -37,7 +37,6 @@ vi.mock('../chat/orchestrator.js', () => ({
     },
   ),
   createMessageStartEvent: vi.fn(() => ({ type: 'message.start', data: {} })),
-  injectWorkflowKickoffIfNeeded: vi.fn(),
   TurnMetrics: class TurnMetrics {
     start = vi.fn()
     end = vi.fn()
@@ -105,7 +104,6 @@ describe('executeWorkflow mode changes', () => {
       setMode,
       setPhase,
       addMessage: vi.fn(),
-      addModifiedFile: vi.fn(),
     }
 
     options = {

@@ -83,9 +83,9 @@ export async function loadLanguage(lang: string): Promise<void> {
       return
     }
 
-    // Fallback: try dynamic import with proper path resolution for Vite
+    // Fallback: try dynamic import for languages not in bundled set
     try {
-      const langModule = await import(`shiki/langs/${lang}.mjs`)
+      const langModule = await import(/* @vite-ignore */ `shiki/langs/${lang}.mjs`)
       if (langModule.default) {
         await h.loadLanguage(langModule.default)
         loadedLanguages.add(lang)

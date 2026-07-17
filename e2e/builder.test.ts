@@ -315,19 +315,4 @@ describe('Builder Mode', () => {
       await client.waitForChatDone()
     })
   })
-
-  describe('Modified Files Tracking', () => {
-    it('tracks files modified during session', async () => {
-      await client.send('chat.send', {
-        content: 'Create a file at src/new.ts with content "export const x = 1"',
-      })
-      await client.waitForChatDone()
-
-      const session = client.getSession()!
-      // Note: Modified files are tracked in executionState
-      if (session.executionState) {
-        expect(session.executionState.modifiedFiles).toBeDefined()
-      }
-    })
-  })
 })

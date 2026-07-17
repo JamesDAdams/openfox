@@ -5,6 +5,7 @@ import { useConfigStore } from '../../stores/config'
 import { useSessionStore } from '../../stores/session'
 import { authFetch } from '../../lib/api'
 import { formatTime, formatSpeed } from '../../lib/format-stats'
+import { formatMetadataKeyLabel } from '../../lib/metadata-keys'
 import { StatsModal } from './StatsModal'
 import { MetadataEntries, MetadataSectionHeader } from '../shared/MetadataEntries'
 import { CriteriaEditor } from './CriteriaEditor'
@@ -13,6 +14,7 @@ import { BackgroundProcesses } from './BackgroundProcesses'
 import { BranchIcon, ReloadIcon } from '../shared/icons'
 import { AutoUpdateModal } from '../AutoUpdateModal'
 import { DiffViewer } from './DiffViewer'
+import { BranchModal } from './BranchModal'
 import type { Message } from '@shared/types.js'
 
 interface SessionSidebarProps {
@@ -25,11 +27,14 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [showBranchModal, setShowBranchModal] = useState(false)
 
   const stats = useSessionStats(messages)
   const { branch } = useGitStatus()
   const version = useConfigStore((state) => state.version)
   const session = useSessionStore((state) => state.currentSession)
+
+  const hasWorktree = !!session?.worktree
 
   const checkForUpdate = useCallback(async () => {
     setCheckingUpdate(true)
@@ -80,35 +85,55 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
         <div className="mt-4">
           <MetadataSectionHeader entries={session?.metadataEntries?.['criteria'] ?? []} title="Acceptance Criteria" />
           {session && <CriteriaEditor entries={session?.metadataEntries?.['criteria'] ?? []} sessionId={session.id} />}
-          {session && (session.metadataEntries?.['review_findings']?.length ?? 0) > 0 && (
-            <div className="mt-6">
-              <MetadataSectionHeader entries={session.metadataEntries!['review_findings']!} title="Review Findings" />
-              <MetadataEntries
-                entries={session.metadataEntries!['review_findings']!}
-                onClearAll={async () => {
-                  try {
-                    await authFetch(`/api/sessions/${session.id}/review-findings`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ review_findings: [] }),
-                    })
-                  } catch (e) {
-                    console.error('Failed to clear review findings:', e)
-                  }
-                }}
-              />
-            </div>
-          )}
+          {session &&
+            (() => {
+              const knownOrder = ['review_findings', 'todos']
+              const all = session.metadataEntries ?? {}
+              const known = knownOrder.filter((k) => k in all)
+              const unknown = Object.keys(all)
+                .filter((k) => k !== 'criteria' && !knownOrder.includes(k))
+                .sort()
+              return [...known, ...unknown]
+                .filter((key) => (all[key]?.length ?? 0) > 0)
+                .map((key) => (
+                  <div key={key} className="mt-6">
+                    <MetadataSectionHeader entries={all[key]!} title={formatMetadataKeyLabel(key)} />
+                    <MetadataEntries
+                      entries={all[key]!}
+                      onClearAll={async () => {
+                        try {
+                          await authFetch(`/api/sessions/${session.id}/metadata/${key}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ entries: [] }),
+                          })
+                        } catch (e) {
+                          console.error(`Failed to clear ${key}:`, e)
+                        }
+                      }}
+                    />
+                  </div>
+                ))
+            })()}
         </div>
       </div>
 
       {/* Git branch — above separator */}
       {branch && (
-        <div className="mt-4 flex items-center gap-2 text-sm">
-          <BranchIcon />
-          <span className="truncate text-text-secondary" title={branch}>
-            {branch}
-          </span>
+        <div className="mt-4">
+          <div className="flex items-center gap-2 text-sm">
+            <BranchIcon />
+            <span className="truncate text-text-secondary" title={branch}>
+              {branch}
+            </span>
+            {hasWorktree && <span className="text-xs text-accent-primary ml-1 font-medium">worktree</span>}
+            <button
+              onClick={() => setShowBranchModal(true)}
+              className="ml-auto px-2 py-0.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:bg-bg-secondary transition-colors"
+            >
+              Edit
+            </button>
+          </div>
         </div>
       )}
 
@@ -153,6 +178,18 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
       )}
 
       <AutoUpdateModal isOpen={showUpdateModal} onClose={() => setShowUpdateModal(false)} versionInfo={null} />
+
+      {session && (
+        <BranchModal
+          isOpen={showBranchModal}
+          onClose={() => setShowBranchModal(false)}
+          projectId={session.projectId}
+          sessionId={session.id}
+          currentBranch={branch}
+          hasWorktree={hasWorktree}
+          worktreeBranch={branch}
+        />
+      )}
     </div>
   )
 }

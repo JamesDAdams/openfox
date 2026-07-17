@@ -89,7 +89,6 @@ describe('SubAgentManager', () => {
       getCurrentWindowMessages: vi.fn().mockReturnValue([]),
       updateMessage: vi.fn(),
       getQueueState: vi.fn().mockReturnValue({ queued: 0, processing: false }),
-      addModifiedFile: vi.fn(),
     } as unknown as SessionManager
 
     let llmCallCount = 0
@@ -224,14 +223,12 @@ describe('SubAgentManager', () => {
       'run_command',
       'web_fetch',
       'session_metadata',
-      'trace_code',
     ])
 
     expect(findAgentById('explorer', agents)?.metadata.allowedTools).toEqual([
       'read_file',
       'run_command',
       'web_fetch',
-      'trace_code',
     ])
   })
 

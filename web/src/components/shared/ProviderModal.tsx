@@ -814,7 +814,7 @@ export function ProviderModal({
       url: formUrl,
       backend: (formBackend || 'unknown') as Backend,
       apiKey: formApiKey || undefined,
-      isLocal: formIsLocal || undefined,
+      isLocal: formIsLocal,
       thinkingField: thinkingField || undefined,
       authAdapter: formAuthAdapter,
       transportAdapter: formTransportAdapter,
@@ -907,7 +907,10 @@ export function ProviderModal({
                   onClick={() => {
                     setFormBackend('unknown')
                     setFormIsLocal(false)
+                    setFormAuthAdapter(undefined)
+                    setFormTransportAdapter(undefined)
                     setFetchError(null)
+                    resetStep2()
                   }}
                   className={`p-2 rounded border text-center text-sm transition-colors ${
                     formBackend === 'unknown'
@@ -939,7 +942,10 @@ export function ProviderModal({
                         setFormUrl((prev) => prev || `http://localhost:${port}`)
                         setFormBackend(backendMap[port] ?? '')
                         setFormIsLocal(true)
+                        setFormAuthAdapter(undefined)
+                        setFormTransportAdapter(undefined)
                         setFetchError(null)
+                        resetStep2()
                       }}
                       className={`p-2 rounded border text-center text-sm transition-colors ${
                         formBackend === backendMap[port]

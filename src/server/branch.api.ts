@@ -2,6 +2,7 @@ import type { Request, Response } from 'express'
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import { logger } from './utils/logger.js'
+import { gitSpawnEnv } from './git/env.js'
 
 /**
  * GET /api/branch
@@ -32,6 +33,7 @@ function getGitBranch(cwd: string): Promise<string | null> {
   return new Promise((resolve) => {
     const proc = spawn('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
       cwd,
+      env: gitSpawnEnv(),
       stdio: ['ignore', 'pipe', 'ignore'],
       windowsHide: true,
     })

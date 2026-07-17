@@ -162,7 +162,11 @@ describe('InspectProxy', () => {
         res.end('<html><body><h1>Hello</h1></body></html>')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/')
         expect(result.status).toBe(200)
@@ -180,7 +184,11 @@ describe('InspectProxy', () => {
         res.end('<html><head><title>Test</title></head><div>content</div></html>')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/')
         expect(result.status).toBe(200)
@@ -198,7 +206,11 @@ describe('InspectProxy', () => {
         res.end(compressed)
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/')
         expect(result.status).toBe(200)
@@ -215,7 +227,11 @@ describe('InspectProxy', () => {
         res.end(compressed)
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/')
         expect(result.status).toBe(200)
@@ -235,7 +251,11 @@ describe('InspectProxy', () => {
         res.end('0\r\n\r\n')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/')
         expect(result.status).toBe(200)
@@ -253,7 +273,11 @@ describe('InspectProxy', () => {
         res.end('body { color: red; }')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/style.css')
         expect(result.status).toBe(200)
@@ -270,7 +294,11 @@ describe('InspectProxy', () => {
         res.end('console.log("hello");')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/script.js')
         expect(result.status).toBe(200)
@@ -287,7 +315,11 @@ describe('InspectProxy', () => {
         res.end('{"ok":true}')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/data.json')
         expect(result.status).toBe(200)
@@ -305,7 +337,11 @@ describe('InspectProxy', () => {
         res.end('ok')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpPost(
           '127.0.0.1',
@@ -337,7 +373,11 @@ describe('InspectProxy', () => {
         res.end('ok')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpPost(
           '127.0.0.1',
@@ -357,7 +397,11 @@ describe('InspectProxy', () => {
         res.end('ok')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         await httpPost(
           '127.0.0.1',
@@ -382,7 +426,11 @@ describe('InspectProxy', () => {
         res.end('ok')
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/__openfox_sessions')
         expect(result.status).toBe(200)
@@ -404,7 +452,12 @@ describe('InspectProxy', () => {
       })
 
       // proj-1 has workdir /tmp, so passing /tmp should filter to sessions 1 and 2
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any, '/tmp')
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+        '/tmp',
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/__openfox_sessions')
         expect(result.status).toBe(200)
@@ -426,7 +479,11 @@ describe('InspectProxy', () => {
         res.destroy()
       })
 
-      const { port, cleanup } = startInspectProxy(`http://127.0.0.1:${targetPort}`, mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy(
+        `http://127.0.0.1:${targetPort}`,
+        mockSessionManager as any,
+        targetPort,
+      )
       try {
         const result = await httpGet('127.0.0.1', port, '/')
         expect(result.status).toBeGreaterThanOrEqual(0)
@@ -436,7 +493,7 @@ describe('InspectProxy', () => {
     })
 
     it('handles unreachable target gracefully', async () => {
-      const { port, cleanup } = startInspectProxy('http://127.0.0.1:1', mockSessionManager as any)
+      const { port, cleanup } = await startInspectProxy('http://127.0.0.1:1', mockSessionManager as any, 9001)
       try {
         const result = await httpGet('127.0.0.1', port, '/')
         expect(result.status).toBeGreaterThanOrEqual(0)

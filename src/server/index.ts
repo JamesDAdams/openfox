@@ -35,6 +35,7 @@ import { createAgentRoutes } from './routes/agents.js'
 import { loadAllAgentsDefault, getTopLevelAgents } from './agents/registry.js'
 import { createWorkflowRoutes } from './routes/workflows.js'
 import { createDevServerRoutes } from './routes/dev-server.js'
+import { createWorktreeConfigRoutes } from './routes/worktree-config.js'
 import { createTerminalRoutes } from './routes/terminals.js'
 import { createDirectoryRoutes } from './routes/directories.js'
 import { createFileSearchRoutes } from './routes/file-search.js'
@@ -43,6 +44,7 @@ import { createProviderAuthRoutes } from './routes/provider-auth.js'
 import { devServerManager } from './dev-server/manager.js'
 import { getGlobalConfigDir } from '../cli/paths.js'
 import { ProviderRegistry, loadProviderPlugins } from './providers/plugins/index.js'
+import { createPluginRoutes } from './routes/plugins.js'
 import { logger, setLogLevel } from './utils/logger.js'
 import { VERSION } from '../constants.js'
 import {
@@ -383,6 +385,62 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     res.json({ project })
   })
 
+  // Branch management endpoints (project-scoped, repo operations)
+
+  /** List local git branches */
+  app.get('/api/projects/:id/branches', async (req, res) => {
+    const { getProject } = await import('./db/projects.js')
+    const project = getProject(req.params.id)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    const { listBranches } = await import('./git/worktree.js')
+    const branches = await listBranches(project.workdir)
+    res.json({ branches })
+  })
+
+  /** Switch to an existing branch */
+  app.post('/api/projects/:id/checkout', async (req, res) => {
+    const { getProject } = await import('./db/projects.js')
+    const project = getProject(req.params.id)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    const { branch } = req.body
+    if (!branch || typeof branch !== 'string') return res.status(400).json({ error: 'branch is required' })
+    const { checkoutBranch } = await import('./git/worktree.js')
+    try {
+      await checkoutBranch(project.workdir, branch)
+      res.json({ branch })
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to checkout branch' })
+    }
+  })
+
+  /** Create and switch to a new branch */
+  app.post('/api/projects/:id/checkout-new', async (req, res) => {
+    const { getProject } = await import('./db/projects.js')
+    const project = getProject(req.params.id)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    const { name } = req.body
+    if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name is required' })
+    const { createBranch } = await import('./git/worktree.js')
+    try {
+      await createBranch(project.workdir, name)
+      res.json({ branch: name })
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to create branch' })
+    }
+  })
+
+  /** List existing git worktrees for a project (excluding the main repo) */
+  app.get('/api/projects/:id/worktrees', async (req, res) => {
+    const { getProject } = await import('./db/projects.js')
+    const project = getProject(req.params.id)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    const { listWorktrees } = await import('./git/worktree.js')
+    const all = await listWorktrees(project.workdir)
+    // Filter out the main worktree (the repo itself) — only show linked worktrees
+    const worktrees = all.filter((wt) => wt.path !== project.workdir)
+    res.json({ worktrees })
+  })
+
   // Session endpoints (REST)
 
   app.get('/api/sessions', async (req, res) => {
@@ -428,6 +486,51 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     // maxTokens is no longer passed - it comes from providerManager.getCurrentModelContext() at query time
     const session = sessionManager.createSession(projectId, title, providerId ?? null, model ?? null)
     res.status(201).json({ session })
+  })
+
+  /** Create a git worktree for a session and move the session into it */
+  app.post('/api/sessions/:id/worktree', async (req, res) => {
+    const session = sessionManager.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+
+    const { name } = req.body
+    if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name is required' })
+
+    try {
+      const updated = await sessionManager.createSessionWorktree(req.params.id, name)
+      res.json({ session: updated })
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to create worktree' })
+    }
+  })
+
+  /** Close the worktree for a session and move it back to the project root */
+  app.post('/api/sessions/:id/close-worktree', async (req, res) => {
+    const session = sessionManager.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+
+    try {
+      const updated = await sessionManager.closeSessionWorktree(req.params.id)
+      res.json({ session: updated })
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to close worktree' })
+    }
+  })
+
+  /** Attach session to an existing worktree by path */
+  app.post('/api/sessions/:id/attach-worktree', async (req, res) => {
+    const session = sessionManager.getSession(req.params.id)
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+
+    const { path } = req.body
+    if (!path || typeof path !== 'string') return res.status(400).json({ error: 'path is required' })
+
+    try {
+      const updated = await sessionManager.attachSessionWorktree(req.params.id, path)
+      res.json({ session: updated })
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to attach worktree' })
+    }
   })
 
   app.get('/api/sessions/:id', async (req, res) => {
@@ -588,6 +691,42 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       status: c.status ?? 'open',
     }))
     sessionManager.setMetadataEntries(sessionId, 'review_findings', entries)
+    res.json({ success: true })
+  })
+
+  app.put('/api/sessions/:id/metadata/:key', async (req, res) => {
+    const sessionId = req.params.id
+    const key = req.params.key
+    const session = sessionManager.getSession(sessionId)
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+
+    const { entries } = req.body
+    if (!Array.isArray(entries)) {
+      return res.status(400).json({ error: 'entries is required and must be an array' })
+    }
+
+    for (let i = 0; i < entries.length; i++) {
+      const c = entries[i]
+      if (c === null || typeof c !== 'object' || Array.isArray(c)) {
+        return res.status(400).json({ error: `entries[${i}] must be an object` })
+      }
+      if (c.description !== undefined && typeof c.description !== 'string') {
+        return res.status(400).json({ error: `entries[${i}].description must be a string` })
+      }
+      if (c.status !== undefined && typeof c.status !== 'string') {
+        return res.status(400).json({ error: `entries[${i}].status must be a string` })
+      }
+    }
+
+    const mapped = entries.map((c: { id?: string; description?: string; status?: string; [key: string]: unknown }, i: number) => ({
+      ...c,
+      id: c.id != null ? String(c.id) : String(i),
+      description: c.description ?? '',
+      status: c.status ?? 'open',
+    }))
+    sessionManager.setMetadataEntries(sessionId, key, mapped)
     res.json({ success: true })
   })
 
@@ -999,6 +1138,12 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     } catch {
       res.json({ available: false })
     }
+  })
+
+  // Shells available for the tools.shell setting (Windows only; empty elsewhere)
+  app.get('/api/tools/shells', async (_req, res) => {
+    const { listAvailableShells } = await import('./utils/platform.js')
+    res.json({ shells: listAvailableShells() })
   })
 
   // Config endpoint
@@ -1477,6 +1622,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
   })
 
+  app.use('/api/plugins', createPluginRoutes({ config, providerAdapters, pluginDiagnostics, logger }))
   app.get('/api/plugins', (_req, res) => res.json({ plugins: pluginDiagnostics }))
   app.get('/api/provider-presets', (_req, res) => res.json({ presets: providerAdapters.getPresets() }))
   app.get('/api/provider-adapters', (_req, res) =>
@@ -1746,6 +1892,78 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
   })
 
+  app.put('/api/mcp/servers/:name', async (req, res) => {
+    const { name } = req.params
+    const existing = mcpManager.getServer(name)
+    if (!existing) {
+      return res.status(404).json({ error: `MCP server '${name}' not found` })
+    }
+
+    const body = req.body as Record<string, unknown>
+    const { transport: rawTransport, command, args, env, url, headers } = body
+
+    if (rawTransport !== undefined && rawTransport !== 'stdio' && rawTransport !== 'http') {
+      return res.status(400).json({ error: `Invalid transport '${String(rawTransport)}'. Must be 'stdio' or 'http'.` })
+    }
+    if (command !== undefined && typeof command !== 'string') {
+      return res.status(400).json({ error: 'command must be a string' })
+    }
+    if (args !== undefined && (!Array.isArray(args) || args.some((a) => typeof a !== 'string'))) {
+      return res.status(400).json({ error: 'args must be an array of strings' })
+    }
+    if (env !== undefined && (typeof env !== 'object' || env === null || Array.isArray(env) || Object.values(env as object).some((v) => typeof v !== 'string'))) {
+      return res.status(400).json({ error: 'env must be a string/string object' })
+    }
+    if (url !== undefined && typeof url !== 'string') {
+      return res.status(400).json({ error: 'url must be a string' })
+    }
+    if (headers !== undefined && (typeof headers !== 'object' || headers === null || Array.isArray(headers) || Object.values(headers as object).some((v) => typeof v !== 'string'))) {
+      return res.status(400).json({ error: 'headers must be a string/string object' })
+    }
+
+    try {
+      const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
+      const { applyMcpServerUpdate } = await import('./mcp/update-server.js')
+
+      const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
+      const mcpServers = { ...(globalConfig.mcpServers ?? {}) } as Record<string, import('./mcp/types.js').McpServerConfig>
+
+      const patch = {
+        ...(rawTransport !== undefined ? { transport: rawTransport as 'stdio' | 'http' } : {}),
+        ...(command !== undefined ? { command: command as string } : {}),
+        ...(args !== undefined ? { args: args as string[] } : {}),
+        ...(env !== undefined ? { env: env as Record<string, string> } : {}),
+        ...(url !== undefined ? { url: url as string } : {}),
+        ...(headers !== undefined ? { headers: headers as Record<string, string> } : {}),
+      }
+
+      const { error: updateError } = await applyMcpServerUpdate({
+        name,
+        patch,
+        existing,
+        persistedCfg: mcpServers[name],
+        mcpManager,
+        save: async (cfg) => {
+          mcpServers[name] = cfg
+          await saveGlobalConfig(config.mode ?? 'production', { ...globalConfig, mcpServers }, config.globalConfigPath)
+        },
+      })
+
+      if (updateError) {
+        return res.status(400).json({ error: updateError })
+      }
+
+      await rebuildMcpTools()
+      const sessions = sessionManager.listSessions()
+      for (const s of sessions) {
+        sessionManager.setDynamicContextChanged(s.id, true)
+      }
+      res.json({ server: mcpManager.getServer(name) })
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+    }
+  })
+
   app.delete('/api/mcp/servers/:name', async (req, res) => {
     const { name } = req.params
     const server = mcpManager.getServer(name)
@@ -1831,6 +2049,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   app.use('/api/agents', createAgentRoutes(configDir, projectDir))
   app.use('/api/workflows', createWorkflowRoutes(configDir, config, projectDir))
   app.use('/api/dev-server', createDevServerRoutes())
+  app.use('/api/worktree', createWorktreeConfigRoutes())
   app.use('/api/terminals', createTerminalRoutes())
   app.use(
     '/api/auto-update',

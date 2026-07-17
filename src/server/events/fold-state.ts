@@ -440,9 +440,9 @@ export function buildSnapshotFromSessionState(input: {
     criteria: session.criteria,
     metadataEntries: foldedState.metadataEntries,
     contextState: {
-      currentTokens: session.executionState?.currentTokenCount ?? foldedState.contextState.currentTokens,
+      currentTokens: foldedState.contextState.currentTokens,
       maxTokens: foldedState.contextState.maxTokens,
-      compactionCount: session.executionState?.compactionCount ?? foldedState.contextState.compactionCount,
+      compactionCount: foldedState.contextState.compactionCount,
       dangerZone: foldedState.contextState.dangerZone,
       canCompact: foldedState.contextState.canCompact,
       dynamicContextChanged: foldedState.contextState.dynamicContextChanged,

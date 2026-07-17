@@ -120,7 +120,6 @@ function createMockSessionManager(overrides?: Record<string, any>): SessionManag
     getCurrentWindowMessages: vi.fn().mockReturnValue([]),
     updateMessage: vi.fn(),
     getQueueState: vi.fn().mockReturnValue({ queued: 0, processing: false }),
-    addModifiedFile: vi.fn(),
     ...overrides,
   } as any
 }

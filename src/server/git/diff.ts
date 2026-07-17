@@ -1,15 +1,19 @@
 import { spawn } from 'node:child_process'
 import type { GitDiffFile } from '../../shared/protocol.js'
+import { gitSpawnEnv } from './env.js'
 
 export function getGitDiffFiles(cwd: string): Promise<GitDiffFile[]> {
   return new Promise((resolve) => {
+    const env = gitSpawnEnv()
     const diffProc = spawn('git', ['diff', '--name-status', 'HEAD'], {
       cwd,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
     const statusProc = spawn('git', ['status', '--porcelain'], {
       cwd,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })

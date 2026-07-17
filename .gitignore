@@ -37,7 +37,8 @@ Thumbs.db
 .turbo/
 
 # OpenFox internal files
-.openfox/
+e2e/.openfox/
+e2e-playwright/.openfox/
 e2e/.openfox-test/
 e2e/**/.openfox-test/
 
@@ -52,3 +53,4 @@ test-results/
 .playwright-cli/
 e2e-test-project/
 tmp/
+worktrees/

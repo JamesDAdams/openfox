@@ -10,6 +10,117 @@ import { CRUDListView } from '../CRUDListView'
 import { useConfirmDialog, FormField, ErrorBanner } from '../CRUDModal'
 import { Modal } from '../../shared/SelfContainedModal'
 
+function parseKeyValueLines(text: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  text
+    .split('\n')
+    .filter(Boolean)
+    .forEach((line) => {
+      const eqIdx = line.indexOf('=')
+      if (eqIdx > 0) {
+        result[line.slice(0, eqIdx).trim()] = line.slice(eqIdx + 1).trim()
+      }
+    })
+  return result
+}
+
+interface McpFormData {
+  name: string
+  transport: 'stdio' | 'http'
+  command: string
+  args: string
+  env: string
+  url: string
+  headers: string
+}
+
+interface McpServerFormFieldsProps {
+  formData: McpFormData
+  onChange: (data: McpFormData) => void
+}
+
+function McpServerFormFields({ formData, onChange }: McpServerFormFieldsProps) {
+  return (
+    <>
+      <div>
+        <label className="block text-xs text-text-secondary mb-1">Transport</label>
+        <div className="flex gap-1">
+          <button
+            onClick={() => onChange({ ...formData, transport: 'stdio' })}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              formData.transport === 'stdio'
+                ? 'bg-accent-primary text-white'
+                : 'bg-bg-tertiary text-text-secondary hover:bg-bg-primary'
+            }`}
+          >
+            Stdio
+          </button>
+          <button
+            onClick={() => onChange({ ...formData, transport: 'http' })}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              formData.transport === 'http'
+                ? 'bg-accent-primary text-white'
+                : 'bg-bg-tertiary text-text-secondary hover:bg-bg-primary'
+            }`}
+          >
+            HTTP
+          </button>
+        </div>
+      </div>
+
+      {formData.transport === 'stdio' ? (
+        <>
+          <FormField
+            label="Command"
+            value={formData.command}
+            onChange={(v) => onChange({ ...formData, command: v })}
+            placeholder="e.g. npx"
+          />
+          <FormField
+            label="Arguments"
+            value={formData.args}
+            onChange={(v) => onChange({ ...formData, args: v })}
+            placeholder="space-separated args"
+          />
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">
+              Environment variables <span className="text-text-muted">(KEY=VALUE, one per line)</span>
+            </label>
+            <textarea
+              value={formData.env}
+              onChange={(e) => onChange({ ...formData, env: e.target.value })}
+              placeholder="API_KEY=xxx"
+              className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-sm font-mono resize-none focus:outline-none focus:ring-1 focus:ring-accent-primary"
+              rows={3}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          <FormField
+            label="URL"
+            value={formData.url}
+            onChange={(v) => onChange({ ...formData, url: v })}
+            placeholder="e.g. https://mcp.example.com/mcp"
+          />
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">
+              Headers <span className="text-text-muted">(KEY=VALUE, one per line)</span>
+            </label>
+            <textarea
+              value={formData.headers}
+              onChange={(e) => onChange({ ...formData, headers: e.target.value })}
+              placeholder="X-API-Key=xxx"
+              className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-sm font-mono resize-none focus:outline-none focus:ring-1 focus:ring-accent-primary"
+              rows={3}
+            />
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
 interface McpToolInfo {
   name: string
   description?: string
@@ -20,7 +131,14 @@ interface McpToolInfo {
 
 interface McpServerState {
   name: string
-  config: { transport: string; command?: string; args?: string[]; url?: string; headers?: Record<string, string> }
+  config: {
+    transport: string
+    command?: string
+    args?: string[]
+    env?: Record<string, string>
+    url?: string
+    headers?: Record<string, string>
+  }
   status: 'connected' | 'disconnected' | 'error'
   tools: McpToolInfo[]
   estimatedTokens: number
@@ -86,6 +204,31 @@ function useTestButton(): [
     }
   }, [])
   return [text, error, isSuccess, test]
+}
+
+function McpFormActions({
+  saving,
+  saveLabel,
+  savingLabel,
+  onCancel,
+  onSave,
+}: {
+  saving: boolean
+  saveLabel: string
+  savingLabel: string
+  onCancel: () => void
+  onSave: () => void
+}) {
+  return (
+    <div className="flex justify-end gap-2 pt-2 border-t border-border">
+      <Button variant="secondary" onClick={onCancel} disabled={saving}>
+        Cancel
+      </Button>
+      <Button variant="primary" onClick={onSave} disabled={saving}>
+        {saving ? savingLabel : saveLabel}
+      </Button>
+    </div>
+  )
 }
 
 export function ToolsTab() {
@@ -162,13 +305,27 @@ export function ToolsTab() {
       .catch(() => setRtkStatus('unavailable'))
   }, [])
 
+  // ── Shell selection (Windows only; empty list elsewhere) ──
+  const [shells, setShells] = useState<{ id: string; label: string; available: boolean }[]>([])
+
+  useEffect(() => {
+    getSetting(SETTINGS_KEYS.TOOLS_SHELL)
+    authFetch('/api/tools/shells')
+      .then((r) => r.json())
+      .then((data) => setShells(data.shells ?? []))
+      .catch(() => setShells([]))
+  }, [getSetting])
+
+  const currentShell = settings[SETTINGS_KEYS.TOOLS_SHELL] || 'cmd'
+
   // ── MCP state ──
   const [servers, setServers] = useState<McpServerState[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [editingServer, setEditingServer] = useState<string | null>(null)
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
   const [expandedDescs, setExpandedDescs] = useState<Set<string>>(new Set())
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<McpFormData>({
     name: '',
     transport: 'stdio' as 'stdio' | 'http',
     command: '',
@@ -178,6 +335,7 @@ export function ToolsTab() {
     headers: '',
   })
   const [formError, setFormError] = useState('')
+  const [mcpError, setMcpError] = useState('')
   const [saving, setSaving] = useState(false)
   const { requestDelete, clearConfirm, isConfirming } = useConfirmDialog()
 
@@ -211,53 +369,51 @@ export function ToolsTab() {
     })
   }
 
+  function validateTransportFields(): string | null {
+    if (formData.transport === 'stdio' && !formData.command) return 'Command is required for stdio transport'
+    if (formData.transport === 'http' && !formData.url) return 'URL is required for HTTP transport'
+    return null
+  }
+
+  function buildTransportBody(includeName: boolean): Record<string, unknown> {
+    const body: Record<string, unknown> = includeName
+      ? { name: formData.name, transport: formData.transport }
+      : { transport: formData.transport }
+    if (formData.transport === 'stdio') {
+      body.command = formData.command
+      body.args = formData.args ? formData.args.split(' ').filter(Boolean) : []
+      body.env = parseKeyValueLines(formData.env)
+    } else {
+      body.url = formData.url
+      body.headers = parseKeyValueLines(formData.headers)
+    }
+    return body
+  }
+
+  const defaultFormData = {
+    name: '',
+    transport: 'stdio' as const,
+    command: '',
+    args: '',
+    env: '',
+    url: '',
+    headers: '',
+  }
+
   const handleAdd = async () => {
     setFormError('')
     if (!formData.name) {
       setFormError('Name is required')
       return
     }
-    if (formData.transport === 'stdio' && !formData.command) {
-      setFormError('Command is required for stdio transport')
-      return
-    }
-    if (formData.transport === 'http' && !formData.url) {
-      setFormError('URL is required for HTTP transport')
+    const transportError = validateTransportFields()
+    if (transportError) {
+      setFormError(transportError)
       return
     }
     setSaving(true)
     try {
-      const parseKeyValueLines = (text: string): Record<string, string> => {
-        const result: Record<string, string> = {}
-        text
-          .split('\n')
-          .filter(Boolean)
-          .forEach((line) => {
-            const eqIdx = line.indexOf('=')
-            if (eqIdx > 0) {
-              result[line.slice(0, eqIdx).trim()] = line.slice(eqIdx + 1).trim()
-            }
-          })
-        return result
-      }
-
-      const body: Record<string, unknown> = {
-        name: formData.name,
-        transport: formData.transport,
-      }
-
-      if (formData.transport === 'stdio') {
-        body.command = formData.command
-        const args = formData.args ? formData.args.split(' ').filter(Boolean) : undefined
-        if (args && args.length > 0) body.args = args
-        const env = parseKeyValueLines(formData.env)
-        if (Object.keys(env).length > 0) body.env = env
-      } else {
-        body.url = formData.url
-        const headers = parseKeyValueLines(formData.headers)
-        if (Object.keys(headers).length > 0) body.headers = headers
-      }
-
+      const body = buildTransportBody(true)
       const res = await authFetch('/api/mcp/servers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -268,7 +424,58 @@ export function ToolsTab() {
         throw new Error(data.error ?? 'Failed to add server')
       }
       setShowAddForm(false)
-      setFormData({ name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '' })
+      setFormData(defaultFormData)
+      await loadServers()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEdit = (server: McpServerState) => {
+    setFormData({
+      name: server.name,
+      transport: server.config.transport as 'stdio' | 'http',
+      command: server.config.command ?? '',
+      args: server.config.args?.join(' ') ?? '',
+      env: server.config.env
+        ? Object.entries(server.config.env)
+            .map(([k, v]) => `${k}=${v}`)
+            .join('\n')
+        : '',
+      url: server.config.url ?? '',
+      headers: server.config.headers
+        ? Object.entries(server.config.headers)
+            .map(([k, v]) => `${k}=${v}`)
+            .join('\n')
+        : '',
+    })
+    setFormError('')
+    setEditingServer(server.name)
+  }
+
+  const handleUpdate = async () => {
+    setFormError('')
+    const transportError = validateTransportFields()
+    if (transportError) {
+      setFormError(transportError)
+      return
+    }
+    setSaving(true)
+    try {
+      const body = buildTransportBody(false)
+      const res = await authFetch(`/api/mcp/servers/${encodeURIComponent(editingServer!)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error ?? 'Failed to update server')
+      }
+      setEditingServer(null)
+      setFormData(defaultFormData)
       await loadServers()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : String(err))
@@ -281,13 +488,14 @@ export function ToolsTab() {
     try {
       const res = await authFetch(`/api/mcp/servers/${encodeURIComponent(name)}`, { method: 'DELETE' })
       if (!res.ok) {
-        const data = await res.json()
-        console.error('Failed to remove MCP server:', data.error)
+        const data = await res.json().catch(() => ({}))
+        throw new Error((data as { error?: string }).error ?? 'Failed to remove server')
       }
       clearConfirm()
+      setMcpError('')
       await loadServers()
     } catch (err) {
-      console.error('Failed to remove MCP server:', err)
+      setMcpError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -302,12 +510,13 @@ export function ToolsTab() {
         },
       )
       if (!res.ok) {
-        const data = await res.json()
-        console.error('Failed to toggle tool:', data.error)
+        const data = await res.json().catch(() => ({}))
+        throw new Error((data as { error?: string }).error ?? 'Failed to toggle tool')
       }
+      setMcpError('')
       await loadServers()
     } catch (err) {
-      console.error('Failed to toggle tool:', err)
+      setMcpError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -428,6 +637,44 @@ export function ToolsTab() {
         </div>
       </div>
 
+      {shells.length > 0 && (
+        <>
+          <hr className="border-border" />
+
+          {/* ── Shell Section (Windows) ── */}
+          <div>
+            <h3 className="text-sm font-medium text-text-primary mb-3">Shell</h3>
+            <p className="text-sm text-text-muted mb-3">
+              Shell used to run agent commands and integrated terminals. Git Bash gives the agent a Unix-like toolset
+              (grep, sed, ls…) and usually works better than cmd.exe.
+            </p>
+            <div className="flex gap-2">
+              {shells.map((shell) => (
+                <button
+                  key={shell.id}
+                  onClick={() => setSetting(SETTINGS_KEYS.TOOLS_SHELL, shell.id)}
+                  disabled={!shell.available}
+                  title={shell.available ? undefined : 'Not found on this machine'}
+                  className={`px-3 py-1.5 rounded text-sm border transition-colors ${
+                    currentShell === shell.id
+                      ? 'bg-accent-primary/10 border-accent-primary text-accent-primary'
+                      : shell.available
+                        ? 'border-border text-text-muted hover:text-text-primary'
+                        : 'border-border text-text-muted opacity-50 cursor-not-allowed'
+                  }`}
+                >
+                  {shell.label}
+                  {!shell.available && ' (not found)'}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-text-muted mt-2">
+              Applies to new commands and newly opened terminals. Running terminals keep their current shell.
+            </p>
+          </div>
+        </>
+      )}
+
       <hr className="border-border" />
 
       {/* ── Token Optimization Section ── */}
@@ -479,6 +726,7 @@ export function ToolsTab() {
         <p className="text-sm text-text-muted mb-3">
           MCP servers provide external tools that extend OpenFox's capabilities.
         </p>
+        {mcpError && <ErrorBanner message={mcpError} />}
 
         <CRUDListView
           loading={loading}
@@ -505,6 +753,50 @@ export function ToolsTab() {
                       {server.error}
                     </span>
                   )}
+                  {expandedServers.has(server.name) &&
+                    (isConfirming(server.name, 'delete') ? (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleRemove(server.name)
+                          }}
+                          className="px-2 py-1 rounded text-xs font-medium hover:opacity-90 transition-colors bg-accent-error/20 text-accent-error hover:bg-accent-error/30"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            clearConfirm()
+                          }}
+                          className="px-2 py-1 rounded text-xs text-text-muted hover:bg-bg-primary transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEdit(server)
+                          }}
+                          className="px-2 py-1 rounded text-xs font-medium text-text-muted hover:text-text-primary hover:bg-bg-primary transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            requestDelete(server.name)
+                          }}
+                          className="px-2 py-1 rounded text-xs font-medium text-accent-error/80 hover:text-accent-error hover:bg-accent-error/10 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </>
+                    ))}
                   <span className="text-xs text-text-muted">{expandedServers.has(server.name) ? '▲' : '▼'}</span>
                 </div>
               </div>
@@ -566,40 +858,6 @@ export function ToolsTab() {
                       ))}
                     </div>
                   )}
-                  <div className="pt-2 flex items-center justify-end gap-2">
-                    {isConfirming(server.name, 'delete') ? (
-                      <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleRemove(server.name)
-                          }}
-                          className="px-2 py-1 rounded text-xs font-medium hover:opacity-90 transition-colors bg-accent-error/20 text-accent-error hover:bg-accent-error/30"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            clearConfirm()
-                          }}
-                          className="px-2 py-1 rounded text-xs text-text-muted hover:bg-bg-primary transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          requestDelete(server.name)
-                        }}
-                        className="px-2 py-1 rounded text-xs font-medium text-accent-error/80 hover:text-accent-error hover:bg-accent-error/10 transition-colors"
-                      >
-                        Remove server
-                      </button>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
@@ -624,100 +882,51 @@ export function ToolsTab() {
                 placeholder="e.g. filesystem"
               />
 
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Transport</label>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setFormData({ ...formData, transport: 'stdio' })}
-                    className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                      formData.transport === 'stdio'
-                        ? 'bg-accent-primary text-white'
-                        : 'bg-bg-tertiary text-text-secondary hover:bg-bg-primary'
-                    }`}
-                  >
-                    Stdio
-                  </button>
-                  <button
-                    onClick={() => setFormData({ ...formData, transport: 'http' })}
-                    className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                      formData.transport === 'http'
-                        ? 'bg-accent-primary text-white'
-                        : 'bg-bg-tertiary text-text-secondary hover:bg-bg-primary'
-                    }`}
-                  >
-                    HTTP
-                  </button>
-                </div>
-              </div>
-
-              {formData.transport === 'stdio' ? (
-                <>
-                  <FormField
-                    label="Command"
-                    value={formData.command}
-                    onChange={(v) => setFormData({ ...formData, command: v })}
-                    placeholder="e.g. npx"
-                  />
-                  <FormField
-                    label="Arguments"
-                    value={formData.args}
-                    onChange={(v) => setFormData({ ...formData, args: v })}
-                    placeholder="space-separated args"
-                  />
-                  <div>
-                    <label className="block text-xs text-text-secondary mb-1">
-                      Environment variables <span className="text-text-muted">(KEY=VALUE, one per line)</span>
-                    </label>
-                    <textarea
-                      value={formData.env}
-                      onChange={(e) => setFormData({ ...formData, env: e.target.value })}
-                      placeholder="API_KEY=xxx"
-                      className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-sm font-mono resize-none focus:outline-none focus:ring-1 focus:ring-accent-primary"
-                      rows={3}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <FormField
-                    label="URL"
-                    value={formData.url}
-                    onChange={(v) => setFormData({ ...formData, url: v })}
-                    placeholder="e.g. https://mcp.example.com/mcp"
-                  />
-                  <div>
-                    <label className="block text-xs text-text-secondary mb-1">
-                      Headers <span className="text-text-muted">(KEY=VALUE, one per line)</span>
-                    </label>
-                    <textarea
-                      value={formData.headers}
-                      onChange={(e) => setFormData({ ...formData, headers: e.target.value })}
-                      placeholder="X-API-Key=xxx"
-                      className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-sm font-mono resize-none focus:outline-none focus:ring-1 focus:ring-accent-primary"
-                      rows={3}
-                    />
-                  </div>
-                </>
-              )}
+              <McpServerFormFields formData={formData} onChange={setFormData} />
 
               {formError && <ErrorBanner message={formError} />}
-              <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowAddForm(false)
-                    setFormError('')
-                    setSaving(false)
-                    setFormData({ name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '' })
-                  }}
-                  disabled={saving}
-                >
-                  Cancel
-                </Button>
-                <Button variant="primary" onClick={handleAdd} disabled={saving}>
-                  {saving ? 'Adding...' : 'Add'}
-                </Button>
-              </div>
+              <McpFormActions
+                saving={saving}
+                saveLabel="Add"
+                savingLabel="Adding..."
+                onCancel={() => {
+                  setShowAddForm(false)
+                  setFormError('')
+                  setSaving(false)
+                  setFormData(defaultFormData)
+                }}
+                onSave={handleAdd}
+              />
+            </div>
+          </Modal>
+        )}
+
+        {editingServer !== null && (
+          <Modal
+            isOpen
+            onClose={() => {
+              setEditingServer(null)
+              setFormError('')
+            }}
+            title={`Edit MCP Server: ${editingServer}`}
+            size="sm"
+          >
+            <div className="space-y-3">
+              <McpServerFormFields formData={formData} onChange={setFormData} />
+
+              {formError && <ErrorBanner message={formError} />}
+              <McpFormActions
+                saving={saving}
+                saveLabel="Save"
+                savingLabel="Saving..."
+                onCancel={() => {
+                  setEditingServer(null)
+                  setFormError('')
+                  setSaving(false)
+                  setFormData(defaultFormData)
+                }}
+                onSave={handleUpdate}
+              />
             </div>
           </Modal>
         )}

@@ -1,19 +1,22 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { type ChildProcess } from 'node:child_process'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
+import net from 'node:net'
 import { terminateProcessTree } from '../utils/process-tree.js'
 import { logger } from '../utils/logger.js'
-import { getPlatformShell } from '../utils/platform.js'
-import { getRuntimeConfig } from '../runtime-config.js'
+import { spawnShell } from '../utils/shell.js'
 import type { DevServerConfig, DevServerState, DevServerStatus } from '../../shared/dev-server.js'
 import { startInspectProxy } from './inspect-proxy.js'
 import type { SessionManager } from '../session/manager.js'
 
 const MAX_LOG_LINES = 2000
 const MAX_LOG_BYTES = 100_000
+const DEFAULT_PROBE_PORT = 10469
+const MAX_PORT_SCAN = 200
+const PROBE_TIMEOUT_MS = 300
+
 const getDevServerConfigPath = (workdir: string) => {
-  const mode = getRuntimeConfig().mode ?? 'production'
-  return join(resolve(workdir), '.openfox', `${mode === 'development' ? 'dev-dev' : 'dev'}.json`)
+  return join(resolve(workdir), '.openfox', 'dev.json')
 }
 
 // Patterns that indicate the server crashed even if the watcher stays alive
@@ -46,6 +49,9 @@ interface DevServerInstance {
   process: ChildProcess | null
   state: DevServerState
   config: DevServerConfig | null
+  resolvedUrl: string | null
+  resolvedCommand: string | null
+  assignedPort: number | null
   logs: LogEntry[]
   totalLogBytes: number
   errorMessage: string | undefined
@@ -59,12 +65,27 @@ function createInstance(): DevServerInstance {
     process: null,
     state: 'off',
     config: null,
+    resolvedUrl: null,
+    resolvedCommand: null,
+    assignedPort: null,
     logs: [],
     totalLogBytes: 0,
     errorMessage: undefined,
     exited: true,
     inspectProxyPort: null,
     proxyCleanup: null,
+  }
+}
+
+function parsePortFromUrl(url: string): { hostname: string; port: number } {
+  const substituted = url.replace(/\$\{PORT\}/g, String(DEFAULT_PROBE_PORT))
+  try {
+    const parsed = new URL(substituted)
+    const port = parsed.port ? parseInt(parsed.port, 10) : DEFAULT_PROBE_PORT
+    return { hostname: parsed.hostname, port: isNaN(port) ? DEFAULT_PROBE_PORT : port }
+  } catch {
+    logger.warn('Failed to parse dev server URL, falling back to defaults', { url })
+    return { hostname: '127.0.0.1', port: DEFAULT_PROBE_PORT }
   }
 }
 
@@ -106,21 +127,88 @@ class DevServerManager {
     }
   }
 
-  async loadConfig(workdir: string): Promise<DevServerConfig | null> {
-    try {
-      const configPath = getDevServerConfigPath(workdir)
-      const raw = await readFile(configPath, 'utf-8')
-      const parsed = JSON.parse(raw)
-      if (!parsed.command || !parsed.url) return null
-      return {
-        command: parsed.command,
-        url: parsed.url,
-        hotReload: parsed.hotReload ?? false,
-        disableInspect: parsed.disableInspect ?? false,
-      }
-    } catch {
-      return null
+  /** Probe whether a TCP port is in use */
+  async probePort(host: string, port: number): Promise<boolean> {
+    return new Promise((resolvePromise) => {
+      const socket = new net.Socket()
+      socket.setTimeout(PROBE_TIMEOUT_MS)
+      socket.on('connect', () => {
+        socket.destroy()
+        resolvePromise(true)
+      })
+      socket.on('timeout', () => {
+        socket.destroy()
+        resolvePromise(false)
+      })
+      socket.on('error', () => {
+        socket.destroy()
+        resolvePromise(false)
+      })
+      socket.connect(port, host)
+    })
+  }
+
+  /**
+   * Find a free port starting from preferred, scanning upward.
+   * Throws if no free port found within range.
+   */
+  async findFreePort(host: string, preferred: number): Promise<number> {
+    const inUse = await this.probePort(host, preferred)
+    if (!inUse) return preferred
+
+    const maxPort = Math.min(preferred + MAX_PORT_SCAN, 65535)
+    for (let port = preferred + 1; port <= maxPort; port++) {
+      const taken = await this.probePort(host, port)
+      if (!taken) return port
     }
+
+    throw new Error(
+      `No free port found in range ${preferred}-${maxPort} on ${host}. ` +
+        `Close some applications or configure a different port in .openfox/dev.json`,
+    )
+  }
+
+  /** Substitute ${PORT} placeholders with actual port number */
+  substitutePort(template: string, port: number): string {
+    return template.replace(/\$\{PORT\}/g, String(port))
+  }
+
+  /**
+   * Load dev server config from workdir.
+   * If not found and the path looks like a git worktree (contains /worktrees/),
+   * falls back to the parent project root.
+   */
+  async loadConfig(workdir: string): Promise<DevServerConfig | null> {
+    const tryLoad = async (dir: string): Promise<DevServerConfig | null> => {
+      try {
+        const configPath = getDevServerConfigPath(dir)
+        const raw = await readFile(configPath, 'utf-8')
+        const parsed = JSON.parse(raw)
+        if (!parsed.command || !parsed.url) return null
+        return {
+          command: parsed.command,
+          url: parsed.url,
+          hotReload: parsed.hotReload ?? false,
+          disableInspect: parsed.disableInspect ?? false,
+        }
+      } catch {
+        return null
+      }
+    }
+
+    const config = await tryLoad(workdir)
+    if (config) return config
+
+    // Auto-detect worktree paths: <project>/worktrees/<name>
+    const wtIdx = workdir.indexOf('/worktrees/')
+    if (wtIdx !== -1) {
+      const projectRoot = workdir.slice(0, wtIdx)
+      if (projectRoot !== workdir) {
+        return tryLoad(projectRoot)
+      }
+    }
+
+    return null
   }
 
   async saveConfig(workdir: string, config: DevServerConfig): Promise<void> {
@@ -144,6 +232,17 @@ class DevServerManager {
       return this.getStatus(workdir)
     }
 
+    // Port probing and auto-assignment
+    const { hostname, port: configuredPort } = parsePortFromUrl(config.url)
+    const assignedPort = await this.findFreePort(hostname, configuredPort)
+    instance.assignedPort = assignedPort
+
+    // Substitute ${PORT} template in command and url (in-memory only, config file untouched)
+    const resolvedCommand = this.substitutePort(config.command, assignedPort)
+    const resolvedUrl = this.substitutePort(config.url, assignedPort)
+    instance.resolvedCommand = resolvedCommand
+    instance.resolvedUrl = resolvedUrl
+
     instance.config = config
     instance.logs = []
     instance.totalLogBytes = 0
@@ -151,12 +250,12 @@ class DevServerManager {
     instance.exited = false
 
     // Start inspect proxy if not disabled
-    if (!config.disableInspect && config.url && this._sessionManager) {
+    if (!config.disableInspect && resolvedUrl && this._sessionManager) {
       try {
-        const { port, cleanup } = startInspectProxy(config.url, this._sessionManager, workdir)
+        const { port, cleanup } = await startInspectProxy(resolvedUrl, this._sessionManager, assignedPort, workdir)
         instance.inspectProxyPort = port
         instance.proxyCleanup = cleanup
-        logger.debug('Inspect proxy started', { workdir, port, target: config.url })
+        logger.debug('Inspect proxy started', { workdir, port, target: resolvedUrl })
       } catch (err) {
         logger.warn('Failed to start inspect proxy', { workdir, error: err })
       }
@@ -164,13 +263,9 @@ class DevServerManager {
 
     const resolved = this.resolveWorkdir(workdir)
 
-    const shell = getPlatformShell()
-    const proc = spawn(shell.command, [...shell.args, config.command], {
+    const proc = spawnShell(resolvedCommand, {
       cwd: resolved,
-      env: { ...process.env, FORCE_COLOR: '1' },
-      stdio: ['ignore', 'pipe', 'pipe'],
       detached: true,
-      windowsHide: true,
     })
 
     instance.process = proc
@@ -191,12 +286,12 @@ class DevServerManager {
       this.emitOutput(workdir, { stream: 'stdout', content })
     })
 
+    // Detect error patterns in stderr — set warning if process is still running
     proc.stderr?.on('data', (data: Buffer) => {
       const content = data.toString()
       appendLog('stderr', content)
       this.emitOutput(workdir, { stream: 'stderr', content })
 
-      // Detect error patterns in stderr — set warning if process is still running
       if (instance.state === 'running' && ERROR_PATTERNS.some((p) => p.test(content))) {
         instance.state = 'warning'
         instance.errorMessage = content.trim().slice(0, 500)
@@ -231,7 +326,7 @@ class DevServerManager {
     instance.state = 'running'
     instance.errorMessage = undefined
     this.emitStateChange(workdir, 'running', undefined)
-    logger.info('Dev server started', { workdir, command: config.command })
+    logger.info('Dev server started', { workdir, command: resolvedCommand, port: assignedPort })
 
     return this.getStatus(workdir)
   }
@@ -268,7 +363,7 @@ class DevServerManager {
     const instance = this.getInstance(workdir)
     return {
       state: instance.state,
-      url: instance.config?.url ?? null,
+      url: instance.resolvedUrl ?? instance.config?.url ?? null,
       hotReload: instance.config?.hotReload ?? false,
       config: instance.config,
       errorMessage: instance.errorMessage,
