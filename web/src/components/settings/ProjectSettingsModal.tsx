@@ -206,7 +206,7 @@ export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettin
           <p className="text-sm text-text-muted font-mono">{project.workdir}</p>
         </div>
 
-        <div className="flex-1 min-h-[150px] pb-4">
+        <div>
           <label className="block text-sm font-medium text-text-primary mb-1 flex-shrink-0">Project Instructions</label>
           <p className="text-sm text-text-muted mb-3 flex-shrink-0">
             These instructions are injected into prompts when working in this project. They are applied after global
@@ -216,13 +216,15 @@ export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettin
             value={customInstructions}
             onChange={handleInstructionsChange}
             placeholder="Enter project-specific instructions..."
-            className="w-full h-full px-3 py-2 mb-3 bg-bg-tertiary border border-border rounded text-sm font-mono resize-none focus:outline-none focus:ring-1 focus:ring-accent-primary"
+            className="w-full h-32 px-3 py-2 bg-bg-tertiary border border-border rounded text-sm font-mono resize-none focus:outline-none focus:ring-1 focus:ring-accent-primary"
             disabled={saving}
           />
         </div>
 
-        <div className="border-t border-border pt-4">
-          <label className="block text-sm font-medium text-text-primary mb-1">Worktree Asset Strategy</label>
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-1 flex-shrink-0">
+            Worktree Asset Strategy
+          </label>
           <p className="text-sm text-text-muted mb-3">
             Controls how .gitignored files (e.g. node_modules) are handled when creating a worktree. Symlink is fast and
             saves disk space. Copy works when tools don't follow symlinks.
@@ -230,8 +232,8 @@ export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettin
 
           {wtLoading && <div className="text-xs text-text-muted mb-2">Loading config...</div>}
 
-          <div className="flex items-center gap-2 mb-4">
-            {(['symlink', 'copy', 'skip'] as const).map((option) => (
+          <div className="flex items-center gap-1 px-1.5 py-1 rounded bg-bg-tertiary/50 w-fit mb-4">
+            {(['skip', 'symlink', 'copy'] as const).map((option) => (
               <button
                 key={option}
                 type="button"
