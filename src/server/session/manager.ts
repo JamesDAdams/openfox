@@ -40,6 +40,7 @@ import { SessionNotFoundError } from '../utils/errors.js'
 import { logger } from '../utils/logger.js'
 import { EventEmitter, type Unsubscribe } from '../utils/async.js'
 import { getLspManager as getOrCreateLspManager, shutdownLspManager, type LspManager } from '../lsp/index.js'
+import { devServerManager } from '../dev-server/manager.js'
 import { getEventStore } from '../events/store.js'
 import {
   getSessionState,
@@ -1070,6 +1071,14 @@ export class SessionManager {
     const branchName = closedPath.includes('/worktrees/')
       ? (closedPath.split('/worktrees/')[1] ?? closedPath)
       : closedPath
+
+    // Stop the worktree's dev server if running
+    try {
+      await devServerManager.stop(closedPath)
+    } catch (err) {
+      logger.error('Error stopping dev server for worktree close', { sessionId, worktree: closedPath, error: err })
+    }
+
     // Just clear worktree — workdir was never changed from project root
     updateSessionWorkdir(sessionId, project.workdir, null)
 

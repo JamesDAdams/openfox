@@ -597,10 +597,37 @@ export function createWebSocketServer(
       const messages = buildMessagesFromStoredEvents(events)
       const pendingConfirmations = foldPendingConfirmations(events)
       const pendingQuestions = getPendingQuestionsForSession(updatedSession.id)
+
+      // Update activeWorkdir when worktree changed so git polling picks up the right dir
+      const effectiveWorkdir = updatedSession.worktree ?? updatedSession.workdir
+      let worktreeChanged = false
+
+      for (const [, client] of clients) {
+        if (client.activeSessionId === updatedSession.id && client.activeWorkdir !== effectiveWorkdir) {
+          worktreeChanged = true
+          const prevWorkdir = client.activeWorkdir
+          client.activeWorkdir = effectiveWorkdir
+          if (prevWorkdir) moduleStopGitPolling(prevWorkdir)
+        }
+      }
+      if (effectiveWorkdir) moduleStartGitPolling(effectiveWorkdir)
+
+      // Broadcast session.state immediately — synchronous, no await
       broadcastForSession(
         updatedSession.id,
         createSessionStateMessage(updatedSession, messages, pendingConfirmations, pendingQuestions),
       )
+
+      // If worktree changed, fetch git status in background and push as git.status message
+      // This avoids blocking session.state broadcast on git IO
+      if (worktreeChanged && effectiveWorkdir) {
+        ;(async () => {
+          const branch = await moduleGitBranch(effectiveWorkdir)
+          if (!branch) return
+          const { files } = await moduleGitDiff(effectiveWorkdir)
+          broadcastForSession(updatedSession.id, createGitStatusMessage(branch, files))
+        })()
+      }
     }
   })
 

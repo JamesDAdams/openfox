@@ -14,7 +14,11 @@ export const devServerTool = createTool<DevServerArgs>(
     function: {
       name: 'dev_server',
       description:
-        'Control the project dev server. Start, stop, restart, check status, or fetch logs with optional pagination. The dev server is configured via .openfox/dev.json in the project root with fields: command (string, required), url (string, required), hotReload (boolean, optional, default false), disableInspect (boolean, optional, default false). You can use ${PORT} in command and url — it will be replaced with an available port at runtime (auto-assigned if the configured port is taken).',
+        'Control the project dev server. Start, stop, restart, check status, or fetch logs with optional pagination. ' +
+        'Each workdir (project root or git worktree) gets its own independent dev server instance with auto-assigned ports. ' +
+        'The dev server is configured via .openfox/dev.json — searched in the current workdir first, falling back to the project root. ' +
+        'Fields: command (string, required), url (string, required), hotReload (boolean, optional, default false), disableInspect (boolean, optional, default false). ' +
+        'You can use ${PORT} in command and url — it will be replaced with an available port at runtime (auto-assigned if the configured port is taken).',
       parameters: {
         type: 'object',
         properties: {
@@ -89,8 +93,9 @@ export const devServerTool = createTool<DevServerArgs>(
 
     if (!status.config) {
       return helpers.error(
-        'No .openfox/dev.json config found in the project root. Create one with:\n\n' +
-          '{\n  "command": "npm run dev",\n  "url": "http://localhost:3000",\n  "hotReload": true,\n  "disableInspect": false\n}',
+        'No .openfox/dev.json config found. Create one in the project root:\n\n' +
+          '{\n  "command": "npm run dev",\n  "url": "http://localhost:3000",\n  "hotReload": true,\n  "disableInspect": false\n}\n\n' +
+          '(Worktrees inherit the project root config automatically.)',
       )
     }
 
