@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
-import { mkdir, readFile, appendFile, stat, symlink, cp } from 'node:fs/promises'
+import { mkdir, readFile, appendFile, stat, symlink } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import copy from '@danieldietrich/copy'
 import { logger } from '../utils/logger.js'
 import { gitSpawnEnv } from './env.js'
 import type { WorktreeConfig } from '../../shared/worktree.js'
@@ -162,8 +163,9 @@ export async function getIgnoredDirectories(projectDir: string): Promise<string[
 }
 
 function resolveStrategy(relPath: string, config: WorktreeConfig): 'symlink' | 'copy' | 'skip' {
-  const basename = relPath.split('/').pop() ?? relPath
-  return config.overrides?.[relPath] ?? config.overrides?.[basename] ?? config.ignoredAssets
+  const normalized = relPath.replace(/\/$/, '')
+  const basename = normalized.split('/').pop() ?? normalized
+  return config.overrides?.[normalized] ?? config.overrides?.[basename] ?? config.ignoredAssets
 }
 
 export async function syncIgnoredAssets(
@@ -200,7 +202,7 @@ export async function syncIgnoredAssets(
         await symlink(sourcePath, targetPath)
         results.push(`symlink ${relPath}`)
       } else if (strategy === 'copy') {
-        await cp(sourcePath, targetPath, { recursive: true, force: true })
+        await copy(sourcePath, targetPath)
         results.push(`copy ${relPath}`)
       }
     } catch (err) {
