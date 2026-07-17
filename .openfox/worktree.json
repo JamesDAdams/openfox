@@ -1,0 +1,6 @@
+{
+  "ignoredAssets": "skip",
+  "overrides": {
+    "node_modules": "copy"
+  }
+}

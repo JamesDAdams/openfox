@@ -5,20 +5,18 @@ import net from 'node:net'
 import { terminateProcessTree } from '../utils/process-tree.js'
 import { logger } from '../utils/logger.js'
 import { spawnShell } from '../utils/shell.js'
-import { getRuntimeConfig } from '../runtime-config.js'
 import type { DevServerConfig, DevServerState, DevServerStatus } from '../../shared/dev-server.js'
 import { startInspectProxy } from './inspect-proxy.js'
 import type { SessionManager } from '../session/manager.js'
 
 const MAX_LOG_LINES = 2000
 const MAX_LOG_BYTES = 100_000
-const DEFAULT_PROBE_PORT = 3000
+const DEFAULT_PROBE_PORT = 10469
 const MAX_PORT_SCAN = 200
 const PROBE_TIMEOUT_MS = 300
 
 const getDevServerConfigPath = (workdir: string) => {
-  const mode = getRuntimeConfig().mode ?? 'production'
-  return join(resolve(workdir), '.openfox', `${mode === 'development' ? 'dev-dev' : 'dev'}.json`)
+  return join(resolve(workdir), '.openfox', 'dev.json')
 }
 
 // Patterns that indicate the server crashed even if the watcher stays alive
@@ -254,7 +252,7 @@ class DevServerManager {
     // Start inspect proxy if not disabled
     if (!config.disableInspect && resolvedUrl && this._sessionManager) {
       try {
-        const { port, cleanup } = startInspectProxy(resolvedUrl, this._sessionManager, workdir)
+        const { port, cleanup } = await startInspectProxy(resolvedUrl, this._sessionManager, assignedPort, workdir)
         instance.inspectProxyPort = port
         instance.proxyCleanup = cleanup
         logger.debug('Inspect proxy started', { workdir, port, target: resolvedUrl })
