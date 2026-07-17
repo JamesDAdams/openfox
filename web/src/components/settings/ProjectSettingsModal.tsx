@@ -41,7 +41,7 @@ export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettin
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  const [wtStrategy, setWtStrategy] = useState<WorktreeAssetStrategy>('symlink')
+  const [wtStrategy, setWtStrategy] = useState<WorktreeAssetStrategy>('skip')
   const [wtOverrides, setWtOverrides] = useState<OverrideRow[]>([])
   const [wtDirty, setWtDirty] = useState(false)
 
@@ -63,7 +63,7 @@ export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettin
       setWtStrategy(wtConfig.ignoredAssets)
       setWtOverrides(Object.entries(wtConfig.overrides ?? {}).map(([path, strategy]) => ({ path, strategy })))
     } else {
-      setWtStrategy('symlink')
+      setWtStrategy('skip')
       setWtOverrides([])
     }
   }, [wtConfig])
