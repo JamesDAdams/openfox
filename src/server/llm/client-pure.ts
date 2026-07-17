@@ -23,6 +23,25 @@ export interface ModelParams {
   maxTokens?: number
 }
 
+export function parseToolArguments(
+  raw: string | null | undefined,
+  _meta: { id?: string; name?: string },
+): { arguments: Record<string, unknown>; parseError?: string } {
+  const input = raw?.trim() ? raw : '{}'
+  try {
+    const parsed = JSON.parse(input) as unknown
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { arguments: {}, parseError: 'Tool arguments must be a JSON object' }
+    }
+    return { arguments: parsed as Record<string, unknown> }
+  } catch (error) {
+    return {
+      arguments: {},
+      parseError: error instanceof Error ? error.message : 'Invalid JSON',
+    }
+  }
+}
+
 export function buildModelParams(params: {
   temperature?: number
   topP?: number

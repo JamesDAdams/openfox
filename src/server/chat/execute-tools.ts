@@ -125,18 +125,23 @@ export async function executeTools(
     }
 
     if (toolCall.parseError) {
-      const toolResult: ToolResult = {
-        success: false,
-        error: `Failed to parse tool call arguments: ${toolCall.parseError}. Please ensure your JSON function call arguments are valid.`,
-        durationMs: 0,
-        truncated: false,
-      }
-      append(createToolResultEvent(assistantMsgId, toolCall.id, toolResult))
-      return {
-        toolCall,
-        toolResult,
-        content: `Error: ${toolResult.error}`,
-        index,
+      if (toolCall.name === 'step_done') {
+        const { parseError: _pe, rawArguments: _ra, ...rest } = toolCall
+        toolCall = { ...rest, arguments: {} }
+      } else {
+        const toolResult: ToolResult = {
+          success: false,
+          error: `Failed to parse tool call arguments: ${toolCall.parseError}. Please ensure your JSON function call arguments are valid.`,
+          durationMs: 0,
+          truncated: false,
+        }
+        append(createToolResultEvent(assistantMsgId, toolCall.id, toolResult))
+        return {
+          toolCall,
+          toolResult,
+          content: `Error: ${toolResult.error}`,
+          index,
+        }
       }
     }
 

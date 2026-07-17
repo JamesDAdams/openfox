@@ -197,6 +197,65 @@ describe('llm client', () => {
     })
   })
 
+  it('handles tool calls with empty arguments string', async () => {
+    httpClientCreateStreamMock.mockReturnValueOnce(
+      (async function* () {
+        yield createChunk({
+          choices: [
+            {
+              delta: {
+                tool_calls: [{ index: 0, id: 'call-1', function: { name: 'step_done', arguments: '' } }],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        })
+      })(),
+    )
+
+    const client = createLLMClient(createConfig(), 'vllm')
+    const events = [] as Array<Record<string, unknown>>
+
+    for await (const event of client.stream({
+      messages: [{ role: 'user', content: 'hello' }],
+    })) {
+      events.push(event as Record<string, unknown>)
+    }
+
+    const doneEvent = events.find((e) => e['type'] === 'done') as Record<string, unknown> | undefined
+    const response = doneEvent?.['response'] as Record<string, unknown> | undefined
+    const toolCalls = response?.['toolCalls'] as Array<Record<string, unknown>> | undefined
+
+    expect(toolCalls).toHaveLength(1)
+    expect(toolCalls?.[0]).toMatchObject({
+      id: 'call-1',
+      name: 'step_done',
+      arguments: {},
+    })
+    expect(toolCalls?.[0]).not.toHaveProperty('parseError')
+  })
+
+  it('handles tool calls with empty arguments string in complete path', async () => {
+    httpClientCreateMock.mockResolvedValueOnce({
+      id: 'resp-1',
+      choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'step_done', arguments: '' } }] } }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    })
+
+    const client = createLLMClient(createConfig(), 'vllm')
+    const result = await client.complete({
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls?.[0]).toMatchObject({
+      id: 'call-1',
+      name: 'step_done',
+      arguments: {},
+    })
+  })
+
   it('streams reasoning, text, and tool calls and emits a done event with parsed tool calls', async () => {
     httpClientCreateStreamMock.mockReturnValueOnce(
       (async function* () {
