@@ -35,6 +35,7 @@ import { createAgentRoutes } from './routes/agents.js'
 import { loadAllAgentsDefault, getTopLevelAgents } from './agents/registry.js'
 import { createWorkflowRoutes } from './routes/workflows.js'
 import { createDevServerRoutes } from './routes/dev-server.js'
+import { createWorktreeConfigRoutes } from './routes/worktree-config.js'
 import { createTerminalRoutes } from './routes/terminals.js'
 import { createDirectoryRoutes } from './routes/directories.js'
 import { createFileSearchRoutes } from './routes/file-search.js'
@@ -1938,6 +1939,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   app.use('/api/agents', createAgentRoutes(configDir, projectDir))
   app.use('/api/workflows', createWorkflowRoutes(configDir, config, projectDir))
   app.use('/api/dev-server', createDevServerRoutes())
+  app.use('/api/worktree', createWorktreeConfigRoutes())
   app.use('/api/terminals', createTerminalRoutes())
   app.use(
     '/api/auto-update',

@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process'
-import { mkdir, readFile, appendFile, stat } from 'node:fs/promises'
+import { mkdir, readFile, appendFile, stat, symlink, cp } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { logger } from '../utils/logger.js'
 import { gitSpawnEnv } from './env.js'
+import type { WorktreeConfig } from '../../shared/worktree.js'
 
 function captureStdout(cwd: string, args: string[]): Promise<string | null> {
   return new Promise((resolvePromise) => {
@@ -146,4 +147,65 @@ export async function ensureWorktree(projectDir: string, name: string, startBran
   }
 
   return { path: wtPath, name }
+}
+
+function parseGitignore(content: string): string[] {
+  return content
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#') && !l.startsWith('!'))
+    .map((l) => l.replace(/\/$/, ''))
+    .filter((l) => !/[?*[\]]/.test(l))
+}
+
+export async function syncIgnoredAssets(
+  projectDir: string,
+  worktreePath: string,
+  config: WorktreeConfig,
+): Promise<void> {
+  let gitignoreContent: string
+  try {
+    gitignoreContent = await readFile(resolve(projectDir, '.gitignore'), 'utf-8')
+  } catch {
+    return
+  }
+
+  const ignoredPaths = parseGitignore(gitignoreContent)
+  const results: string[] = []
+
+  for (const relPath of ignoredPaths) {
+    const sourcePath = resolve(projectDir, relPath)
+    const targetPath = resolve(worktreePath, relPath)
+
+    try {
+      await stat(sourcePath)
+    } catch {
+      continue
+    }
+
+    try {
+      await stat(targetPath)
+      continue
+    } catch {
+      // target doesn't exist — proceed
+    }
+
+    const strategy = config.overrides?.[relPath] ?? config.ignoredAssets
+
+    try {
+      if (strategy === 'symlink') {
+        await symlink(sourcePath, targetPath)
+        results.push(`symlink ${relPath}`)
+      } else if (strategy === 'copy') {
+        await cp(sourcePath, targetPath, { recursive: true })
+        results.push(`copy ${relPath}`)
+      }
+    } catch (err) {
+      logger.warn('Failed to sync ignored asset to worktree', { relPath, strategy, error: String(err) })
+    }
+  }
+
+  if (results.length > 0) {
+    logger.info('Synced ignored assets to worktree', { count: results.length, actions: results })
+  }
 }

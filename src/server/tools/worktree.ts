@@ -15,6 +15,7 @@ export const worktreeTool = createTool<WorktreeArgs>(
       name: 'worktree',
       description:
         'Manage git worktrees for the current session. Use this to work on isolated branches without affecting the main working tree.\n\n' +
+        'Asset strategy for .gitignored files (e.g. node_modules) is configured via .openfox/worktree.json in the project root with fields: ignoredAssets ("symlink"|"copy"|"skip"), overrides (optional, per-path exceptions). The server reads this file automatically on create. You can manage it via read_file/write_file, or the user can configure it in Project Settings → Worktree Asset Strategy.\n\n' +
         'Actions:\n' +
         '- list_branches: List local git branches for the current project\n' +
         '- create: Create a new branch + git worktree and attach this session to it (provide: name)\n' +

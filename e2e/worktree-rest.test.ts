@@ -143,6 +143,79 @@ describe('Session Worktree REST API', () => {
   })
 })
 
+describe('Worktree Config REST API', () => {
+  let server: TestServerHandle
+  let testProject: TestProject
+
+  beforeAll(async () => {
+    server = await createTestServer()
+  })
+
+  afterAll(async () => {
+    await server.close()
+  })
+
+  beforeEach(async () => {
+    testProject = await createTestProject({ template: 'git-repo' })
+  })
+
+  afterEach(async () => {
+    await testProject.cleanup()
+  })
+
+  it('GET /api/worktree/config returns null when no config exists', async () => {
+    const res = await fetch(`${server.url}/api/worktree/config?workdir=${encodeURIComponent(testProject.path)}`)
+    expect(res.status).toBe(200)
+    const data: any = await res.json()
+    expect(data.config).toBeNull()
+  })
+
+  it('POST /api/worktree/config saves and returns config', async () => {
+    const res = await fetch(`${server.url}/api/worktree/config?workdir=${encodeURIComponent(testProject.path)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ignoredAssets: 'copy', overrides: { node_modules: 'symlink' } }),
+    })
+    expect(res.status).toBe(200)
+    const data: any = await res.json()
+    expect(data.config.ignoredAssets).toBe('copy')
+    expect(data.config.overrides.node_modules).toBe('symlink')
+  })
+
+  it('GET /api/worktree/config reads back saved config', async () => {
+    // Save first
+    await fetch(`${server.url}/api/worktree/config?workdir=${encodeURIComponent(testProject.path)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ignoredAssets: 'symlink' }),
+    })
+
+    // Read back
+    const res = await fetch(`${server.url}/api/worktree/config?workdir=${encodeURIComponent(testProject.path)}`)
+    expect(res.status).toBe(200)
+    const data: any = await res.json()
+    expect(data.config.ignoredAssets).toBe('symlink')
+  })
+
+  it('rejects invalid strategy', async () => {
+    const res = await fetch(`${server.url}/api/worktree/config?workdir=${encodeURIComponent(testProject.path)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ignoredAssets: 'invalid' }),
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects missing workdir', async () => {
+    const res = await fetch(`${server.url}/api/worktree/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ignoredAssets: 'symlink' }),
+    })
+    expect(res.status).toBe(400)
+  })
+})
+
 describe('Project Branch REST API', () => {
   let server: TestServerHandle
   let testProject: TestProject

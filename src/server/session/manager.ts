@@ -34,7 +34,8 @@ import {
   type DangerLevel,
 } from '../db/sessions.js'
 import { getProject } from '../db/projects.js'
-import { ensureWorktree } from '../git/worktree.js'
+import { ensureWorktree, syncIgnoredAssets } from '../git/worktree.js'
+import { loadWorktreeConfig } from '../git/worktree-config.js'
 import { SessionNotFoundError } from '../utils/errors.js'
 import { logger } from '../utils/logger.js'
 import { EventEmitter, type Unsubscribe } from '../utils/async.js'
@@ -989,6 +990,13 @@ export class SessionManager {
     if (session.worktree) throw new Error('Session already has a worktree')
 
     const result = await ensureWorktree(project.workdir, name)
+
+    // Apply worktree asset strategy from config
+    const wtConfig = await loadWorktreeConfig(project.workdir)
+    if (wtConfig) {
+      await syncIgnoredAssets(project.workdir, result.path, wtConfig)
+    }
+
     // Keep workdir as project root — only set worktree
     updateSessionWorkdir(sessionId, project.workdir, result.path)
 
