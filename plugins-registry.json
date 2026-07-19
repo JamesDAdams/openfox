@@ -10,5 +10,11 @@
     "displayName": "Github Copilot",
     "description": "Authenticate with a Github copilot account via browser-based OAuth.",
     "githubUrl": "https://github.com/JamesDAdams/openfox-github-copilot"
+  },
+  {
+    "name": "openfox-google-antigravity",
+    "displayName": "Google Antigravity",
+    "description": "Authenticate with a Google Antigravity account via browser-based OAuth | ⚠️ Using this plugin violates Google's Terms of Service.",
+    "githubUrl": "https://github.com/JamesDAdams/openfox-google-antigravity"
   }
 ]

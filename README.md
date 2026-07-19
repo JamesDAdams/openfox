@@ -85,6 +85,8 @@ openfox provider remove   # Remove provider
 
 OpenFox supports provider plugins loaded from the `plugins` directory inside its configuration folder. Plugins can add authentication methods, transports, provider presets, and model discovery without adding provider-specific code to the OpenFox core.
 
+You can install the plugin manually or directly from the UI.
+
 Default plugin directories:
 
 - macOS: `~/Library/Application Support/openfox/plugins`
@@ -93,8 +95,9 @@ Default plugin directories:
 
 Restart OpenFox after installing or updating a plugin.
 
-To authenticate with a ChatGPT Plus or Pro account, you can install the [`openfox-chatgpt`](https://github.com/arthurlacoste/openfox-chatgpt) plugin.
-To authenticate with a Github copilot account, you can install the [`openfox-github-copilot`](https://github.com/JamesDAdams/openfox-github-copilot) plugin.
+- To authenticate with a ChatGPT Plus or Pro account, you can install the [`openfox-chatgpt`](https://github.com/arthurlacoste/openfox-chatgpt) plugin.
+- To authenticate with a Github copilot account, you can install the [`openfox-github-copilot`](https://github.com/JamesDAdams/openfox-github-copilot) plugin.
+- To authenticate with a Google Antigravity account, you can install the [`openfox-google-antigravity`](https://github.com/JamesDAdams/openfox-google-antigravity) plugin.
 
 ## Screenshots
 
