@@ -32,6 +32,7 @@ interface McpFormData {
   env: string
   url: string
   headers: string
+  timeout: string
 }
 
 interface McpServerFormFieldsProps {
@@ -117,6 +118,12 @@ function McpServerFormFields({ formData, onChange }: McpServerFormFieldsProps) {
           </div>
         </>
       )}
+      <FormField
+        label="Timeout (seconds)"
+        value={formData.timeout}
+        onChange={(v) => onChange({ ...formData, timeout: v })}
+        placeholder="optional, e.g. 30"
+      />
     </>
   )
 }
@@ -138,6 +145,7 @@ interface McpServerState {
     env?: Record<string, string>
     url?: string
     headers?: Record<string, string>
+    timeout?: number
   }
   status: 'connected' | 'disconnected' | 'error'
   tools: McpToolInfo[]
@@ -333,6 +341,7 @@ export function ToolsTab() {
     env: '',
     url: '',
     headers: '',
+    timeout: '',
   })
   const [formError, setFormError] = useState('')
   const [mcpError, setMcpError] = useState('')
@@ -372,6 +381,12 @@ export function ToolsTab() {
   function validateTransportFields(): string | null {
     if (formData.transport === 'stdio' && !formData.command) return 'Command is required for stdio transport'
     if (formData.transport === 'http' && !formData.url) return 'URL is required for HTTP transport'
+    if (formData.timeout) {
+      const parsed = parseInt(formData.timeout, 10)
+      if (isNaN(parsed) || parsed < 0) {
+        return 'Timeout must be a non-negative number'
+      }
+    }
     return null
   }
 
@@ -387,6 +402,12 @@ export function ToolsTab() {
       body.url = formData.url
       body.headers = parseKeyValueLines(formData.headers)
     }
+    if (formData.timeout) {
+      const parsed = parseInt(formData.timeout, 10)
+      if (!isNaN(parsed)) {
+        body.timeout = parsed
+      }
+    }
     return body
   }
 
@@ -398,6 +419,7 @@ export function ToolsTab() {
     env: '',
     url: '',
     headers: '',
+    timeout: '',
   }
 
   const handleAdd = async () => {
@@ -450,6 +472,7 @@ export function ToolsTab() {
             .map(([k, v]) => `${k}=${v}`)
             .join('\n')
         : '',
+      timeout: server.config.timeout !== undefined ? String(server.config.timeout) : '',
     })
     setFormError('')
     setEditingServer(server.name)
