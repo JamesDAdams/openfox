@@ -103,6 +103,44 @@ describe('GET /api/files', () => {
     expect(first.path).toContain('index.ts')
   })
 
+  it('discovers files deeper than 5 levels (regression: deep limit)', async () => {
+    const deepDir = join(testDir, 'a', 'b', 'c', 'd', 'e', 'f')
+    await mkdir(deepDir, { recursive: true })
+    await writeFile(join(deepDir, 'deep-file.ts'), 'export {}')
+
+    const res = await fetch(`${baseUrl}/api/files?q=deep-file&workdir=${encodeURIComponent(testDir)}`)
+    expect(res.status).toBe(200)
+    const results = (await res.json()) as Array<{ path: string; name: string }>
+    expect(results.some((r) => r.name === 'deep-file.ts')).toBe(true)
+  })
+
+  it('lists directory contents when query ends with trailing slash', async () => {
+    const nestedDir = join(testDir, 'components', 'ui')
+    await mkdir(nestedDir, { recursive: true })
+    await writeFile(join(nestedDir, 'Button.tsx'), '')
+    await writeFile(join(nestedDir, 'Input.tsx'), '')
+
+    const res = await fetch(`${baseUrl}/api/files?q=components/ui/&workdir=${encodeURIComponent(testDir)}`)
+    expect(res.status).toBe(200)
+    const results = (await res.json()) as Array<{ path: string; name: string }>
+    expect(results.length).toBe(2)
+    expect(results.some((r) => r.name === 'Button.tsx')).toBe(true)
+    expect(results.some((r) => r.name === 'Input.tsx')).toBe(true)
+  })
+
+  it('matches partial filename after directory path', async () => {
+    const nestedDir = join(testDir, 'components', 'ui')
+    await mkdir(nestedDir, { recursive: true })
+    await writeFile(join(nestedDir, 'Button.tsx'), '')
+    await writeFile(join(nestedDir, 'Input.tsx'), '')
+
+    const res = await fetch(`${baseUrl}/api/files?q=components/ui/But&workdir=${encodeURIComponent(testDir)}`)
+    expect(res.status).toBe(200)
+    const results = (await res.json()) as Array<{ path: string; name: string }>
+    expect(results.length).toBeGreaterThan(0)
+    expect(results[0]!.name).toBe('Button.tsx')
+  })
+
   it('ignores node_modules by default', async () => {
     const nodeModulesDir = join(testDir, 'node_modules')
     await mkdir(nodeModulesDir, { recursive: true })

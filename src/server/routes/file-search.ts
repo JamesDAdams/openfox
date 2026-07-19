@@ -1,6 +1,17 @@
 import { Router } from 'express'
 import fg from 'fast-glob'
 
+const IGNORED_PATTERNS = [
+  '**/node_modules/**',
+  '**/.git/**',
+  '**/dist/**',
+  '**/.next/**',
+  '**/.cache/**',
+  '**/__pycache__/**',
+  '**/*.lock',
+  '**/.openfox/**',
+]
+
 export function createFileSearchRoutes(): Router {
   const router = Router()
 
@@ -27,21 +38,16 @@ interface FileSuggestion {
 }
 
 async function searchFiles(query: string, workdir: string): Promise<FileSuggestion[]> {
+  if (query.endsWith('/')) {
+    return listDirectoryContents(query, workdir)
+  }
+
   const entries = await fg(['**/*'], {
     cwd: workdir,
     dot: true,
-    deep: 5,
+    deep: 32,
     onlyFiles: false,
-    ignore: [
-      '**/node_modules/**',
-      '**/.git/**',
-      '**/dist/**',
-      '**/.next/**',
-      '**/.cache/**',
-      '**/__pycache__/**',
-      '**/*.lock',
-      '**/.openfox/**',
-    ],
+    ignore: IGNORED_PATTERNS,
     objectMode: true,
   })
 
@@ -70,6 +76,33 @@ async function searchFiles(query: string, workdir: string): Promise<FileSuggesti
   scored.sort((a, b) => b.score - a.score)
 
   return scored.slice(0, 20)
+}
+
+async function listDirectoryContents(query: string, workdir: string): Promise<FileSuggestion[]> {
+  const dirPath = query.slice(0, -1).replace(/\/+/g, '/')
+  const pattern = dirPath ? `${dirPath}/*` : '*'
+
+  const entries = await fg([pattern], {
+    cwd: workdir,
+    dot: true,
+    onlyFiles: false,
+    ignore: IGNORED_PATTERNS,
+    objectMode: true,
+  })
+
+  const results = entries.map((entry) => {
+    const isDir = entry.dirent.isDirectory()
+    return {
+      path: entry.path,
+      name: entry.path.split('/').pop() || entry.path,
+      type: isDir ? ('directory' as const) : ('file' as const),
+      score: isDir ? 110 : 100,
+    }
+  })
+
+  results.sort((a, b) => b.score - a.score)
+
+  return results.slice(0, 20)
 }
 
 function fuzzyScore(filePath: string, query: string): number {
