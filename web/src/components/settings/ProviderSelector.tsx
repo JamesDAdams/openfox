@@ -33,6 +33,7 @@ export function ProviderSelector() {
   const [authBusy, setAuthBusy] = useState<string | null>(null)
   const [deviceChallenge, setDeviceChallenge] = useState<{
     providerId: string
+    mode?: 'device' | 'browser' | 'external'
     verificationUrl: string
     directUrl?: string
     userCode?: string
@@ -216,6 +217,7 @@ export function ProviderSelector() {
       const response = await authFetch(`/api/provider-auth/${providerId}/login`, { method: 'POST' })
       if (!response.ok) throw new Error('Unable to start provider sign-in')
       const challenge = (await response.json()) as {
+        mode?: 'device' | 'browser' | 'external'
         verificationUrl: string
         directUrl?: string
         userCode?: string
@@ -609,41 +611,61 @@ export function ProviderSelector() {
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={copyDeviceCode}
-              className="mt-6 w-full select-all rounded-lg border border-accent-primary/40 bg-bg-primary px-4 py-5 font-mono text-3xl font-semibold tracking-[0.2em] text-accent-primary hover:bg-bg-tertiary"
-              title="Copy code"
-            >
-              {deviceChallenge.userCode ?? 'Continue'}
-            </button>
+            {deviceChallenge.mode !== 'browser' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={copyDeviceCode}
+                  className="mt-6 w-full select-all rounded-lg border border-accent-primary/40 bg-bg-primary px-4 py-5 font-mono text-3xl font-semibold tracking-[0.2em] text-accent-primary hover:bg-bg-tertiary"
+                  title="Copy code"
+                >
+                  {deviceChallenge.userCode ?? 'Continue'}
+                </button>
 
-            <div className="mt-3 text-center text-xs text-text-muted">
-              {codeCopied ? 'Copied to clipboard' : 'Click the code to copy it'}
-            </div>
+                <div className="mt-3 text-center text-xs text-text-muted">
+                  {codeCopied ? 'Copied to clipboard' : 'Click the code to copy it'}
+                </div>
 
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={copyDeviceCode}
-                className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-text-primary hover:bg-bg-tertiary"
-              >
-                {codeCopied ? 'Copied' : 'Copy code'}
-              </button>
-              <button
-                type="button"
-                onClick={openDeviceAuthorization}
-                className="flex-1 rounded-lg bg-accent-primary px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-primary/90"
-              >
-                {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
-              </button>
-            </div>
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={copyDeviceCode}
+                    className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-text-primary hover:bg-bg-tertiary"
+                  >
+                    {codeCopied ? 'Copied' : 'Copy code'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openDeviceAuthorization}
+                    className="flex-1 rounded-lg bg-accent-primary px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-primary/90"
+                  >
+                    {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
+                  </button>
+                </div>
 
-            <p className="mt-4 text-center text-xs text-text-muted">
-              {devicePageOpened
-                ? 'If the browser blocked or closed the tab, reopen authorization.'
-                : 'OpenFox stays open while you complete authorization in the other tab.'}
-            </p>
+                <p className="mt-4 text-center text-xs text-text-muted">
+                  {devicePageOpened
+                    ? 'If the browser blocked or closed the tab, reopen authorization.'
+                    : 'OpenFox stays open while you complete authorization in the other tab.'}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-6 text-sm text-text-secondary leading-relaxed bg-bg-primary p-4 rounded-lg border border-border">
+                  {deviceChallenge.instructions}
+                </p>
+
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={openDeviceAuthorization}
+                    className="w-full rounded-lg bg-accent-primary px-4 py-2 text-sm font-medium text-text-primary hover:bg-accent-primary/90"
+                  >
+                    {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

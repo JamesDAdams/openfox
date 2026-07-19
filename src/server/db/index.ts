@@ -240,8 +240,7 @@ function runMigrations(db: Database.Database): void {
   if (!columnNames.includes('workspace') && columnNames.includes('worktree')) {
     logger.info('Migrating sessions table: renaming worktree to workspace')
     db.exec(`ALTER TABLE sessions RENAME COLUMN worktree TO workspace`)
-  }
-  if (!columnNames.includes('workspace')) {
+  } else if (!columnNames.includes('workspace')) {
     logger.info('Migrating sessions table: adding workspace column')
     db.exec(`ALTER TABLE sessions ADD COLUMN workspace TEXT`)
   }

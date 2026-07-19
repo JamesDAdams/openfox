@@ -395,6 +395,7 @@ export function ProviderModal({
   )
   const [providerAuthBusy, setProviderAuthBusy] = useState(false)
   const [deviceChallenge, setDeviceChallenge] = useState<{
+    mode?: 'device' | 'browser' | 'external'
     verificationUrl: string
     directUrl?: string
     userCode?: string
@@ -600,6 +601,7 @@ export function ProviderModal({
       const response = await authFetch(`/api/provider-auth/${providerId}/login`, { method: 'POST' })
       if (!response.ok) throw new Error('Unable to start provider sign-in')
       const challenge = (await response.json()) as {
+        mode?: 'device' | 'browser' | 'external'
         verificationUrl: string
         directUrl?: string
         userCode?: string
@@ -1053,30 +1055,45 @@ export function ProviderModal({
                 </div>
                 {deviceChallenge && (
                   <div className="mt-4 border-t border-border pt-4">
-                    <p className="text-xs text-text-muted">Use this code to complete authorization:</p>
-                    <button
-                      type="button"
-                      onClick={() => void copyDeviceCode()}
-                      className="mt-3 w-full rounded-lg border border-accent-primary/40 px-4 py-4 font-mono text-2xl font-semibold tracking-[0.2em] text-accent-primary"
-                    >
-                      {deviceChallenge.userCode ?? 'Continue'}
-                    </button>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void copyDeviceCode()}
-                        className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-text-primary"
-                      >
-                        {codeCopied ? 'Copied' : 'Copy code'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openDeviceAuthorization}
-                        className="flex-1 rounded-lg bg-accent-primary px-3 py-2 text-sm font-medium text-text-primary"
-                      >
-                        {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
-                      </button>
-                    </div>
+                    {deviceChallenge.mode !== 'browser' ? (
+                      <>
+                        <p className="text-xs text-text-muted">Use this code to complete authorization:</p>
+                        <button
+                          type="button"
+                          onClick={() => void copyDeviceCode()}
+                          className="mt-3 w-full rounded-lg border border-accent-primary/40 px-4 py-4 font-mono text-2xl font-semibold tracking-[0.2em] text-accent-primary"
+                        >
+                          {deviceChallenge.userCode ?? 'Continue'}
+                        </button>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void copyDeviceCode()}
+                            className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-text-primary"
+                          >
+                            {codeCopied ? 'Copied' : 'Copy code'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openDeviceAuthorization}
+                            className="flex-1 rounded-lg bg-accent-primary px-3 py-2 text-sm font-medium text-text-primary"
+                          >
+                            {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-text-muted mb-3">{deviceChallenge.instructions}</p>
+                        <button
+                          type="button"
+                          onClick={openDeviceAuthorization}
+                          className="w-full rounded-lg bg-accent-primary px-3 py-2 text-sm font-medium text-text-primary"
+                        >
+                          {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
