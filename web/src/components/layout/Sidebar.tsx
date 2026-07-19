@@ -6,6 +6,9 @@ import type { SessionSummary } from '@shared/types.js'
 import { ProjectSettingsModal } from '../settings/ProjectSettingsModal'
 import { DropdownMenu } from '../shared/DropdownMenu'
 import { CloseButton } from '../shared/CloseButton'
+import { ConfirmModal } from '../shared/ConfirmModal'
+import { Modal } from '../shared/Modal'
+import { ModalFooter } from '../shared/ModalFooter'
 import { EllipsisIcon, SpinIcon } from '../shared/icons'
 import { groupSessionsByDate, formatDateHeader, formatTime } from '../../lib/format-date.js'
 
@@ -18,6 +21,10 @@ interface SidebarProps {
 export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
   const [, navigate] = useLocation()
   const [showSettings, setShowSettings] = useState(false)
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
+  const [sessionToRename, setSessionToRename] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [showDeleteAll, setShowDeleteAll] = useState(false)
 
   const sessions = useSessionStore((state) => state.sessions)
   const currentSession = useSessionStore((state) => state.currentSession)
@@ -60,31 +67,42 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
 
   const handleDeleteSession = (sessionId: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
-    if (confirm('Delete this session?')) {
-      deleteSession(sessionId)
-      // If deleting current session, navigate to project root
-      if (currentSession?.id === sessionId) {
-        navigate(`/p/${projectId}`)
-      }
+    setSessionToDelete(sessionId)
+  }
+
+  const handleConfirmDeleteSession = () => {
+    if (!sessionToDelete) return
+    deleteSession(sessionToDelete)
+    if (currentSession?.id === sessionToDelete) {
+      navigate(`/p/${projectId}`)
     }
+    setSessionToDelete(null)
   }
 
   const handleRenameSession = (sessionId: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
     const session = sessions.find((s) => s.id === sessionId)
     const currentTitle = session?.title ?? sessionId.slice(0, 6)
-    const newTitle = prompt('Rename session:', currentTitle)
-    if (newTitle !== null && newTitle.trim() !== '') {
-      const renameSession = useSessionStore.getState().renameSession
-      renameSession(sessionId, newTitle.trim())
-    }
+    setRenameValue(currentTitle)
+    setSessionToRename(sessionId)
+  }
+
+  const handleConfirmRename = () => {
+    if (!sessionToRename || renameValue.trim() === '') return
+    const renameSession = useSessionStore.getState().renameSession
+    renameSession(sessionToRename, renameValue.trim())
+    setSessionToRename(null)
+    setRenameValue('')
   }
 
   const handleDeleteAllSessions = () => {
-    if (confirm('Delete all sessions in this project? This cannot be undone.')) {
-      deleteAllSessions(projectId)
-      navigate(`/p/${projectId}`)
-    }
+    setShowDeleteAll(true)
+  }
+
+  const handleConfirmDeleteAll = () => {
+    deleteAllSessions(projectId)
+    navigate(`/p/${projectId}`)
+    setShowDeleteAll(false)
   }
 
   return (
@@ -140,6 +158,60 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
         {currentProject && (
           <ProjectSettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} project={currentProject} />
         )}
+
+        <ConfirmModal
+          isOpen={sessionToDelete !== null}
+          onClose={() => setSessionToDelete(null)}
+          onConfirm={handleConfirmDeleteSession}
+          title="Delete session?"
+          message="This session will be permanently deleted."
+          confirmLabel="Delete session"
+          confirmVariant="danger"
+        />
+
+        <ConfirmModal
+          isOpen={showDeleteAll}
+          onClose={() => setShowDeleteAll(false)}
+          onConfirm={handleConfirmDeleteAll}
+          title="Delete all sessions?"
+          message="Delete all sessions in this project? This cannot be undone."
+          confirmLabel="Delete all"
+          confirmVariant="danger"
+        />
+
+        <Modal
+          isOpen={sessionToRename !== null}
+          onClose={() => {
+            setSessionToRename(null)
+            setRenameValue('')
+          }}
+          title="Rename session"
+          size="sm"
+          footer={
+            <ModalFooter
+              onCancel={() => {
+                setSessionToRename(null)
+                setRenameValue('')
+              }}
+              onSave={handleConfirmRename}
+              saving={false}
+              saveDisabled={renameValue.trim() === ''}
+              saveLabel="Rename"
+            />
+          }
+        >
+          <input
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleConfirmRename()
+            }}
+            onFocus={(e) => e.target.select()}
+            className="w-full px-3 py-2 text-sm text-text-primary bg-bg-tertiary border border-border rounded focus:outline-none focus:ring-1 focus:ring-accent-primary"
+            autoFocus
+          />
+        </Modal>
 
         <div className="flex-1 overflow-y-auto">
           {projectSessions.length === 0 ? (

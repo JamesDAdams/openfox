@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../shared/Button'
+import { ConfirmModal } from '../shared/ConfirmModal'
 import { DirectoryBrowser } from '../shared/DirectoryBrowser'
 import { packageFromDataTransfer, packageFromFileList, type DroppedSkillPackage } from './skill-package-drop'
 
@@ -28,23 +29,30 @@ export function SkillLibraryPanel({
   const [choosing, setChoosing] = useState(false)
   const [installing, setInstalling] = useState(false)
   const [error, setError] = useState('')
+  const [pendingPath, setPendingPath] = useState<string | null>(null)
+  const [confirmingPath, setConfirmingPath] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     inputRef.current?.setAttribute('webkitdirectory', '')
   }, [])
 
-  const choose = async (path: string) => {
-    const trusted = window.confirm(
-      'Skills may contain instructions and scripts. Select this folder for discovery without executing package content?',
-    )
-    if (!trusted) return
-    const result = await onSelect(path)
+  const choose = (path: string) => {
+    setPendingPath(path)
+  }
+
+  const handleConfirmPath = async () => {
+    if (!pendingPath || confirmingPath) return
+    setConfirmingPath(true)
+    const result = await onSelect(pendingPath)
     if (result && !result.success) {
       setError(result.error ?? 'Cannot use selected folder.')
+      setConfirmingPath(false)
       return
     }
+    setPendingPath(null)
     setChoosing(false)
+    setConfirmingPath(false)
   }
 
   const install = async (skillPackage: DroppedSkillPackage) => {
@@ -131,6 +139,16 @@ export function SkillLibraryPanel({
           onClose={() => setChoosing(false)}
         />
       )}
+
+      <ConfirmModal
+        isOpen={pendingPath !== null}
+        onClose={() => setPendingPath(null)}
+        onConfirm={handleConfirmPath}
+        title="Trust this folder?"
+        message="Skills may contain instructions and scripts. Select this folder for discovery without executing package content?"
+        confirmLabel="Trust folder"
+        disabled={confirmingPath}
+      />
     </section>
   )
 }

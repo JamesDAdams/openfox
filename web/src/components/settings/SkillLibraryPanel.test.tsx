@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SkillLibraryPanel } from './SkillLibraryPanel'
 
 vi.mock('../shared/DirectoryBrowser', () => ({
@@ -11,10 +11,6 @@ vi.mock('../shared/DirectoryBrowser', () => ({
 }))
 
 describe('SkillLibraryPanel', () => {
-  beforeEach(() => {
-    window.confirm = vi.fn(() => true)
-  })
-
   it('shows the default global folder and lets it be changed', () => {
     const onSelect = vi.fn()
     render(
@@ -36,6 +32,7 @@ describe('SkillLibraryPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Change folder' }))
     fireEvent.click(screen.getByRole('button', { name: 'Select mocked folder' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Trust folder' }))
     expect(onSelect).toHaveBeenCalledWith('/Users/test/Shared Skills')
   })
 })

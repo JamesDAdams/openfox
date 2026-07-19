@@ -29,9 +29,7 @@ const REGISTRY_RESPONSE = {
 }
 
 const INSTALLED_RESPONSE = {
-  installed: [
-    { name: 'openfox-chatgpt', version: 'v1.0.0' },
-  ],
+  installed: [{ name: 'openfox-chatgpt', version: 'v1.0.0' }],
 }
 
 function createJsonResponse(data: unknown, status = 200): Response {
@@ -149,9 +147,12 @@ describe('PluginsTab', () => {
     await userEvent.setup().click(installButtons[0]!)
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/plugins/install', expect.objectContaining({
-        method: 'POST',
-      }))
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/plugins/install',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      )
     })
   })
 
@@ -167,15 +168,20 @@ describe('PluginsTab', () => {
     })
 
     mockFetch.mockResolvedValueOnce(createJsonResponse({ success: true }))
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const removeButton = screen.getByRole('button', { name: 'Remove' })
     await userEvent.setup().click(removeButton)
 
+    const confirmButtons = screen.getAllByRole('button', { name: 'Remove' })
+    await userEvent.setup().click(confirmButtons[1]!)
+
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/plugins/openfox-chatgpt', expect.objectContaining({
-        method: 'DELETE',
-      }))
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/plugins/openfox-chatgpt',
+        expect.objectContaining({
+          method: 'DELETE',
+        }),
+      )
     })
   })
 })
