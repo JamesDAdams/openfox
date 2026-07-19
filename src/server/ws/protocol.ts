@@ -566,6 +566,13 @@ export function storedEventToServerMessage(event: StoredEvent): ServerMessage | 
       return createChatFormatRetryMessage(data.attempt, data.maxAttempts, data.pattern, data.field, data.matchedContent)
     }
 
+    case 'path.confirmation_pending':
+    case 'path.confirmation_responded':
+      // Confirmations are handled via broadcastForSession onMessage callback
+      // (with project-scoped filtering) and folded into session.state on load.
+      // Avoid re-broadcasting to all clients via EventStore replay.
+      return null
+
     case 'turn.snapshot':
     case 'context.compacted':
       // These are internal events, not sent to frontend in real-time

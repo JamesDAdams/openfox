@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useLocation, Link } from 'wouter'
 import { useSessionStore } from '../../stores/session'
+import type { PendingPathConfirmation } from '../../stores/session/types'
 import { useProjectStore } from '../../stores/project'
 import type { SessionSummary } from '@shared/types.js'
 import { ProjectSettingsModal } from '../settings/ProjectSettingsModal'
@@ -9,7 +10,7 @@ import { CloseButton } from '../shared/CloseButton'
 import { ConfirmModal } from '../shared/ConfirmModal'
 import { Modal } from '../shared/Modal'
 import { ModalFooter } from '../shared/ModalFooter'
-import { EllipsisIcon, SpinIcon } from '../shared/icons'
+import { EllipsisIcon, SpinIcon, StopIcon } from '../shared/icons'
 import { groupSessionsByDate, formatDateHeader, formatTime } from '../../lib/format-date.js'
 
 interface SidebarProps {
@@ -34,6 +35,8 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
   const loadMoreSessions = useSessionStore((state) => state.loadMoreSessions)
   const sessionsHasMore = useSessionStore((state) => state.sessionsHasMore)
   const sessionsPaginationLoading = useSessionStore((state) => state.sessionsPaginationLoading)
+  const sessionsWithPendingConfirmations = useSessionStore((state) => state.sessionsWithPendingConfirmations)
+  const pendingPathConfirmations = useSessionStore((state) => state.pendingPathConfirmations)
 
   const currentProject = useProjectStore((state) => state.currentProject)
 
@@ -226,6 +229,8 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
                   handleDeleteSession,
                   handleRenameSession,
                   projectId,
+                  sessionsWithPendingConfirmations,
+                  pendingPathConfirmations,
                 )}
               </div>
               {sessionsPaginationLoading && (
@@ -247,6 +252,8 @@ function renderSessionGroups(
   handleDeleteSession: (sessionId: string, e?: React.MouseEvent) => void,
   handleRenameSession: (sessionId: string, e?: React.MouseEvent) => void,
   projectId: string,
+  sessionsWithPendingConfirmations: string[],
+  pendingPathConfirmations: PendingPathConfirmation[],
 ) {
   const groups = groupSessionsByDate(projectSessions)
 
@@ -266,6 +273,8 @@ function renderSessionGroups(
           const isActive = currentSession?.id === session.id
           const hasUnread = unreadSessionIds.includes(session.id)
           const isRunning = session.isRunning
+          const hasPendingConfirmation =
+            sessionsWithPendingConfirmations.includes(session.id) || (isActive && pendingPathConfirmations.length > 0)
           return (
             <div
               key={session.id}
@@ -308,7 +317,11 @@ function renderSessionGroups(
                 </div>
                 {/* Time displayed below the title as muted secondary text */}
                 <div className="flex items-center gap-2 mt-1">
-                  {isRunning ? (
+                  {hasPendingConfirmation ? (
+                    <span title="Awaiting path confirmation">
+                      <StopIcon className="w-3 h-3 text-red-400 flex-shrink-0" />
+                    </span>
+                  ) : isRunning ? (
                     <SpinIcon />
                   ) : hasUnread && !isActive ? (
                     <span

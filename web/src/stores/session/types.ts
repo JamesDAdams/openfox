@@ -46,6 +46,8 @@ export interface SessionState {
   contextState: ContextState | null
   subAgentContextStates: Record<string, ContextState>
   pendingPathConfirmations: PendingPathConfirmation[]
+  crossSessionConfirmations: Record<string, PendingPathConfirmation[]>
+  sessionsWithPendingConfirmations: string[]
   gitStatus: {
     branch: string | null
     diff: { files: { path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number }[] }

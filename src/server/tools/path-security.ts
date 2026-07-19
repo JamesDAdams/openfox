@@ -621,7 +621,7 @@ export async function requestPathAccess(
   // This ensures the user is aware the agent is bypassing hooks/pre-commit checks
   if (command && extractGitNoVerify(command)) {
     emitPendingEvent([workdir], 'git_no_verify')
-    const confirmationPromise = registerPathConfirmation(callId, [workdir], sessionId)
+    const confirmationPromise = registerPathConfirmation(callId, [workdir], sessionId, tool, workdir, 'git_no_verify')
     onEvent(createChatPathConfirmationMessage(callId, tool, ['git --no-verify detected'], workdir, 'git_no_verify'))
     const approved = await confirmationPromise
     if (!approved) {
@@ -639,7 +639,14 @@ export async function requestPathAccess(
     const dangerousPatterns = extractDangerousPatterns(command)
     if (dangerousPatterns.length > 0) {
       emitPendingEvent([workdir], 'dangerous_command')
-      const confirmationPromise = registerPathConfirmation(callId, [workdir], sessionId)
+      const confirmationPromise = registerPathConfirmation(
+        callId,
+        [workdir],
+        sessionId,
+        tool,
+        workdir,
+        'dangerous_command',
+      )
       onEvent(
         createChatPathConfirmationMessage(callId, tool, [dangerousPatterns.join(', ')], workdir, 'dangerous_command'),
       )
@@ -682,7 +689,14 @@ export async function requestPathAccess(
   emitPendingEvent(allPathsNeedingConfirmation, reason)
 
   // Create the confirmation Promise and send event to client
-  const confirmationPromise = registerPathConfirmation(callId, allPathsNeedingConfirmation, sessionId)
+  const confirmationPromise = registerPathConfirmation(
+    callId,
+    allPathsNeedingConfirmation,
+    sessionId,
+    tool,
+    workdir,
+    reason,
+  )
 
   // Send path confirmation event to client (this shows the modal)
   onEvent(createChatPathConfirmationMessage(callId, tool, allPathsNeedingConfirmation, workdir, reason))
@@ -739,6 +753,9 @@ const pendingConfirmations = new Map<
     reject: (error: Error) => void
     paths: string[]
     sessionId: string
+    tool: string
+    workdir: string
+    reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify'
   }
 >()
 
@@ -746,9 +763,16 @@ const pendingConfirmations = new Map<
  * Register a pending path confirmation.
  * Stores the paths and sessionId so they can be added to allowlist on approval.
  */
-export function registerPathConfirmation(callId: string, paths: string[], sessionId: string): Promise<boolean> {
+export function registerPathConfirmation(
+  callId: string,
+  paths: string[],
+  sessionId: string,
+  tool: string,
+  workdir: string,
+  reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify',
+): Promise<boolean> {
   return new Promise((resolve, reject) => {
-    pendingConfirmations.set(callId, { resolve, reject, paths, sessionId })
+    pendingConfirmations.set(callId, { resolve, reject, paths, sessionId, tool, workdir, reason })
   })
 }
 
@@ -846,4 +870,46 @@ export function cancelPathConfirmationsForSession(sessionId: string, reason: str
  */
 export function hasPendingPathConfirmation(callId: string): boolean {
   return pendingConfirmations.has(callId)
+}
+
+/**
+ * Get all pending path confirmations grouped by session ID.
+ * Returns a record mapping sessionId to arrays of pending confirmations.
+ */
+export function getPendingConfirmationsBySession(): Record<
+  string,
+  Array<{
+    callId: string
+    tool: string
+    paths: string[]
+    workdir: string
+    reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify'
+  }>
+> {
+  const bySession: Record<
+    string,
+    Array<{
+      callId: string
+      tool: string
+      paths: string[]
+      workdir: string
+      reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify'
+    }>
+  > = {}
+  for (const [_callId, pending] of pendingConfirmations.entries()) {
+    const entry = {
+      callId: _callId,
+      tool: pending.tool,
+      paths: pending.paths,
+      workdir: pending.workdir,
+      reason: pending.reason,
+    }
+    const existing = bySession[pending.sessionId]
+    if (existing) {
+      existing.push(entry)
+    } else {
+      bySession[pending.sessionId] = [entry]
+    }
+  }
+  return bySession
 }

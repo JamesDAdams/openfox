@@ -50,6 +50,8 @@ const sessionStoreState = {
   ],
   currentSession: { id: 'session-2' },
   unreadSessionIds: ['session-3'],
+  sessionsWithPendingConfirmations: [],
+  pendingPathConfirmations: [],
   createSession: vi.fn(),
   deleteSession: vi.fn(),
   listSessions: vi.fn(),

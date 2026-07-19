@@ -897,7 +897,14 @@ describe('path-security', () => {
     })
 
     it('registers, approves, and cancels pending confirmations', async () => {
-      const approvedPromise = registerPathConfirmation('call-approve', ['/tmp/secret'], 'session-1')
+      const approvedPromise = registerPathConfirmation(
+        'call-approve',
+        ['/tmp/secret'],
+        'session-1',
+        'read_file',
+        '/tmp',
+        'outside_workdir',
+      )
       expect(hasPendingPathConfirmation('call-approve')).toBe(true)
       expect(providePathConfirmation('call-approve', true)).toEqual({
         found: true,
@@ -908,7 +915,14 @@ describe('path-security', () => {
       expect(hasPendingPathConfirmation('call-approve')).toBe(false)
       expect(isPathAllowed('session-1', '/tmp/secret')).toBe(true)
 
-      const deniedPromise = registerPathConfirmation('call-cancel', ['/tmp/other'], 'session-2')
+      const deniedPromise = registerPathConfirmation(
+        'call-cancel',
+        ['/tmp/other'],
+        'session-2',
+        'read_file',
+        '/tmp',
+        'outside_workdir',
+      )
       const deniedAssertion = expect(deniedPromise).rejects.toThrow('user cancelled')
       expect(cancelPathConfirmation('call-cancel', 'user cancelled')).toBe(true)
       await deniedAssertion
@@ -916,9 +930,30 @@ describe('path-security', () => {
     })
 
     it('cancels all pending confirmations for a session', async () => {
-      const pendingA = registerPathConfirmation('call-a', ['/tmp/a'], 'session-1')
-      const pendingB = registerPathConfirmation('call-b', ['/tmp/b'], 'session-1')
-      const pendingC = registerPathConfirmation('call-c', ['/tmp/c'], 'session-2')
+      const pendingA = registerPathConfirmation(
+        'call-a',
+        ['/tmp/a'],
+        'session-1',
+        'read_file',
+        '/tmp',
+        'outside_workdir',
+      )
+      const pendingB = registerPathConfirmation(
+        'call-b',
+        ['/tmp/b'],
+        'session-1',
+        'read_file',
+        '/tmp',
+        'outside_workdir',
+      )
+      const pendingC = registerPathConfirmation(
+        'call-c',
+        ['/tmp/c'],
+        'session-2',
+        'read_file',
+        '/tmp',
+        'outside_workdir',
+      )
 
       const rejectedA = expect(pendingA).rejects.toThrow('session aborted')
       const rejectedB = expect(pendingB).rejects.toThrow('session aborted')

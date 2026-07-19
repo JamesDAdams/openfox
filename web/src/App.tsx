@@ -28,6 +28,7 @@ import { ReadonlySessionView } from './components/plan/ReadonlySessionView'
 import { Spinner, SpinnerWithText } from './components/shared/Spinner'
 import { PasswordModal } from './components/PasswordModal'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
+import { CrossSessionConfirmationBanner } from './components/shared/CrossSessionConfirmationBanner'
 import { UpdateBanner } from './components/UpdateBanner'
 
 function hasStoredToken(): boolean {
@@ -116,7 +117,8 @@ function ProjectSessionView({
   return (
     <>
       <Sidebar projectId={projectId!} isOpen={sidebarOpen} onClose={onSidebarToggle} />
-      <div className="flex-1 min-w-0 bg-primary">
+      <div className="flex-1 min-w-0 bg-primary flex flex-col">
+        <CrossSessionConfirmationBanner projectId={projectId} />
         <PlanPanel criteriaSidebarOpen={rightSidebarOpen} onCriteriaSidebarToggle={onRightSidebarToggle} />
       </div>
     </>

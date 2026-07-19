@@ -421,14 +421,6 @@ export function createWebSocketServer(
     return client.activeSessionId === sessionId
   }
 
-  const broadcastForSession = (sessionId: string, msg: ServerMessage) => {
-    for (const [clientWs, client] of clients) {
-      if (isSubscribedToSession(client, sessionId) && clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(serializeServerMessage({ ...msg, sessionId }))
-      }
-    }
-  }
-
   // Ordered send queue implementation for FIFO message delivery
   function enqueueSend(client: ClientConnection, data: string, seq: number): void {
     // Drop message if queue is too large (prevents memory leak on slow clients)
@@ -556,13 +548,41 @@ export function createWebSocketServer(
   // Note: SessionManager subscription removed - EventStore global subscription (below)
   // is the single source of truth for all session events including running.changed
 
-  // Broadcast dev server events to all connected clients
+  // Broadcast all (dev server events, cross-session confirmations)
   const broadcastAll = (msg: ServerMessage) => {
     const serialized = serializeServerMessage(msg)
     for (const [clientWs, client] of clients) {
       if (clientWs.readyState === WebSocket.OPEN) {
         const seq = client.lastSentSeq + 1
         enqueueSend(client, serialized, seq)
+      }
+    }
+  }
+
+  const broadcastForSession = (sessionId: string, msg: ServerMessage) => {
+    const session = sessionManager.getSession(sessionId)
+    const projectId = session?.projectId
+    for (const [clientWs, client] of clients) {
+      if (clientWs.readyState !== WebSocket.OPEN) continue
+      if (!isSubscribedToSession(client, sessionId)) continue
+      const seq = client.lastSentSeq + 1
+      enqueueSend(client, serializeServerMessage({ ...msg, sessionId }), seq)
+    }
+    // Broadcast confirmations to non-subscribed clients within the same project
+    if (msg.type === 'chat.path_confirmation' && projectId) {
+      for (const [clientWs, client] of clients) {
+        if (clientWs.readyState !== WebSocket.OPEN) continue
+        if (isSubscribedToSession(client, sessionId)) continue
+        const clientProjectId = client.activeSessionId
+          ? sessionManager.getSession(client.activeSessionId)?.projectId
+          : undefined
+        if (clientProjectId !== projectId) continue
+        const seq = client.lastSentSeq + 1
+        enqueueSend(
+          client,
+          serializeServerMessage({ type: 'session.confirmation_pending', sessionId, payload: msg.payload }),
+          seq,
+        )
       }
     }
   }
@@ -608,9 +628,7 @@ export function createWebSocketServer(
           const prevWorkdir = client.activeWorkdir
           client.activeWorkdir = effectiveWorkdir
           if (prevWorkdir) {
-            const hasOtherClients = [...clients.values()].some(
-              (c) => c !== client && c.activeWorkdir === prevWorkdir,
-            )
+            const hasOtherClients = [...clients.values()].some((c) => c !== client && c.activeWorkdir === prevWorkdir)
             if (!hasOtherClients) {
               moduleStopGitPolling(prevWorkdir)
             }
@@ -1217,7 +1235,7 @@ async function handleClientMessage(
             }
           : {}),
         signal: controller.signal,
-        onMessage: (msg) => sendForSession(sessionId, msg), // For path confirmation dialogs
+        onMessage: (msg) => _broadcastForSession(sessionId, msg), // For path confirmation dialogs
       })
         .catch((error) => {
           // Don't create error message for controlled abort

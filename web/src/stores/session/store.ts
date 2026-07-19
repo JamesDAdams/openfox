@@ -6,7 +6,7 @@ import { wsClient } from '../../lib/ws'
 import { useConfigStore } from '../config'
 import { useProjectStore } from '../project'
 import { useBackgroundProcessesStore } from '../background-processes'
-import type { SessionState } from './types'
+import type { SessionState, PendingPathConfirmation } from './types'
 import { getBuffer, setFlushFn, cancelStreamingFlush } from './streamingBuffer'
 import { handleServerMessage as handleMessage } from './messageHandler'
 
@@ -127,6 +127,8 @@ export const useSessionStore = create<SessionState>((set, get) => {
     contextState: null,
     subAgentContextStates: {},
     pendingPathConfirmations: [],
+    crossSessionConfirmations: {},
+    sessionsWithPendingConfirmations: [],
     pendingQuestions: [],
     visionFallbackByMessage: {},
     gitStatus: null,
@@ -290,6 +292,13 @@ export const useSessionStore = create<SessionState>((set, get) => {
         const currentSession = get().currentSession
 
         if (!currentSession || currentSession.id !== sessionId) {
+          const oldSessionId = currentSession?.id
+          const oldConfirmations = get().pendingPathConfirmations
+          const existingCross = get().crossSessionConfirmations
+          const crossCleanup = { ...existingCross }
+          if (oldSessionId && oldConfirmations.length > 0) {
+            crossCleanup[oldSessionId] = [...(crossCleanup[oldSessionId] ?? []), ...oldConfirmations]
+          }
           cancelStreamingFlush()
           set({
             currentSession: null,
@@ -306,6 +315,8 @@ export const useSessionStore = create<SessionState>((set, get) => {
             error: null,
             gitStatus: null,
             pendingSessionCreate: false as boolean | string,
+            crossSessionConfirmations: crossCleanup,
+            sessionsWithPendingConfirmations: Object.keys(crossCleanup),
           })
         } else {
           set({ unreadSessionIds: get().unreadSessionIds.filter((id) => id !== sessionId) })
@@ -316,12 +327,17 @@ export const useSessionStore = create<SessionState>((set, get) => {
 
         const data = await res.json()
         const loadedMessages = (data.messages as Message[] | undefined) ?? []
+        const crossCleanup = { ...get().crossSessionConfirmations }
+        delete crossCleanup[sessionId]
         set({
           currentSession: data.session,
           messages: loadedMessages,
           contextState: data.contextState,
           queuedMessages: (data.queueState as QueuedMessage[] | undefined) ?? [],
+          pendingPathConfirmations: (data.pendingConfirmations ?? []) as PendingPathConfirmation[],
           pendingQuestions: (data.pendingQuestions ?? []) as PendingQuestionPayload[],
+          crossSessionConfirmations: crossCleanup,
+          sessionsWithPendingConfirmations: Object.keys(crossCleanup),
         })
 
         wsClient.send('session.load', { sessionId })
@@ -374,6 +390,24 @@ export const useSessionStore = create<SessionState>((set, get) => {
             }),
             sessionsHasMore: projectId ? (data.hasMore ?? false) : true,
           }))
+
+          // Restore cross-session confirmation state from server
+          const pendingBySession = data.pendingConfirmationsBySession as
+            | Record<string, PendingPathConfirmation[]>
+            | undefined
+          if (pendingBySession) {
+            const currentSessionId = get().currentSession?.id
+            const crossSessionConfirmations: Record<string, PendingPathConfirmation[]> = {}
+            for (const [sid, confs] of Object.entries(pendingBySession)) {
+              if (sid !== currentSessionId) {
+                crossSessionConfirmations[sid] = confs
+              }
+            }
+            set({
+              crossSessionConfirmations,
+              sessionsWithPendingConfirmations: Object.keys(crossSessionConfirmations),
+            })
+          }
         } catch {
           /* empty */
         } finally {

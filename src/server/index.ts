@@ -491,6 +491,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
   app.get('/api/sessions', async (req, res) => {
     const { getRecentUserPromptsForSession } = await import('./events/index.js')
+    const { getPendingConfirmationsBySession } = await import('./tools/path-security.js')
 
     const projectId = req.query['projectId'] as string | undefined
     const limit = Math.min(parseInt(req.query['limit'] as string) || 20, 100)
@@ -512,7 +513,26 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       recentUserPrompts: getRecentUserPromptsForSession(session.id, 10),
     }))
 
-    res.json({ sessions: sessionsWithPrompts, hasMore })
+    // Collect pending confirmations for returned sessions
+    const allPending = getPendingConfirmationsBySession()
+    const pendingConfirmationsBySession: Record<
+      string,
+      Array<{
+        callId: string
+        tool: string
+        paths: string[]
+        workdir: string
+        reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify'
+      }>
+    > = {}
+    for (const s of sessions) {
+      const confs = allPending[s.id]
+      if (confs) {
+        pendingConfirmationsBySession[s.id] = confs
+      }
+    }
+
+    res.json({ sessions: sessionsWithPrompts, hasMore, pendingConfirmationsBySession })
   })
 
   app.post('/api/sessions', async (req, res) => {
@@ -531,6 +551,29 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
     // maxTokens is no longer passed - it comes from providerManager.getCurrentModelContext() at query time
     const session = sessionManager.createSession(projectId, title, providerId ?? null, model ?? null)
+    wssExports.broadcastAll({
+      type: 'session.created',
+      sessionId: session.id,
+      payload: {
+        session: {
+          id: session.id,
+          projectId: session.projectId,
+          title: session.metadata.title,
+          workdir: session.workdir,
+          workspace: session.workspace,
+          mode: session.mode,
+          phase: session.phase,
+          isRunning: session.isRunning,
+          providerId: session.providerId,
+          providerModel: session.providerModel,
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+          criteriaCount: session.criteria.length,
+          criteriaCompleted: session.criteria.filter((c) => c.status.type === 'passed').length,
+          messageCount: session.messageCount ?? session.messages.length,
+        },
+      },
+    })
     res.status(201).json({ session })
   })
 
@@ -568,7 +611,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
   app.get('/api/sessions/:id', async (req, res) => {
     const { getEventStore } = await import('./events/index.js')
-    const { buildMessagesFromStoredEvents } = await import('./events/folding.js')
+    const { buildMessagesFromStoredEvents, foldPendingConfirmations } = await import('./events/folding.js')
     const { getPendingQuestionsForSession } = await import('./tools/index.js')
 
     const session = sessionManager.getSession(req.params.id)
@@ -582,8 +625,9 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const contextState = sessionManager.getContextState(req.params.id)
     const queueState = sessionManager.getQueueState(req.params.id)
     const pendingQuestions = getPendingQuestionsForSession(req.params.id)
+    const pendingConfirmations = foldPendingConfirmations(events)
 
-    res.json({ session, messages, contextState, queueState, pendingQuestions })
+    res.json({ session, messages, contextState, queueState, pendingQuestions, pendingConfirmations })
   })
 
   app.delete('/api/sessions/:id', async (req, res) => {
@@ -604,6 +648,11 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     cancelPathConfirmationsForSession(sessionId, 'Session deleted')
 
     sessionManager.deleteSession(sessionId)
+    wssExports.broadcastAll({
+      type: 'session.deleted',
+      sessionId,
+      payload: { sessionId },
+    })
     res.json({ success: true })
   })
 
@@ -614,6 +663,11 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       return res.status(404).json({ error: 'Project not found' })
     }
     sessionManager.deleteAllSessions(projectId, project.workdir)
+    wssExports.broadcastAll({
+      type: 'session.deletedAll',
+      sessionId: projectId,
+      payload: {},
+    })
     res.json({ success: true })
   })
 
@@ -864,6 +918,13 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       const stateMsg = createSessionStateMessage(session, messages, pendingConfirmations, pendingQuestions)
       wssExports.broadcastForSession(sessionId, { ...stateMsg, sessionId })
     }
+
+    // Broadcast to all clients that the confirmation was resolved
+    wssExports.broadcastAll({
+      type: 'session.confirmation_resolved',
+      sessionId,
+      payload: { sessionId, callId },
+    })
 
     res.json({ success: true })
   })

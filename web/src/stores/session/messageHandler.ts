@@ -26,6 +26,7 @@ import type {
   MetadataUpdatedPayload,
   ContextStatePayload,
   QueueStatePayload,
+  SessionCreatedPayload,
 } from '@shared/protocol.js'
 import { useDevServerStore } from '../dev-server'
 import { useBackgroundProcessesStore } from '../background-processes'
@@ -96,6 +97,10 @@ function mergeSessionIntoSummary(
   return existingSession
     ? sessions.map((candidate) => (candidate.id === session.id ? nextSummary : candidate))
     : [nextSummary, ...sessions]
+}
+
+function dedupeByCallId<T extends { callId: string }>(list: T[], item: T): T[] {
+  return list.some((x) => x.callId === item.callId) ? list : [...list, item]
 }
 
 function mergeSessionList(
@@ -176,13 +181,20 @@ export function handleServerMessage(
       cancelStreamingFlush()
       const wasPendingCreate = get().pendingSessionCreate === true
 
+      const confs = payload.pendingConfirmations ?? []
+      const sessionId = payload.session.id
+      const crossCleanup = { ...get().crossSessionConfirmations }
+      delete crossCleanup[sessionId]
+
       set({
         currentSession: payload.session,
         sessions: mergeSessionIntoSummary(get().sessions, payload.session),
-        unreadSessionIds: removeUnreadSessionId(get().unreadSessionIds, payload.session.id),
+        unreadSessionIds: removeUnreadSessionId(get().unreadSessionIds, sessionId),
         messages: payload.messages,
         currentTodos: [],
-        pendingPathConfirmations: payload.pendingConfirmations ?? [],
+        pendingPathConfirmations: confs,
+        crossSessionConfirmations: crossCleanup,
+        sessionsWithPendingConfirmations: Object.keys(crossCleanup),
         pendingQuestions: payload.pendingQuestions ?? [],
         error: null,
         ...(wasPendingCreate ? { pendingSessionCreate: payload.session.id } : {}),
@@ -195,6 +207,16 @@ export function handleServerMessage(
       const payload = message.payload as SessionListPayload
       set((state) => ({
         sessions: mergeSessionList(payload.sessions, state.sessions, state.currentSession),
+      }))
+      break
+    }
+
+    case 'session.created': {
+      const payload = message.payload as SessionCreatedPayload
+      set((state) => ({
+        sessions: state.sessions.some((s) => s.id === payload.session.id)
+          ? state.sessions.map((s) => (s.id === payload.session.id ? { ...s, ...payload.session } : s))
+          : [payload.session, ...state.sessions],
       }))
       break
     }
@@ -533,10 +555,8 @@ export function handleServerMessage(
     }
 
     case 'chat.path_confirmation': {
-      if (!isMessageForCurrentSession(message, get().currentSession?.id ?? null)) {
-        markBackgroundSessionUnread()
-        break
-      }
+      const eventSessionId = message.sessionId
+      const isCurrentSession = eventSessionId === (get().currentSession?.id ?? null)
       const payload = message.payload as ChatPathConfirmationPayload
       const newConfirmation = {
         callId: payload.callId,
@@ -545,9 +565,72 @@ export function handleServerMessage(
         workdir: payload.workdir,
         reason: payload.reason,
       }
+
+      if (!isCurrentSession) {
+        markBackgroundSessionUnread()
+        if (eventSessionId) {
+          set((state) => ({
+            crossSessionConfirmations: {
+              ...state.crossSessionConfirmations,
+              [eventSessionId]: dedupeByCallId(state.crossSessionConfirmations[eventSessionId] ?? [], newConfirmation),
+            },
+            sessionsWithPendingConfirmations: state.sessionsWithPendingConfirmations.includes(eventSessionId)
+              ? state.sessionsWithPendingConfirmations
+              : [...state.sessionsWithPendingConfirmations, eventSessionId],
+          }))
+        }
+        break
+      }
+
       set((state) => ({
-        pendingPathConfirmations: [...state.pendingPathConfirmations, newConfirmation],
+        pendingPathConfirmations: dedupeByCallId(state.pendingPathConfirmations, newConfirmation),
       }))
+      break
+    }
+
+    case 'session.confirmation_pending': {
+      const pendingSessionId = message.sessionId
+      const payload = message.payload as ChatPathConfirmationPayload
+      const conf = {
+        callId: payload.callId,
+        tool: payload.tool,
+        paths: payload.paths,
+        workdir: payload.workdir,
+        reason: payload.reason,
+      }
+      if (pendingSessionId) {
+        set((state) => ({
+          crossSessionConfirmations: {
+            ...state.crossSessionConfirmations,
+            [pendingSessionId]: dedupeByCallId(state.crossSessionConfirmations[pendingSessionId] ?? [], conf),
+          },
+          sessionsWithPendingConfirmations: state.sessionsWithPendingConfirmations.includes(pendingSessionId)
+            ? state.sessionsWithPendingConfirmations
+            : [...state.sessionsWithPendingConfirmations, pendingSessionId],
+        }))
+      }
+      break
+    }
+
+    case 'session.confirmation_resolved': {
+      const resolvedId = message.sessionId
+      const resolvedPayload = message.payload as { sessionId: string; callId: string }
+      if (resolvedId) {
+        set((state) => {
+          const sessionConfs = state.crossSessionConfirmations[resolvedId] ?? []
+          const remaining = sessionConfs.filter((c) => c.callId !== resolvedPayload.callId)
+          const newCross = { ...state.crossSessionConfirmations }
+          if (remaining.length === 0) {
+            delete newCross[resolvedId]
+          } else {
+            newCross[resolvedId] = remaining
+          }
+          return {
+            crossSessionConfirmations: newCross,
+            sessionsWithPendingConfirmations: Object.keys(newCross),
+          }
+        })
+      }
       break
     }
 

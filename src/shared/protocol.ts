@@ -76,10 +76,13 @@ export type ServerMessageType =
   // Session events
   | 'session.state'
   | 'session.list'
+  | 'session.created'
   | 'session.deleted'
   | 'session.deletedAll'
   | 'session.running' // Real-time running state change
   | 'session.name_generated' // Session name was auto-generated
+  | 'session.confirmation_pending' // Path confirmation waiting in another session (broadcast to all)
+  | 'session.confirmation_resolved' // Path confirmation was answered (broadcast to all)
   // Unified chat events (replaces plan.delta, agent.event, etc.)
   | 'chat.delta' // Text streaming
   | 'chat.thinking' // Thinking block content
@@ -182,6 +185,10 @@ export interface PendingPathConfirmationPayload {
 
 export interface SessionListPayload {
   sessions: SessionSummary[]
+}
+
+export interface SessionCreatedPayload {
+  session: SessionSummary
 }
 
 export interface SessionRunningPayload {
