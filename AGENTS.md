@@ -104,9 +104,9 @@ Precommit hooks take >40s, so always use a 120s timeout when committing:
 git commit -m "message"   # timeout: 120000ms
 ```
 
-### PR Review & Squash-Merge
+### PR Review
 
-See [docs/PR-REVIEW.md](PR-REVIEW.md) for the full PR review workflow, including how to review, fix, and merge pull requests from forks.
+If user calls "/review N", read [docs/PR-REVIEW.md](PR-REVIEW.md) and instantly start the process with PR number N.
 
 ### Release
 
