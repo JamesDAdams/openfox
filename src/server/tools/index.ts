@@ -19,7 +19,6 @@ import { mcpConfigTool } from './mcp-config.js'
 import { webSearchTool } from './web-search.js'
 import { workspaceTool } from './workspace.js'
 import { computeEffectiveTools } from './tool-policy.js'
-import { loadAllAgentsDefault, findAgentById } from '../agents/registry.js'
 import { logger } from '../utils/logger.js'
 
 // ============================================================================
@@ -142,15 +141,6 @@ export function validateToolAction(
 // Registry Creation
 // ============================================================================
 
-/**
- * Extract a prompt string from tool call arguments, trying common keys.
- * Only explicit keys are checked — no fallback loop to avoid picking up
- * unrelated string fields like subAgentType.
- */
-function extractSubAgentPrompt(args: Record<string, unknown>): string {
-  return (args['prompt'] as string) || (args['query'] as string) || (args['task'] as string) || ''
-}
-
 export function createRegistryFromTools(
   tools: Tool[],
   allowedTools?: string[],
@@ -162,45 +152,6 @@ export function createRegistryFromTools(
 
   for (const tool of tools) {
     toolMap.set(tool.name, tool)
-  }
-
-  /**
-   * Try to resolve a tool name as a sub-agent alias.
-   * If the name matches a registered sub-agent ID, transforms the call
-   * into a call_sub_agent invocation. This is an explicit dispatch stage,
-   * not a fallback — it handles models that call sub-agent names directly
-   * (e.g., "explorer") instead of using call_sub_agent(subAgentType: "explorer", ...).
-   */
-  async function trySubAgentAlias(
-    name: string,
-    args: Record<string, unknown>,
-    context: ToolContext,
-  ): Promise<ToolResult | null> {
-    if (!toolMap.has('call_sub_agent')) {
-      return null
-    }
-
-    try {
-      const agents = await loadAllAgentsDefault()
-      const agentDef = findAgentById(name, agents)
-      if (!agentDef?.metadata.subagent) {
-        return null
-      }
-
-      const prompt = extractSubAgentPrompt(args)
-      logger.info('Sub-agent alias transformation', {
-        from: name,
-        to: 'call_sub_agent',
-        subAgentType: name,
-      })
-      return callSubAgentTool.execute({ subAgentType: name, prompt }, context)
-    } catch (err) {
-      logger.warn('Sub-agent alias resolution failed', {
-        tool: name,
-        error: err instanceof Error ? err.message : String(err),
-      })
-      return null
-    }
   }
 
   return {
@@ -296,11 +247,7 @@ export function createRegistryFromTools(
         }
       }
 
-      // Stage 2: Explicit sub-agent alias transformation
-      const aliasResult = await trySubAgentAlias(name, args, context)
-      if (aliasResult) return aliasResult
-
-      // Stage 3: Unknown tool
+      // Unknown tool
       return {
         success: false,
         error: `Unknown tool: ${name}. Available tools: ${tools.map((t) => t.name).join(', ')}`,

@@ -91,6 +91,7 @@ describe('executeTools', () => {
     } as unknown as SessionManager
 
     mockToolRegistry = {
+      tools: [],
       execute: vi.fn(),
       definitions: [],
     } as unknown as ToolRegistry
@@ -339,7 +340,7 @@ describe('runTopLevelAgentLoop assembleRequest', () => {
       llmClient: mockLLMClient,
       statsIdentity: { providerId: 'test', providerName: 'Test', backend: 'unknown' as const, model: 'test-model' },
       assembleRequest: assembleRequestMock as any,
-      getToolRegistry: () => ({ definitions: [], execute: vi.fn() }) as any,
+      getToolRegistry: () => ({ tools: [], definitions: [], execute: vi.fn() }) as any,
       getConversationMessages: vi.fn().mockResolvedValue([]),
       ...overrides,
     }
@@ -445,7 +446,7 @@ describe('maxTokens clamping', () => {
       llmClient: mockLLMClient,
       statsIdentity: { providerId: 'test', providerName: 'Test', backend: 'unknown' as const, model: 'test-model' },
       assembleRequest: assembleRequestMock as any,
-      getToolRegistry: () => ({ definitions: [], execute: vi.fn() }) as any,
+      getToolRegistry: () => ({ tools: [], definitions: [], execute: vi.fn() }) as any,
       getConversationMessages: vi.fn().mockResolvedValue([]),
       ...overrides,
     }

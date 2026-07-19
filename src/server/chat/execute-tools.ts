@@ -11,6 +11,7 @@ import type { DangerLevel } from '../../shared/types.js'
 import { createToolProgressHandler } from './tool-streaming.js'
 import { createToolCallEvent, createToolResultEvent, createChatDoneEvent } from './stream-pure.js'
 import { PathAccessDeniedError, AskUserInterrupt } from '../tools/index.js'
+import { loadAllAgentsDefault, findAgentById } from '../agents/registry.js'
 import stripAnsi from 'strip-ansi'
 
 export interface ToolBatchContext {
@@ -39,6 +40,35 @@ export interface ToolBatchResult {
 
 const INTERRUPTED_ERROR = 'Tool execution was interrupted by user'
 
+/**
+ * Extract a prompt string from tool call arguments, trying common keys.
+ */
+function extractSubAgentPrompt(args: Record<string, unknown>): string {
+  return (args['prompt'] as string) || (args['query'] as string) || (args['task'] as string) || ''
+}
+
+/**
+ * Transform sub-agent alias tool calls in place.
+ * When a tool call name matches a registered sub-agent ID (e.g. "explorer"),
+ * mutates it to call_sub_agent with the original name as subAgentType.
+ * Must happen before event emission so the feed displays the correct tool name.
+ */
+export async function transformSubAgentAliases(toolCalls: ToolCall[], toolRegistry: ToolRegistry): Promise<void> {
+  const hasCallSubAgent = toolRegistry.tools.some((t) => t.name === 'call_sub_agent')
+  if (!hasCallSubAgent) return
+
+  const agents = await loadAllAgentsDefault()
+
+  for (const tc of toolCalls) {
+    const agentDef = findAgentById(tc.name, agents)
+    if (!agentDef?.metadata.subagent) continue
+
+    const prompt = extractSubAgentPrompt(tc.arguments)
+    tc.name = 'call_sub_agent'
+    tc.arguments = { subAgentType: agentDef.metadata.id, prompt }
+  }
+}
+
 function createInterruptedResult(startTime?: number): ToolResult {
   return {
     success: false,
@@ -62,6 +92,11 @@ export async function executeTools(
   if (ctx.signal?.aborted) {
     throw new Error('Aborted')
   }
+
+  // Transform sub-agent aliases in place before emitting events,
+  // so the feed displays the correct tool name (call_sub_agent)
+  // instead of the hallucinated name (e.g. "explorer").
+  await transformSubAgentAliases(toolCalls, ctx.toolRegistry)
 
   for (const toolCall of toolCalls) {
     append(createToolCallEvent(assistantMsgId, toolCall))

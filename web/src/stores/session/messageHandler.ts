@@ -367,13 +367,10 @@ export function handleServerMessage(
       const payload = message.payload as ChatToolCallPayload
 
       const applyToolCall = (m: Message): Message => {
-        const preparingToolCalls = m.preparingToolCalls?.filter((ptc, idx) => {
-          if (ptc.name === payload.tool) {
-            const hasEarlierMatch = m.preparingToolCalls?.slice(0, idx).some((p) => p.name === payload.tool)
-            return hasEarlierMatch
-          }
-          return true
-        })
+        // Preparing entries carry an index matching the tool call's position.
+        // The next tool call's index equals the current toolCalls length.
+        const nextIndex = (m.toolCalls ?? []).length
+        const preparingToolCalls = m.preparingToolCalls?.filter((ptc) => ptc.index !== nextIndex)
         const buf = getBuffer()
         const bufferedOutputs = buf.toolOutput.filter((o) => o.callId === payload.callId)
         if (bufferedOutputs.length > 0) {

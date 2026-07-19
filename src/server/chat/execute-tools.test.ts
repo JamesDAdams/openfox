@@ -3,10 +3,16 @@ import type { ToolCall } from '../../shared/types.js'
 import type { TurnMetrics } from './stream-pure.js'
 import type { ToolRegistry } from '../tools/types.js'
 import type { TurnEvent } from '../events/types.js'
-import { executeTools } from './execute-tools.js'
+import { executeTools, transformSubAgentAliases } from './execute-tools.js'
+
+vi.mock('../agents/registry.js', () => ({
+  loadAllAgentsDefault: vi.fn(),
+  findAgentById: vi.fn(),
+}))
 
 describe('executeTools', () => {
   const mockToolRegistry = {
+    tools: [] as Array<{ name: string }>,
     execute: vi.fn(),
     definitions: [],
   } as unknown as ToolRegistry
@@ -172,7 +178,7 @@ describe('executeTools', () => {
     const result = await executeTools(
       'msg-1',
       toolCalls,
-      { ...makeCtx(), toolRegistry: { execute, definitions: [] } as any },
+      { ...makeCtx(), toolRegistry: { tools: [], execute, definitions: [] } as any },
       append,
     )
 
@@ -280,6 +286,155 @@ describe('executeTools', () => {
     const result = await executeTools('msg-1', toolCalls, makeCtx(), append)
 
     expect(result.stepDoneCalled).toBe(true)
+  })
+
+  describe('sub-agent alias transform', () => {
+    const mockExplorerDef = {
+      metadata: {
+        id: 'explorer',
+        name: 'Explorer',
+        description: 'Explore',
+        subagent: true,
+        allowedTools: [] as string[],
+      },
+      prompt: 'Explore.',
+    }
+    const mockVerifierDef = {
+      metadata: {
+        id: 'verifier',
+        name: 'Verifier',
+        description: 'Verify',
+        subagent: true,
+        allowedTools: [] as string[],
+      },
+      prompt: 'Verify.',
+    }
+    const mockAgents = [mockExplorerDef, mockVerifierDef]
+
+    beforeEach(async () => {
+      vi.clearAllMocks()
+      const { loadAllAgentsDefault, findAgentById } = await import('../agents/registry.js')
+      vi.mocked(loadAllAgentsDefault).mockResolvedValue(mockAgents)
+      vi.mocked(findAgentById).mockImplementation((id: string, agents: typeof mockAgents) =>
+        agents.find((a) => a.metadata.id === id),
+      )
+    })
+
+    it('transforms explorer tool call to call_sub_agent in place', async () => {
+      const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'explorer', arguments: { prompt: 'find the entry point' } }]
+      const registry = { tools: [{ name: 'call_sub_agent' }] } as unknown as ToolRegistry
+
+      await transformSubAgentAliases(toolCalls, registry)
+
+      expect(toolCalls[0]!.name).toBe('call_sub_agent')
+      expect(toolCalls[0]!.arguments).toEqual({
+        subAgentType: 'explorer',
+        prompt: 'find the entry point',
+      })
+    })
+
+    it('does not transform unknown tool names', async () => {
+      const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'read_file', arguments: { path: 'test.txt' } }]
+      const registry = { tools: [{ name: 'call_sub_agent' }] } as unknown as ToolRegistry
+
+      await transformSubAgentAliases(toolCalls, registry)
+
+      expect(toolCalls[0]!.name).toBe('read_file')
+      expect(toolCalls[0]!.arguments).toEqual({ path: 'test.txt' })
+    })
+
+    it('does not transform if call_sub_agent is not in the registry', async () => {
+      const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'explorer', arguments: { prompt: 'find stuff' } }]
+      const registry = { tools: [] } as unknown as ToolRegistry
+
+      await transformSubAgentAliases(toolCalls, registry)
+
+      expect(toolCalls[0]!.name).toBe('explorer')
+    })
+
+    it('extracts prompt from query fallback key', async () => {
+      const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'explorer', arguments: { query: 'find the entry point' } }]
+      const registry = { tools: [{ name: 'call_sub_agent' }] } as unknown as ToolRegistry
+
+      await transformSubAgentAliases(toolCalls, registry)
+
+      expect(toolCalls[0]!.name).toBe('call_sub_agent')
+      expect(toolCalls[0]!.arguments).toEqual({
+        subAgentType: 'explorer',
+        prompt: 'find the entry point',
+      })
+    })
+
+    it('extracts prompt from task fallback key', async () => {
+      const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'explorer', arguments: { task: 'find the entry point' } }]
+      const registry = { tools: [{ name: 'call_sub_agent' }] } as unknown as ToolRegistry
+
+      await transformSubAgentAliases(toolCalls, registry)
+
+      expect(toolCalls[0]!.name).toBe('call_sub_agent')
+      expect(toolCalls[0]!.arguments).toEqual({
+        subAgentType: 'explorer',
+        prompt: 'find the entry point',
+      })
+    })
+
+    it('uses tool name as subAgentType even when conflicting subAgentType is passed', async () => {
+      const toolCalls: ToolCall[] = [
+        { id: 'call-1', name: 'explorer', arguments: { subAgentType: 'verifier', prompt: 'find stuff' } },
+      ]
+      const registry = { tools: [{ name: 'call_sub_agent' }] } as unknown as ToolRegistry
+
+      await transformSubAgentAliases(toolCalls, registry)
+
+      expect(toolCalls[0]!.name).toBe('call_sub_agent')
+      expect(toolCalls[0]!.arguments).toEqual({
+        subAgentType: 'explorer',
+        prompt: 'find stuff',
+      })
+    })
+
+    it('works for any sub-agent ID', async () => {
+      const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'verifier', arguments: { prompt: 'verify criteria' } }]
+      const registry = { tools: [{ name: 'call_sub_agent' }] } as unknown as ToolRegistry
+
+      await transformSubAgentAliases(toolCalls, registry)
+
+      expect(toolCalls[0]!.name).toBe('call_sub_agent')
+      expect(toolCalls[0]!.arguments).toEqual({
+        subAgentType: 'verifier',
+        prompt: 'verify criteria',
+      })
+    })
+
+    it('emits transformed tool.call events via executeTools', async () => {
+      const append = vi.fn()
+      const mockExecute = vi.fn().mockResolvedValue({
+        success: true,
+        output: 'sub-agent result',
+        durationMs: 10,
+        truncated: false,
+      })
+      const registry = {
+        tools: [{ name: 'call_sub_agent' }],
+        execute: mockExecute,
+        definitions: [],
+      } as unknown as ToolRegistry
+
+      const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'explorer', arguments: { prompt: 'find the entry point' } }]
+
+      await executeTools('msg-1', toolCalls, makeCtx({ toolRegistry: registry }), append)
+
+      const callEvents = append.mock.calls.filter((args: unknown[]) => (args[0] as TurnEvent).type === 'tool.call')
+      expect(callEvents).toHaveLength(1)
+      const event = callEvents[0]![0] as TurnEvent
+      expect(event.type).toBe('tool.call')
+      const data = event.data as { toolCall: ToolCall }
+      expect(data.toolCall.name).toBe('call_sub_agent')
+      expect(data.toolCall.arguments).toEqual({
+        subAgentType: 'explorer',
+        prompt: 'find the entry point',
+      })
+    })
   })
 
   it('detects return_value tool and includes it in result', async () => {

@@ -31,6 +31,7 @@ import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
 import { createChatMessageUpdatedMessage, createChatDoneMessage } from '../ws/protocol.js'
 import { executeTools, type ToolBatchContext } from './execute-tools.js'
+import { loadAllAgentsDefault, getSubAgents } from '../agents/registry.js'
 import { createRetryLimiter, type RetryLimiter } from './retry-limiter.js'
 import { drainQueue } from './drain-queue.js'
 import { COMPACTION_PROMPT } from './prompts.js'
@@ -279,6 +280,11 @@ export async function runTopLevelAgentLoop(
       modelSettings = { ...modelSettings, maxTokens: Math.min(requestedMaxTokens, availableForOutput) }
     }
 
+    // Build set of sub-agent IDs so streamLLMPure can show the correct
+    // tool name in preparing events instead of hallucinated aliases.
+    const allAgents = await loadAllAgentsDefault()
+    const subAgentAliases = new Set(getSubAgents(allAgents).map((a) => a.metadata.id))
+
     const streamGen = streamLLMPure({
       messageId: assistantMsgId,
       systemPrompt: assembledRequest.systemPrompt,
@@ -287,6 +293,7 @@ export async function runTopLevelAgentLoop(
       tools: assembledRequest.tools,
       toolChoice: 'auto',
       signal,
+      subAgentAliases,
       ...(config.retryPatterns ? { retryPatterns: config.retryPatterns } : {}),
       ...(modelSettings && { modelSettings }),
     })

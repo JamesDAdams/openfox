@@ -56,6 +56,10 @@ export interface PureStreamOptions {
   modelSettings?: ModelParams & { supportsVision?: boolean }
   /** Retry patterns to check mid-stream */
   retryPatterns?: RetryPatternConfig[]
+  /** Set of tool names that are sub-agent aliases (e.g. "explorer").
+   *  When a preparing event matches, the name is shown as "call_sub_agent"
+   *  instead of the hallucinated name. */
+  subAgentAliases?: Set<string>
 }
 
 export interface PureStreamResult {
@@ -268,13 +272,15 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
           const fullName = toolNames.get(value.index)
           if (!seenToolIndices.has(value.index) && fullName) {
             seenToolIndices.add(value.index)
+            // If the tool name is a sub-agent alias, show call_sub_agent instead
+            const displayName = options.subAgentAliases?.has(fullName) ? 'call_sub_agent' : fullName
             const accumulatedArgs = toolArgs.get(value.index)
             yield {
               type: 'tool.preparing',
               data: {
                 messageId,
                 index: value.index,
-                name: fullName,
+                name: displayName,
                 ...(accumulatedArgs ? { arguments: accumulatedArgs } : {}),
               },
             }

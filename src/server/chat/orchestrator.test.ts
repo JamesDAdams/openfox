@@ -336,7 +336,7 @@ describe('chat orchestrator', () => {
     const eventStore = createEventStore()
     getEventStoreMock.mockReturnValue(eventStore)
     getAllInstructionsMock.mockResolvedValue({ content: 'Plan carefully', files: [] })
-    getToolRegistryForModeMock.mockReturnValue({ definitions: [], execute: vi.fn() })
+    getToolRegistryForModeMock.mockReturnValue({ tools: [], definitions: [], execute: vi.fn() })
     streamLLMPureMock.mockReturnValue({ kind: 'stream' })
     consumeStreamGeneratorMock
       .mockResolvedValueOnce({
@@ -401,7 +401,7 @@ describe('chat orchestrator', () => {
     const eventStore = createEventStore()
     getEventStoreMock.mockReturnValue(eventStore)
     getAllInstructionsMock.mockResolvedValue({ content: 'Plan carefully', files: [] })
-    getToolRegistryForModeMock.mockReturnValue({ definitions: [], execute: vi.fn() })
+    getToolRegistryForModeMock.mockReturnValue({ tools: [], definitions: [], execute: vi.fn() })
     streamLLMPureMock.mockReturnValue({ kind: 'stream' })
     consumeStreamGeneratorMock.mockResolvedValue({
       content: 'Planned response',
@@ -483,6 +483,7 @@ describe('chat orchestrator', () => {
     })
 
     getToolRegistryForModeMock.mockReturnValue({
+      tools: [{ name: 'ask_user' }] as any,
       definitions: [{ type: 'function', function: { name: 'ask_user', description: 'Ask', parameters: {} } }],
       execute: executeMock,
     })
@@ -586,7 +587,7 @@ describe('chat orchestrator', () => {
     const eventStore = createEventStore()
     getEventStoreMock.mockReturnValue(eventStore)
     getAllInstructionsMock.mockResolvedValue({ content: '', files: [] })
-    getToolRegistryForModeMock.mockReturnValue({ definitions: [], execute: vi.fn() })
+    getToolRegistryForModeMock.mockReturnValue({ tools: [], definitions: [], execute: vi.fn() })
     streamLLMPureMock.mockReturnValue({ kind: 'stream' })
     consumeStreamGeneratorMock.mockResolvedValueOnce({
       content: '',
@@ -643,6 +644,7 @@ describe('chat orchestrator', () => {
     })
 
     getToolRegistryForModeMock.mockReturnValue({
+      tools: [{ name: 'glob' }, { name: 'read_file' }, { name: 'grep' }] as any,
       definitions: [
         { type: 'function', function: { name: 'glob', description: 'Search', parameters: {} } },
         { type: 'function', function: { name: 'read_file', description: 'Read', parameters: {} } },
@@ -1307,7 +1309,7 @@ describe('chat orchestrator', () => {
       getCurrentContextWindowIdMock.mockReturnValue('window-2')
 
       getAllInstructionsMock.mockResolvedValue({ content: '', files: [] })
-      getToolRegistryForModeMock.mockReturnValue({ definitions: [], execute: vi.fn() })
+      getToolRegistryForModeMock.mockReturnValue({ tools: [], definitions: [], execute: vi.fn() })
       streamLLMPureMock.mockReturnValue({ kind: 'stream' })
       consumeStreamGeneratorMock.mockResolvedValue({
         content: 'Response',
@@ -1645,7 +1647,7 @@ describe('chat orchestrator', () => {
       getCurrentContextWindowIdMock.mockReturnValue('window-123')
 
       getAllInstructionsMock.mockResolvedValue({ content: '', files: [] })
-      getToolRegistryForModeMock.mockReturnValue({ definitions: [], execute: vi.fn() })
+      getToolRegistryForModeMock.mockReturnValue({ tools: [], definitions: [], execute: vi.fn() })
       streamLLMPureMock.mockReturnValue({ kind: 'stream' })
       consumeStreamGeneratorMock.mockResolvedValue({
         content: 'Hi',
