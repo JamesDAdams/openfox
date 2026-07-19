@@ -164,6 +164,17 @@ describe('McpManager', () => {
       expect(result.output).toBe('Sunny, 72°F')
     })
 
+    it('should call a tool and pass custom timeout option if configured', async () => {
+      await manager.addServer('test-timeout', { transport: 'stdio', command: 'node', timeout: 120 })
+
+      await manager.callTool('test-timeout', 'get_weather', { location: 'Paris' })
+      expect(mockClientInstance.callTool).toHaveBeenLastCalledWith(
+        { name: 'get_weather', arguments: { location: 'Paris' } },
+        undefined,
+        { timeout: 120000 },
+      )
+    })
+
     it('should return error for unknown server', async () => {
       const result = await manager.callTool('unknown', 'tool', {})
       expect(result.success).toBe(false)

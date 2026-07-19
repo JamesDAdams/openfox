@@ -225,7 +225,12 @@ export class McpManager {
 
     if (!entry.client) return { success: false, error: `MCP server '${serverName}' is not connected` }
     try {
-      const result = await entry.client.callTool({ name: toolName, arguments: args })
+      const timeoutMs = entry.config.timeout !== undefined ? entry.config.timeout * 1000 : undefined
+      const result = await entry.client.callTool(
+        { name: toolName, arguments: args },
+        undefined,
+        timeoutMs !== undefined ? { timeout: timeoutMs } : undefined,
+      )
       const content = result.content as Array<{ type: string; text?: string }>
       const textParts = content.filter((c) => c.type === 'text').map((c) => c.text)
       return { success: !result.isError, output: textParts.join('\n') }

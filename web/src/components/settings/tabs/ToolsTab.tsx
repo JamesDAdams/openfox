@@ -32,6 +32,7 @@ interface McpFormData {
   env: string
   url: string
   headers: string
+  timeout: string
 }
 
 interface McpServerFormFieldsProps {
@@ -117,6 +118,12 @@ function McpServerFormFields({ formData, onChange }: McpServerFormFieldsProps) {
           </div>
         </>
       )}
+      <FormField
+        label="Timeout (seconds, optional)"
+        value={formData.timeout}
+        onChange={(v) => onChange({ ...formData, timeout: v })}
+        placeholder="e.g. 60"
+      />
     </>
   )
 }
@@ -138,6 +145,7 @@ interface McpServerState {
     env?: Record<string, string>
     url?: string
     headers?: Record<string, string>
+    timeout?: number
   }
   status: 'connected' | 'disconnected' | 'error'
   tools: McpToolInfo[]
@@ -333,6 +341,7 @@ export function ToolsTab() {
     env: '',
     url: '',
     headers: '',
+    timeout: '',
   })
   const [formError, setFormError] = useState('')
   const [mcpError, setMcpError] = useState('')
@@ -387,6 +396,12 @@ export function ToolsTab() {
       body.url = formData.url
       body.headers = parseKeyValueLines(formData.headers)
     }
+    if (formData.timeout) {
+      const t = parseInt(formData.timeout, 10)
+      if (!isNaN(t)) {
+        body.timeout = t
+      }
+    }
     return body
   }
 
@@ -398,6 +413,7 @@ export function ToolsTab() {
     env: '',
     url: '',
     headers: '',
+    timeout: '',
   }
 
   const handleAdd = async () => {
@@ -450,6 +466,7 @@ export function ToolsTab() {
             .map(([k, v]) => `${k}=${v}`)
             .join('\n')
         : '',
+      timeout: server.config.timeout !== undefined ? String(server.config.timeout) : '',
     })
     setFormError('')
     setEditingServer(server.name)
