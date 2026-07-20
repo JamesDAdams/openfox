@@ -906,7 +906,7 @@ describe('path-security', () => {
         'outside_workdir',
       )
       expect(hasPendingPathConfirmation('call-approve')).toBe(true)
-      expect(providePathConfirmation('call-approve', true)).toEqual({
+      expect(providePathConfirmation('call-approve', true, true)).toEqual({
         found: true,
         sessionId: 'session-1',
         approved: true,
@@ -1003,7 +1003,7 @@ describe('path-security', () => {
           }),
         }),
       )
-      providePathConfirmation('call-sensitive', true)
+      providePathConfirmation('call-sensitive', true, true)
       await expect(approvedPromise).resolves.toBeUndefined()
       expect(isPathAllowed('session-sensitive', sensitivePath)).toBe(true)
 
@@ -1030,6 +1030,45 @@ describe('path-security', () => {
       )
       providePathConfirmation('call-both', false)
       await deniedAssertion
+    })
+
+    it('does not add paths to allowlist when alwaysAllow is false', async () => {
+      const callId = 'always-allow-false'
+      const path = '/tmp/secret-once'
+
+      registerPathConfirmation(callId, [path], 'session-once', 'read_file', '/tmp', 'outside_workdir')
+
+      const result = providePathConfirmation(callId, true, false)
+      expect(result.found).toBe(true)
+      expect(result.approved).toBe(true)
+
+      expect(isPathAllowed('session-once', path)).toBe(false)
+    })
+
+    it('does not add paths to allowlist when alwaysAllow is not provided', async () => {
+      const callId = 'always-allow-undefined'
+      const path = '/tmp/secret-default'
+
+      registerPathConfirmation(callId, [path], 'session-default', 'read_file', '/tmp', 'outside_workdir')
+
+      const result = providePathConfirmation(callId, true)
+      expect(result.found).toBe(true)
+      expect(result.approved).toBe(true)
+
+      expect(isPathAllowed('session-default', path)).toBe(false)
+    })
+
+    it('adds paths to allowlist only when alwaysAllow is true', async () => {
+      const callId = 'always-allow-true'
+      const path = '/tmp/secret-persist'
+
+      registerPathConfirmation(callId, [path], 'session-persist', 'read_file', '/tmp', 'outside_workdir')
+
+      const result = providePathConfirmation(callId, true, true)
+      expect(result.found).toBe(true)
+      expect(result.approved).toBe(true)
+
+      expect(isPathAllowed('session-persist', path)).toBe(true)
     })
 
     // Note: Full flow testing requires the interrupt to be thrown and caught,
@@ -1473,6 +1512,42 @@ describe('path-security', () => {
       expect(hasPendingPathConfirmation('call-normal')).toBe(false)
       expect(onEvent).not.toHaveBeenCalled()
       await expect(promise).resolves.toBeUndefined()
+    })
+  })
+
+  describe('non-path confirmations do not pollute allowlist', () => {
+    it('does not add paths to allowlist for dangerous_command confirmations', () => {
+      const callId = 'cmd-confirm-1'
+
+      registerPathConfirmation(callId, ['rm -rf /'], 'session-cmd', 'run_command', WORKDIR, 'dangerous_command')
+
+      expect(hasPendingPathConfirmation(callId)).toBe(true)
+
+      const result = providePathConfirmation(callId, true, false)
+      expect(result.found).toBe(true)
+      expect(result.approved).toBe(true)
+
+      // The description text should NOT be in the allowlist
+      expect(isPathAllowed('session-cmd', 'rm -rf /')).toBe(false)
+    })
+
+    it('does not add paths to allowlist for git_no_verify confirmations', () => {
+      const callId = 'git-confirm-1'
+
+      registerPathConfirmation(
+        callId,
+        ['git --no-verify detected'],
+        'session-git',
+        'run_command',
+        WORKDIR,
+        'git_no_verify',
+      )
+
+      const result = providePathConfirmation(callId, true, false)
+      expect(result.found).toBe(true)
+      expect(result.approved).toBe(true)
+
+      expect(isPathAllowed('session-git', 'git --no-verify detected')).toBe(false)
     })
   })
 

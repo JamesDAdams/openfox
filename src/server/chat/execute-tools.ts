@@ -189,7 +189,7 @@ export async function executeTools(
 
     const toolContext: ToolContext = {
       sessionManager: ctx.sessionManager,
-      workdir: ctx.workdir,
+      workdir: ctx.sessionManager.getEffectiveWorkdir(ctx.sessionId),
       sessionId: ctx.sessionId,
       signal: ctx.signal,
       llmClient: ctx.llmClient,

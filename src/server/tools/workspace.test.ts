@@ -6,10 +6,24 @@ const mockSwitchWorkspace = vi.fn()
 const mockDeleteWorkspace = vi.fn()
 const mockGetSession = vi.fn()
 const mockGetProject = vi.fn()
+const mockRegisterPathConfirmation = vi.fn()
 
 vi.mock('../git/workspace.js', () => ({
   getGitBranch: (...args: unknown[]) => mockGetGitBranch(...args),
   listWorkspaces: (...args: unknown[]) => mockListWorkspaces(...args),
+}))
+
+vi.mock('./path-security.js', () => ({
+  registerPathConfirmation: (...args: unknown[]) => mockRegisterPathConfirmation(...args),
+  PathAccessDeniedError: class extends Error {
+    paths = []
+    tool = ''
+    reason = 'outside_workdir'
+    constructor() {
+      super('denied')
+      this.name = 'PathAccessDeniedError'
+    }
+  },
 }))
 
 import { workspaceTool } from './workspace.js'
@@ -25,6 +39,7 @@ function makeContext(overrides: Record<string, unknown> = {}) {
     workdir: '/tmp/project',
     sessionId: 'session-1',
     sessionManager: sessionManager as any,
+    onEvent: vi.fn(),
     ...overrides,
   }
 }
@@ -35,33 +50,33 @@ beforeEach(() => {
 
 describe('workspaceTool', () => {
   describe('switch', () => {
-    it('switches to a named workspace', async () => {
-      mockGetSession.mockReturnValue({ projectId: 'p1', workspace: null })
-      mockSwitchWorkspace.mockResolvedValue({ workspace: '/workspaces/test/feat-x', workdir: '/tmp/project' })
+    it('switches to a named workspace after user confirmation', async () => {
+      mockRegisterPathConfirmation.mockResolvedValue(true)
       mockGetGitBranch.mockResolvedValue('main')
+      mockSwitchWorkspace.mockResolvedValue({ workspace: '/workspaces/test/feat-x', workdir: '/tmp/project' })
 
       const result = await workspaceTool.execute({ action: 'switch', target: 'feat-x' }, makeContext())
       expect(result.success).toBe(true)
       expect(result.output).toContain('feat-x')
       expect(result.output).toContain('main')
-      expect(mockSwitchWorkspace).toHaveBeenCalledWith('session-1', 'feat-x', undefined)
+      expect(mockSwitchWorkspace).toHaveBeenCalledWith('session-1', 'feat-x', undefined, undefined)
     })
 
-    it('switches to original', async () => {
-      mockGetSession.mockReturnValue({ projectId: 'p1', workspace: '/workspaces/test/feat-x' })
-      mockSwitchWorkspace.mockResolvedValue({ workspace: null, workdir: '/tmp/project' })
+    it('switches to original after user confirmation', async () => {
+      mockRegisterPathConfirmation.mockResolvedValue(true)
       mockGetGitBranch.mockResolvedValue('main')
+      mockSwitchWorkspace.mockResolvedValue({ workspace: null, workdir: '/tmp/project' })
 
       const result = await workspaceTool.execute({ action: 'switch', target: 'original' }, makeContext())
       expect(result.success).toBe(true)
       expect(result.output).toContain('"workspace": "original"')
-      expect(mockSwitchWorkspace).toHaveBeenCalledWith('session-1', 'original', undefined)
+      expect(mockSwitchWorkspace).toHaveBeenCalledWith('session-1', 'original', undefined, undefined)
     })
 
-    it('switches with optional branch', async () => {
-      mockGetSession.mockReturnValue({ projectId: 'p1', workspace: null })
-      mockSwitchWorkspace.mockResolvedValue({ workspace: '/workspaces/test/feat-x', workdir: '/tmp/project' })
+    it('switches with optional branch after user confirmation', async () => {
+      mockRegisterPathConfirmation.mockResolvedValue(true)
       mockGetGitBranch.mockResolvedValue('develop')
+      mockSwitchWorkspace.mockResolvedValue({ workspace: '/workspaces/test/feat-x', workdir: '/tmp/project' })
 
       const result = await workspaceTool.execute(
         { action: 'switch', target: 'feat-x', branch: 'develop' },
@@ -69,7 +84,28 @@ describe('workspaceTool', () => {
       )
       expect(result.success).toBe(true)
       expect(result.output).toContain('develop')
-      expect(mockSwitchWorkspace).toHaveBeenCalledWith('session-1', 'feat-x', 'develop')
+      expect(mockSwitchWorkspace).toHaveBeenCalledWith('session-1', 'feat-x', 'develop', undefined)
+    })
+
+    it('changes branch on the current workspace without recreating', async () => {
+      mockGetSession.mockReturnValue({ projectId: 'p1', workspace: '/workspaces/test/feat-x', workdir: '/tmp/project' })
+      mockRegisterPathConfirmation.mockResolvedValue(true)
+      mockGetGitBranch.mockResolvedValue('toto')
+      mockSwitchWorkspace.mockResolvedValue({ workspace: '/workspaces/test/feat-x', workdir: '/tmp/project' })
+
+      const result = await workspaceTool.execute({ action: 'switch', target: 'feat-x', branch: 'toto' }, makeContext())
+      expect(result.success).toBe(true)
+      expect(result.output).toContain('toto')
+      expect(mockSwitchWorkspace).toHaveBeenCalledWith('session-1', 'feat-x', 'toto', undefined)
+    })
+
+    it('returns error when user denies switch', async () => {
+      mockRegisterPathConfirmation.mockResolvedValue(false)
+
+      const result = await workspaceTool.execute({ action: 'switch', target: 'feat-x' }, makeContext())
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('denied')
+      expect(mockSwitchWorkspace).not.toHaveBeenCalled()
     })
 
     it('returns error when target is missing', async () => {
@@ -113,13 +149,23 @@ describe('workspaceTool', () => {
   })
 
   describe('delete', () => {
-    it('deletes a workspace', async () => {
+    it('deletes a workspace after user confirmation', async () => {
+      mockRegisterPathConfirmation.mockResolvedValue(true)
       mockDeleteWorkspace.mockResolvedValue({ workspace: null, workdir: '/tmp/project' })
 
       const result = await workspaceTool.execute({ action: 'delete', target: 'feat-x' }, makeContext())
       expect(result.success).toBe(true)
       expect(result.output).toContain('feat-x')
       expect(mockDeleteWorkspace).toHaveBeenCalledWith('session-1', 'feat-x')
+    })
+
+    it('returns error when user denies delete', async () => {
+      mockRegisterPathConfirmation.mockResolvedValue(false)
+
+      const result = await workspaceTool.execute({ action: 'delete', target: 'feat-x' }, makeContext())
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('denied')
+      expect(mockDeleteWorkspace).not.toHaveBeenCalled()
     })
 
     it('returns error when target is missing', async () => {

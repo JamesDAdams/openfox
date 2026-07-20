@@ -32,6 +32,7 @@ export function createSession(
   providerId?: string | null,
   providerModel?: string | null,
   workspace?: string,
+  branch?: string,
 ): Session {
   const db = getDatabase()
   const now = new Date().toISOString()
@@ -40,14 +41,15 @@ export function createSession(
 
   db.prepare(
     `
-    INSERT INTO sessions (id, project_id, workdir, workspace, phase, mode, workflow_phase, is_running, created_at, updated_at, title, provider_id, provider_model, danger_level)
-    VALUES (?, ?, ?, ?, 'idle', 'planner', 'plan', 0, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, project_id, workdir, workspace, branch, phase, mode, workflow_phase, is_running, created_at, updated_at, title, provider_id, provider_model, danger_level)
+    VALUES (?, ?, ?, ?, ?, 'idle', 'planner', 'plan', 0, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     id,
     projectId,
     workdir,
     workspace ?? null,
+    branch ?? null,
     now,
     now,
     title ?? null,
@@ -61,6 +63,7 @@ export function createSession(
     projectId,
     workdir,
     ...(workspace ? { workspace } : {}),
+    ...(branch ? { branch } : {}),
     mode: 'planner',
     phase: 'plan',
     isRunning: false,
@@ -102,6 +105,7 @@ export function getSession(id: string): Session | null {
   // This function returns the DB row data only - caller should enrich with event data
   return {
     ...mapSessionBase(row),
+    ...(row.branch ? { branch: row.branch } : {}),
     messages: [],
     criteria: [],
     contextWindows: [],
@@ -288,6 +292,7 @@ export function listSessions(): SessionSummary[] {
       s.project_id,
       s.workdir,
       s.workspace,
+      s.branch,
       s.mode,
       s.workflow_phase,
       s.is_running,
@@ -321,6 +326,7 @@ export function listSessionsByProject(
       s.project_id,
       s.workdir,
       s.workspace,
+      s.branch,
       s.mode,
       s.workflow_phase,
       s.is_running,
@@ -344,15 +350,25 @@ export function listSessionsByProject(
   return { sessions, hasMore }
 }
 
-export function updateSessionWorkdir(id: string, workdir: string, workspace: string | null): void {
+export function updateSessionWorkdir(
+  id: string,
+  workdir: string,
+  workspace: string | null,
+  branch?: string | null,
+): void {
   const db = getDatabase()
   const now = new Date().toISOString()
-  db.prepare('UPDATE sessions SET workdir = ?, workspace = ?, updated_at = ? WHERE id = ?').run(
-    workdir,
-    workspace,
-    now,
-    id,
-  )
+  db.prepare(
+    branch !== undefined
+      ? 'UPDATE sessions SET workdir = ?, workspace = ?, branch = ?, updated_at = ? WHERE id = ?'
+      : 'UPDATE sessions SET workdir = ?, workspace = ?, updated_at = ? WHERE id = ?',
+  ).run(workdir, workspace, ...(branch !== undefined ? [branch, now, id] : [now, id]))
+}
+
+export function updateSessionBranch(id: string, branch: string): void {
+  const db = getDatabase()
+  const now = new Date().toISOString()
+  db.prepare('UPDATE sessions SET branch = ?, updated_at = ? WHERE id = ?').run(branch, now, id)
 }
 
 export function deleteSession(id: string): void {
@@ -365,6 +381,7 @@ function mapSessionBase(row: SessionRow | SessionSummaryRow): {
   projectId: string
   workdir: string
   workspace?: string
+  branch?: string
   mode: SessionMode
   phase: SessionPhase
   isRunning: boolean
@@ -378,6 +395,7 @@ function mapSessionBase(row: SessionRow | SessionSummaryRow): {
     projectId: row.project_id,
     workdir: row.workdir,
     ...(row.workspace ? { workspace: row.workspace } : {}),
+    ...(row.branch ? { branch: row.branch } : {}),
     mode: (row.mode ?? 'planner') as SessionMode,
     phase: (row.workflow_phase ?? 'plan') as SessionPhase,
     isRunning: Boolean(row.is_running),
@@ -407,6 +425,7 @@ interface SessionRow {
   project_id: string
   workdir: string
   workspace: string | null
+  branch: string | null
   phase: string
   mode: string
   workflow_phase: string
@@ -431,6 +450,7 @@ interface SessionSummaryRow {
   project_id: string
   workdir: string
   workspace: string | null
+  branch: string | null
   mode: string
   workflow_phase: string
   is_running: number

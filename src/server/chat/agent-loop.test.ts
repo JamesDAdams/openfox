@@ -87,6 +87,7 @@ describe('executeTools', () => {
         projectId: 'test-project',
       }),
       getLspManager: vi.fn(),
+      getEffectiveWorkdir: vi.fn().mockReturnValue('/test'),
       drainAsapMessages: vi.fn().mockReturnValue([]),
     } as unknown as SessionManager
 

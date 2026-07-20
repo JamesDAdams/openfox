@@ -568,8 +568,8 @@ export function createWebSocketServer(
       const seq = client.lastSentSeq + 1
       enqueueSend(client, serializeServerMessage({ ...msg, sessionId }), seq)
     }
-    // Broadcast confirmations to non-subscribed clients within the same project
-    if (msg.type === 'chat.path_confirmation' && projectId) {
+    // Broadcast confirmations and their resolution to non-subscribed clients within the same project
+    if ((msg.type === 'chat.path_confirmation' || msg.type === 'session.confirmation_resolved') && projectId) {
       for (const [clientWs, client] of clients) {
         if (clientWs.readyState !== WebSocket.OPEN) continue
         if (isSubscribedToSession(client, sessionId)) continue
@@ -578,12 +578,22 @@ export function createWebSocketServer(
           : undefined
         if (clientProjectId !== projectId) continue
         const seq = client.lastSentSeq + 1
-        enqueueSend(
-          client,
-          serializeServerMessage({ type: 'session.confirmation_pending', sessionId, payload: msg.payload }),
-          seq,
-        )
+        const crossSessionType =
+          msg.type === 'chat.path_confirmation' ? 'session.confirmation_pending' : 'session.confirmation_resolved'
+        enqueueSend(client, serializeServerMessage({ type: crossSessionType, sessionId, payload: msg.payload }), seq)
       }
+    }
+  }
+
+  const broadcastForProject = (projectId: string, sessionId: string, msg: ServerMessage) => {
+    for (const [clientWs, client] of clients) {
+      if (clientWs.readyState !== WebSocket.OPEN) continue
+      const clientProjectId = client.activeSessionId
+        ? sessionManager.getSession(client.activeSessionId)?.projectId
+        : undefined
+      if (clientProjectId !== projectId) continue
+      const seq = client.lastSentSeq + 1
+      enqueueSend(client, serializeServerMessage({ ...msg, sessionId }), seq)
     }
   }
 
@@ -620,11 +630,9 @@ export function createWebSocketServer(
 
       // Update activeWorkdir when workspace changed so git polling picks up the right dir
       const effectiveWorkdir = updatedSession.workspace ?? updatedSession.workdir
-      let workspaceChanged = false
 
       for (const [, client] of clients) {
         if (client.activeSessionId === updatedSession.id && client.activeWorkdir !== effectiveWorkdir) {
-          workspaceChanged = true
           const prevWorkdir = client.activeWorkdir
           client.activeWorkdir = effectiveWorkdir
           if (prevWorkdir) {
@@ -643,9 +651,9 @@ export function createWebSocketServer(
         createSessionStateMessage(updatedSession, messages, pendingConfirmations, pendingQuestions),
       )
 
-      // If workspace changed, fetch git status in background and push as git.status message
-      // This avoids blocking session.state broadcast on git IO
-      if (workspaceChanged && effectiveWorkdir) {
+      // Always send git.status after a session update to sync workspace/branch in the UI,
+      // even when the workspace path hasn't changed (e.g. branch-only change).
+      if (effectiveWorkdir) {
         ;(async () => {
           const branch = await moduleGitBranch(effectiveWorkdir)
           if (!branch) return
@@ -814,6 +822,7 @@ export function createWebSocketServer(
     },
     close: (cb?: () => void) => wss.close(cb as (err?: Error) => void),
     broadcastForSession,
+    broadcastForProject,
     broadcastAll,
   }
 }
@@ -823,6 +832,7 @@ export interface WebSocketServerExports {
   abortSession: (sessionId: string) => boolean
   close: (cb?: () => void) => void
   broadcastForSession: (sessionId: string, msg: ServerMessage) => void
+  broadcastForProject: (projectId: string, sessionId: string, msg: ServerMessage) => void
   broadcastAll: (msg: ServerMessage) => void
 }
 

@@ -32,6 +32,7 @@ export interface Session {
   projectId: string
   workdir: string
   workspace?: string // Optional workspace path
+  branch?: string // Persisted branch for this session
   mode: SessionMode
   phase: SessionPhase // Current workflow phase
   isRunning: boolean // Is the agent actively working?
@@ -83,6 +84,7 @@ export interface SessionSummary {
   title?: string
   workdir: string
   workspace?: string // Optional workspace path
+  branch?: string // Persisted branch for this session
   mode: SessionMode
   phase: SessionPhase // Current workflow phase
   isRunning: boolean

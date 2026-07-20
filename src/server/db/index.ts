@@ -249,5 +249,11 @@ function runMigrations(db: Database.Database): void {
     db.exec(`ALTER TABLE sessions ADD COLUMN workspace TEXT`)
   }
 
+  // Migration: Add branch column for session→branch binding
+  if (!columnNames.includes('branch')) {
+    logger.info('Migrating sessions table: adding branch column')
+    db.exec(`ALTER TABLE sessions ADD COLUMN branch TEXT`)
+  }
+
   logger.info('Database migrations completed')
 }

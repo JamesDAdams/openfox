@@ -412,6 +412,16 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const { checkoutBranch } = await import('./git/workspace.js')
     try {
       await checkoutBranch(project.workdir, branch)
+      // Update all sessions using this project tree
+      const { updateSessionBranch } = await import('./db/sessions.js')
+      const allSessions = sessionManager.listSessions()
+      for (const s of allSessions) {
+        const effectiveWorkdir = s.workspace ?? s.workdir
+        if (effectiveWorkdir === project.workdir) {
+          updateSessionBranch(s.id, branch)
+          sessionManager.emitBranchChange(s.id)
+        }
+      }
       res.json({ branch })
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to checkout branch' })
@@ -423,12 +433,27 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const { getProject } = await import('./db/projects.js')
     const project = getProject(req.params.id)
     if (!project) return res.status(404).json({ error: 'Project not found' })
-    const { name } = req.body
+    const { name, sourceBranch } = req.body
     if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name is required' })
-    const { createBranch } = await import('./git/workspace.js')
+    const { createBranch, resolveAndValidateSourceBranch, validateRef } = await import('./git/workspace.js')
     try {
-      await createBranch(project.workdir, name)
-      res.json({ branch: name })
+      await validateRef(project.workdir, name)
+      let sb: string | undefined
+      if (sourceBranch) {
+        sb = await resolveAndValidateSourceBranch(project.workdir, sourceBranch, project.workdir)
+      }
+      await createBranch(project.workdir, name, sb)
+      // Update all sessions using this project tree
+      const { updateSessionBranch } = await import('./db/sessions.js')
+      const allSessions = sessionManager.listSessions()
+      for (const s of allSessions) {
+        const effectiveWorkdir = s.workspace ?? s.workdir
+        if (effectiveWorkdir === project.workdir) {
+          updateSessionBranch(s.id, name)
+          sessionManager.emitBranchChange(s.id)
+        }
+      }
+      res.json({ branch: name, sourceBranch: sourceBranch ?? null })
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to create branch' })
     }
@@ -441,9 +466,12 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const session = sessionManager.getSession(req.params.id)
     if (!session) return res.status(404).json({ error: 'Session not found' })
     const effectiveWorkdir = session.workspace ?? session.workdir
-    const { listBranches } = await import('./git/workspace.js')
-    const branches = await listBranches(effectiveWorkdir)
-    res.json({ branches })
+    const { listBranches, getDefaultBranch } = await import('./git/workspace.js')
+    const [branches, defaultBranch] = await Promise.all([
+      listBranches(effectiveWorkdir),
+      getDefaultBranch(session.workdir), // project root, not workspace, for real upstream origin/HEAD
+    ])
+    res.json({ branches, defaultBranch })
   })
 
   /** Switch to an existing branch in the session's effective workdir */
@@ -454,9 +482,23 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     if (!branch || typeof branch !== 'string') return res.status(400).json({ error: 'branch is required' })
     const effectiveWorkdir = session.workspace ?? session.workdir
     const { checkoutBranch, validateRef } = await import('./git/workspace.js')
+    const { updateSessionBranch } = await import('./db/sessions.js')
     try {
       await validateRef(effectiveWorkdir, branch)
       await checkoutBranch(effectiveWorkdir, branch)
+      updateSessionBranch(req.params.id, branch)
+
+      // Sync branch to other sessions sharing this workspace
+      if (session.workspace) {
+        const all = sessionManager.listSessions()
+        for (const s of all) {
+          if (s.id !== req.params.id && s.workspace === session.workspace) {
+            updateSessionBranch(s.id, branch)
+            sessionManager.emitBranchChange(s.id)
+          }
+        }
+      }
+
       res.json({ branch })
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to checkout branch' })
@@ -467,14 +509,36 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   app.post('/api/sessions/:id/checkout-new', async (req, res) => {
     const session = sessionManager.getSession(req.params.id)
     if (!session) return res.status(404).json({ error: 'Session not found' })
-    const { name } = req.body
+    const { name, sourceBranch } = req.body
     if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name is required' })
     const effectiveWorkdir = session.workspace ?? session.workdir
-    const { createBranch, validateRef } = await import('./git/workspace.js')
+    const { validateRef } = await import('./git/workspace.js')
+    const { updateSessionBranch } = await import('./db/sessions.js')
     try {
       await validateRef(effectiveWorkdir, name)
-      await createBranch(effectiveWorkdir, name)
-      res.json({ branch: name })
+      if (sourceBranch) {
+        const { resolveAndValidateSourceBranch, createBranch } = await import('./git/workspace.js')
+        // resolveAndValidateSourceBranch handles its own validateRef internally
+        const sb = await resolveAndValidateSourceBranch(effectiveWorkdir, sourceBranch, session.workdir)
+        await createBranch(effectiveWorkdir, name, sb)
+      } else {
+        const { createBranch } = await import('./git/workspace.js')
+        await createBranch(effectiveWorkdir, name)
+      }
+      updateSessionBranch(req.params.id, name)
+
+      // Sync branch to other sessions sharing this workspace
+      if (session.workspace) {
+        const all = sessionManager.listSessions()
+        for (const s of all) {
+          if (s.id !== req.params.id && s.workspace === session.workspace) {
+            updateSessionBranch(s.id, name)
+            sessionManager.emitBranchChange(s.id)
+          }
+        }
+      }
+
+      res.json({ branch: name, sourceBranch: sourceBranch ?? null })
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to create branch' })
     }
@@ -556,7 +620,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
     // maxTokens is no longer passed - it comes from providerManager.getCurrentModelContext() at query time
     const session = sessionManager.createSession(projectId, title, providerId ?? null, model ?? null)
-    wssExports.broadcastAll({
+    wssExports.broadcastForProject(projectId, session.id, {
       type: 'session.created',
       sessionId: session.id,
       payload: {
@@ -587,11 +651,11 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const session = sessionManager.getSession(req.params.id)
     if (!session) return res.status(404).json({ error: 'Session not found' })
 
-    const { target, branch } = req.body
+    const { target, branch, sourceBranch } = req.body
     if (!target || typeof target !== 'string') return res.status(400).json({ error: 'target is required' })
 
     try {
-      const updated = await sessionManager.switchWorkspace(req.params.id, target, branch)
+      const updated = await sessionManager.switchWorkspace(req.params.id, target, branch, sourceBranch)
       res.json({ session: updated })
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to switch workspace' })
@@ -897,13 +961,25 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const sessionId = req.params.id
     const { callId, approved, alwaysAllow } = req.body
 
-    if (!callId || approved === undefined) {
-      return res.status(400).json({ error: 'callId and approved are required' })
+    if (!callId || typeof approved !== 'boolean') {
+      return res.status(400).json({ error: 'callId and approved (boolean) are required' })
+    }
+    if (alwaysAllow !== undefined && typeof alwaysAllow !== 'boolean') {
+      return res.status(400).json({ error: 'alwaysAllow must be a boolean if provided' })
     }
 
-    const { providePathConfirmation } = await import('./tools/index.js')
-    const result = providePathConfirmation(callId, approved, alwaysAllow)
+    const { providePathConfirmation, getConfirmationSessionId } = await import('./tools/index.js')
 
+    // Check session binding BEFORE resolving — must match URL session
+    const pendingSessionId = getConfirmationSessionId(callId)
+    if (!pendingSessionId) {
+      return res.status(404).json({ error: 'No pending path confirmation with that ID' })
+    }
+    if (pendingSessionId !== sessionId) {
+      return res.status(403).json({ error: 'Confirmation does not belong to this session' })
+    }
+
+    const result = providePathConfirmation(callId, approved, alwaysAllow)
     if (!result.found) {
       return res.status(404).json({ error: 'No pending path confirmation with that ID' })
     }
@@ -924,8 +1000,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       wssExports.broadcastForSession(sessionId, { ...stateMsg, sessionId })
     }
 
-    // Broadcast to all clients that the confirmation was resolved
-    wssExports.broadcastAll({
+    // Broadcast to session clients that the confirmation was resolved
+    wssExports.broadcastForSession(sessionId, {
       type: 'session.confirmation_resolved',
       sessionId,
       payload: { sessionId, callId },

@@ -149,6 +149,19 @@ export async function runChatTurn(options: OrchestratorOptions): Promise<void> {
   // Mark session as running (cleared in finally)
   sessionManager.setRunning(sessionId, true)
 
+  // Check branch consistency and warn if the session's persisted branch doesn't
+  // match the actual branch on disk (e.g. changed externally)
+  const branchWarning = await sessionManager.checkBranchConsistency(sessionId)
+  if (branchWarning) {
+    logger.warn('Branch consistency check failed', { sessionId, warning: branchWarning })
+    sessionManager.addMessage(sessionId, {
+      role: 'user',
+      content: `<system-reminder>\n${branchWarning}\n</system-reminder>`,
+      isSystemGenerated: true,
+      messageKind: 'auto-prompt',
+    })
+  }
+
   // Create append closure — the only write path to EventStore from the loop
   const append = (event: import('../events/types.js').TurnEvent) => {
     try {

@@ -1,9 +1,13 @@
+import { randomUUID } from 'node:crypto'
 import { resolve, isAbsolute } from 'node:path'
 import type { ToolResult } from '../../shared/types.js'
 import type { Tool, ToolContext } from './types.js'
 import type { LLMToolDefinition } from '../llm/types.js'
 import type { SessionManager } from '../session/manager.js'
-import { requestPathAccess, PathAccessDeniedError } from './path-security.js'
+import { requestPathAccess, PathAccessDeniedError, registerPathConfirmation } from './path-security.js'
+import { AskUserInterrupt } from './ask.js'
+import { createChatPathConfirmationMessage } from '../ws/protocol.js'
+import { getEventStore } from '../events/index.js'
 
 /**
  * Helper utilities provided to tool handlers by createTool.
@@ -62,6 +66,41 @@ export type ToolHandler<TArgs> = (args: TArgs, context: ToolContext, helpers: To
  * If context provides a signal (e.g. user cancel), the returned signal
  * triggers on whichever fires first.
  */
+export function requestUserConfirmation(context: ToolContext, toolLabel: string, desc: string): Promise<boolean> {
+  // In dangerous mode, auto-approve all shell guard confirmations
+  if (context.dangerLevel === 'dangerous') return Promise.resolve(true)
+  // Sub-agent shortcut: skip confirmation dialogs since they don't render in the sub-agent bubble.
+  // Already handled by dangerous check above; in normal mode, deny (fail closed).
+  if (context.isSubAgent) return Promise.resolve(false)
+  if (typeof context.onEvent !== 'function') return Promise.resolve(false)
+  // Use the tool call ID so the frontend can match this confirmation to the tool call UI.
+  // Fall back to a fresh UUID if no toolCallId is available.
+  const callId = context.toolCallId ?? randomUUID()
+  // Persist to EventStore so the confirmation survives navigation/reload
+  try {
+    const eventStore = getEventStore()
+    eventStore.append(context.sessionId, {
+      type: 'path.confirmation_pending',
+      data: { callId, tool: toolLabel, paths: [desc], workdir: context.workdir, reason: 'dangerous_command' },
+    })
+  } catch {
+    // Event store not available (tests, early init)
+  }
+  // Register the resolver BEFORE emitting to client (prevent race)
+  const promise = registerPathConfirmation(
+    callId,
+    [desc],
+    context.sessionId,
+    toolLabel,
+    context.workdir,
+    'dangerous_command',
+  )
+  ;(context.onEvent as (msg: unknown) => void)(
+    createChatPathConfirmationMessage(callId, toolLabel, [desc], context.workdir, 'dangerous_command'),
+  )
+  return promise
+}
+
 export function buildSignal(timeoutMs: number, contextSignal?: AbortSignal): AbortSignal {
   const timeoutSignal = AbortSignal.timeout(timeoutMs)
   if (contextSignal) {
@@ -190,8 +229,8 @@ export function createTool<TArgs>(name: string, definition: LLMToolDefinition, h
       try {
         return await handler(args as TArgs, context, helpers)
       } catch (error) {
-        // Re-throw path access errors for orchestrator to handle with helpful message
-        if (error instanceof PathAccessDeniedError) {
+        // Re-throw path access and ask-user errors for orchestrator to handle
+        if (error instanceof PathAccessDeniedError || error instanceof AskUserInterrupt) {
           throw error
         }
 

@@ -24,7 +24,7 @@ describe('executeTools', () => {
   function makeCtx(overrides?: Record<string, unknown>) {
     return {
       toolRegistry: mockToolRegistry,
-      sessionManager: { getLspManager: vi.fn() } as any,
+      sessionManager: { getLspManager: vi.fn(), getEffectiveWorkdir: vi.fn().mockReturnValue('/test') } as any,
       sessionId: 'test-session',
       workdir: '/test',
       turnMetrics: mockTurnMetrics,

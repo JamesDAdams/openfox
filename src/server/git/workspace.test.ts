@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import {
   getGitBranch,
+  getDefaultBranch,
+  resolveAndValidateSourceBranch,
   validateRef,
   ensureWorkspace,
   listBranches,
@@ -146,6 +148,7 @@ describe('ensureWorkspace', () => {
   it('checks out specific branch when requested', async () => {
     vi.mocked(spawn)
       .mockReturnValueOnce(makeMockProc('') as any) // git clone --shared
+      .mockReturnValueOnce(makeMockProc('') as any) // validateRef (git check-ref-format)
       .mockReturnValueOnce(makeMockProc('') as any) // git checkout (branch exists)
     vi.mocked(mkdir).mockResolvedValue(undefined)
     vi.mocked(stat)
@@ -155,14 +158,16 @@ describe('ensureWorkspace', () => {
 
     const result = await ensureWorkspace(CWD, 'my-experiment', PROJECT_NAME, 'develop')
     expect(result.name).toBe('my-experiment')
-    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(spawn).toHaveBeenCalledTimes(3)
   })
 
-  it('creates branch in workspace when requested branch does not exist', async () => {
+  it('uses getDefaultBranch as source when requested branch does not exist', async () => {
     vi.mocked(spawn)
       .mockReturnValueOnce(makeMockProc('') as any) // git clone --shared
+      .mockReturnValueOnce(makeMockProc('') as any) // validateRef (git check-ref-format)
       .mockReturnValueOnce(makeMockProc('', 'fatal: not a git repository', 128) as any) // git checkout fails
-      .mockReturnValueOnce(makeMockProc('main\n') as any) // getGitBranch (source)
+      .mockReturnValueOnce(makeMockProc('') as any) // git fetch origin --no-tags --quiet (getDefaultBranch)
+      .mockReturnValueOnce(makeMockProc('refs/remotes/origin/main\n') as any) // git symbolic-ref origin/HEAD (getDefaultBranch)
       .mockReturnValueOnce(makeMockProc('') as any) // git checkout -b succeeds
     vi.mocked(mkdir).mockResolvedValue(undefined)
     vi.mocked(stat)
@@ -184,5 +189,74 @@ describe('ensureWorkspace', () => {
 
     const result = await ensureWorkspace(CWD, 'existing-ws', PROJECT_NAME)
     expect(result.name).toBe('existing-ws')
+  })
+})
+
+describe('getDefaultBranch', () => {
+  it('returns origin/HEAD after fetch', async () => {
+    vi.mocked(spawn)
+      .mockReturnValueOnce(makeMockProc('') as any) // git fetch (runGit)
+      .mockReturnValueOnce(makeMockProc('refs/remotes/origin/main\n') as any) // git symbolic-ref
+    const result = await getDefaultBranch(CWD)
+    expect(result).toBe('main')
+  })
+
+  it('falls back to current branch when origin/HEAD is not set', async () => {
+    vi.mocked(spawn)
+      .mockReturnValueOnce(makeMockProc('') as any) // git fetch (runGit)
+      .mockReturnValueOnce(makeMockProc('', '', 1) as any) // git symbolic-ref fails
+      .mockReturnValueOnce(makeMockProc('develop\n') as any) // git rev-parse (current branch)
+    const result = await getDefaultBranch(CWD)
+    expect(result).toBe('develop')
+  })
+
+  it('falls back to "main" when nothing else works', async () => {
+    vi.mocked(spawn)
+      .mockReturnValueOnce(makeMockProc('') as any) // git fetch (runGit)
+      .mockReturnValueOnce(makeMockProc('', '', 1) as any) // git symbolic-ref fails
+      .mockReturnValueOnce(makeMockProc('', '', 1) as any) // git rev-parse fails
+    const result = await getDefaultBranch(CWD)
+    expect(result).toBe('main')
+  })
+})
+
+describe('resolveAndValidateSourceBranch', () => {
+  it('returns local branch name when it exists locally', async () => {
+    vi.mocked(spawn)
+      .mockReturnValueOnce(makeMockProc('') as any) // git check-ref-format (validateRef)
+      .mockReturnValueOnce(makeMockProc('') as any) // git fetch
+      .mockReturnValueOnce(makeMockProc('abc123\n') as any) // git rev-parse local ref
+    const result = await resolveAndValidateSourceBranch(CWD, 'main')
+    expect(result).toBe('main')
+  })
+
+  it('creates tracking branch when branch exists on origin', async () => {
+    vi.mocked(spawn)
+      .mockReturnValueOnce(makeMockProc('') as any) // git check-ref-format (validateRef)
+      .mockReturnValueOnce(makeMockProc('') as any) // git fetch
+      .mockReturnValueOnce(makeMockProc('', '', 1) as any) // git rev-parse local fails
+      .mockReturnValueOnce(makeMockProc('abc123\n') as any) // git rev-parse remote ref succeeds
+      .mockReturnValueOnce(makeMockProc('') as any) // git checkout -b from origin succeeds
+    const result = await resolveAndValidateSourceBranch(CWD, 'origin/feature')
+    expect(result).toBe('feature')
+  })
+
+  it('throws when branch does not exist locally or on origin', async () => {
+    vi.mocked(spawn)
+      .mockReturnValueOnce(makeMockProc('') as any) // git check-ref-format (validateRef)
+      .mockReturnValueOnce(makeMockProc('') as any) // git fetch
+      .mockReturnValueOnce(makeMockProc('', '', 1) as any) // git rev-parse local fails
+      .mockReturnValueOnce(makeMockProc('', '', 1) as any) // git rev-parse remote fails
+    await expect(resolveAndValidateSourceBranch(CWD, 'nonexistent')).rejects.toThrow('not found')
+  })
+
+  it('throws when projectDir is provided but branch is absent from remote ls-remote (empty output)', async () => {
+    vi.mocked(spawn)
+      .mockReturnValueOnce(makeMockProc('') as any) // git check-ref-format (validateRef)
+      .mockReturnValueOnce(makeMockProc('') as any) // git fetch
+      .mockReturnValueOnce(makeMockProc('', '', 1) as any) // git rev-parse local fails
+      .mockReturnValueOnce(makeMockProc('', '', 1) as any) // git rev-parse remote fails
+      .mockReturnValueOnce(makeMockProc('') as any) // git ls-remote succeeds but returns empty (branch absent)
+    await expect(resolveAndValidateSourceBranch(CWD, 'absent-branch', '/tmp/project')).rejects.toThrow('not found')
   })
 })

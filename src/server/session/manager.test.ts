@@ -13,6 +13,16 @@ vi.mock('../lsp/index.js', () => ({
   shutdownLspManager: shutdownLspManagerMock,
 }))
 
+const mockGetGitBranch = vi.fn()
+
+vi.mock('../git/workspace.js', async (importOriginal) => {
+  const actual = (await importOriginal()) as any
+  return {
+    ...actual,
+    getGitBranch: (...args: any[]) => mockGetGitBranch(...args),
+  }
+})
+
 import { loadConfig } from '../config.js'
 import { closeDatabase, getDatabase, initDatabase } from '../db/index.js'
 import { createProject } from '../db/projects.js'
@@ -44,6 +54,7 @@ describe('SessionManager', () => {
     getLspManagerMock.mockClear()
     shutdownLspManagerMock.mockClear()
     mockProviderManager.getCurrentModelContext.mockClear()
+    mockGetGitBranch.mockResolvedValue(null) // default: no branch
   })
 
   afterEach(async () => {
@@ -493,6 +504,78 @@ describe('SessionManager', () => {
       manager.markWarmedUp(s1.id)
       expect(manager.isWarmedUp(s1.id)).toBe(true)
       expect(manager.isWarmedUp(s2.id)).toBe(false)
+    })
+  })
+
+  describe('checkBranchConsistency', () => {
+    it('returns null when session has no persisted branch', async () => {
+      const session = manager.createSession(projectId)
+      expect(session.branch).toBeUndefined()
+      const result = await manager.checkBranchConsistency(session.id)
+      expect(result).toBeNull()
+    })
+
+    it('returns null when persisted branch matches actual branch', async () => {
+      const session = manager.createSession(projectId)
+      const { updateSessionBranch } = await import('../db/sessions.js')
+      updateSessionBranch(session.id, 'main')
+      mockGetGitBranch.mockResolvedValue('main')
+
+      const result = await manager.checkBranchConsistency(session.id)
+      expect(result).toBeNull()
+    })
+
+    it('returns warning string when persisted branch differs from actual branch', async () => {
+      const session = manager.createSession(projectId)
+      const { updateSessionBranch } = await import('../db/sessions.js')
+      updateSessionBranch(session.id, 'feature-x')
+      mockGetGitBranch.mockResolvedValue('main')
+
+      const result = await manager.checkBranchConsistency(session.id)
+      expect(result).toContain('Branch mismatch')
+      expect(result).toContain('feature-x')
+      expect(result).toContain('main')
+    })
+  })
+
+  describe('branch persistence', () => {
+    it('persists branch after update and reads it back', async () => {
+      const session = manager.createSession(projectId)
+      const { updateSessionBranch, getSession } = await import('../db/sessions.js')
+
+      updateSessionBranch(session.id, 'feature-x')
+      const reloaded = getSession(session.id)
+      expect(reloaded?.branch).toBe('feature-x')
+    })
+
+    it('preserves branch after session reload from DB', async () => {
+      const session = manager.createSession(projectId)
+      const { updateSessionBranch } = await import('../db/sessions.js')
+      updateSessionBranch(session.id, 'develop')
+
+      const reloaded = manager.getSession(session.id)
+      expect(reloaded?.branch).toBe('develop')
+    })
+
+    it('syncs branch to other sessions sharing the same workspace path', async () => {
+      const s1 = manager.createSession(projectId)
+      const s2 = manager.createSession(projectId)
+      const { updateSessionWorkdir, updateSessionBranch, getSession } = await import('../db/sessions.js')
+      const sharedWs = '/workspaces/test/shared-ws'
+
+      // Both sessions reference the same workspace
+      updateSessionWorkdir(s1.id, '/tmp/project', sharedWs)
+      updateSessionWorkdir(s2.id, '/tmp/project', sharedWs)
+
+      // Simulate branch sync after a workspace switch changes the branch
+      updateSessionBranch(s1.id, 'feature-x')
+      const otherSessions = manager.listSessions().filter((s) => s.id !== s1.id && s.workspace === sharedWs)
+      for (const other of otherSessions) {
+        updateSessionBranch(other.id, 'feature-x')
+      }
+
+      expect(getSession(s1.id)?.branch).toBe('feature-x')
+      expect(getSession(s2.id)?.branch).toBe('feature-x')
     })
   })
 })

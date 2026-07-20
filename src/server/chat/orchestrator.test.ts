@@ -218,6 +218,8 @@ function createSessionManager(state: Record<string, any>) {
     addTokensUsed: vi.fn(),
     getCurrentModelSettings: vi.fn(() => undefined),
     getLspManager: vi.fn(() => ({ name: 'lsp' })),
+    getEffectiveWorkdir: vi.fn((_id: string) => state['current']?.workspace ?? state['current']?.workdir ?? '/test'),
+    checkBranchConsistency: vi.fn().mockResolvedValue(null),
     setRunning: vi.fn(),
     getCachedPrompt: vi.fn(() => undefined),
     setCachedPrompt: vi.fn(),
@@ -1686,5 +1688,56 @@ describe('chat orchestrator', () => {
       expect(assistantStart).toBeDefined()
       expect((assistantStart![1].data as any).contextWindowId).toBe('window-123')
     })
+  })
+
+  it('injects branch mismatch warning as system message when checkBranchConsistency returns warning', async () => {
+    const eventStore = createEventStore()
+    getEventStoreMock.mockReturnValue(eventStore)
+    getCurrentContextWindowIdMock.mockReturnValue('window-1')
+    getAllInstructionsMock.mockResolvedValue({ content: 'Build carefully', files: [] })
+    getContextMessagesMock.mockReturnValue([{ role: 'user' as const, content: 'test' }])
+    getConversationMessagesMock.mockReturnValue([
+      { role: 'user' as const, content: 'test', source: 'history' as const },
+    ])
+    getToolRegistryForModeMock.mockReturnValue({ tools: [], definitions: [], execute: vi.fn() })
+    streamLLMPureMock.mockReturnValue({ kind: 'stream' })
+    consumeStreamGeneratorMock.mockResolvedValueOnce({
+      content: 'Done',
+      toolCalls: [],
+      segments: [{ type: 'text', content: 'Done' }],
+      usage: { promptTokens: 10, completionTokens: 3 },
+      timing: { ttft: 1, completionTime: 1, tps: 3, prefillTps: 10 },
+      aborted: false,
+    })
+
+    const addMessageMock = vi.fn()
+    const sessionManager = createSessionManager({
+      current: {
+        id: 'session-1',
+        projectId: 'project-1',
+        workdir: '/tmp/project',
+        mode: 'planner',
+        messages: [],
+        criteria: [],
+      },
+    })
+    // Override checkBranchConsistency to return a warning
+    sessionManager.checkBranchConsistency = vi.fn().mockResolvedValue('Branch mismatch: session expects "feature-x" but workspace is on "main"')
+    sessionManager.addMessage = addMessageMock
+
+    await runChatTurn({
+      sessionManager: sessionManager as never,
+      sessionId: 'session-1',
+      llmClient: { getModel: () => 'qwen3-32b' } as never,
+    })
+
+    expect(addMessageMock).toHaveBeenCalledTimes(1)
+    const callArgs = addMessageMock.mock.calls[0]
+    expect(callArgs).toBeDefined()
+    const message = callArgs![1] as any
+    expect(message.role).toBe('user')
+    expect(message.content).toContain('Branch mismatch')
+    expect(message.isSystemGenerated).toBe(true)
+    expect(message.messageKind).toBe('auto-prompt')
   })
 })

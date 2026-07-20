@@ -51,6 +51,7 @@ function createSessionManager(state: any) {
     setCurrentContextSize: vi.fn(),
     addTokensUsed: vi.fn(),
     getLspManager: vi.fn(() => ({ name: 'lsp' })),
+    checkBranchConsistency: vi.fn().mockResolvedValue(null),
     setRunning: vi.fn(),
     updateExecutionState: vi.fn(),
     addMessage: vi.fn(),

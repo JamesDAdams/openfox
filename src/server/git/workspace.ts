@@ -77,6 +77,17 @@ export function listBranches(cwd: string): Promise<BranchInfo[]> {
   })
 }
 
+export function listRemoteBranches(cwd: string): Promise<string[]> {
+  return captureStdout(cwd, ['branch', '-r', '--format', '%(refname:short)']).then((out) => {
+    if (!out) return []
+    return out
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((b) => b.trim())
+  })
+}
+
 /**
  * Count how many commits the workspace's current branch is behind the same
  * branch on origin (the original repo). Returns 0 if up to date, null if the
@@ -93,6 +104,77 @@ export function validateRef(cwd: string, name: string): Promise<void> {
   return runGit(cwd, ['check-ref-format', `refs/heads/${name}`])
 }
 
+/**
+ * Resolve the default branch for a project directory.
+ * Fetches origin to ensure remote refs are up to date, then reads origin/HEAD.
+ * Falls back to the current branch, then 'main'.
+ */
+export async function getDefaultBranch(projectDir: string): Promise<string> {
+  await runGit(projectDir, ['fetch', 'origin', '--no-tags', '--quiet']).catch(() => {})
+  const originHead = await captureStdout(projectDir, ['symbolic-ref', 'refs/remotes/origin/HEAD'])
+  if (originHead) {
+    const branch = originHead.trim().replace('refs/remotes/origin/', '')
+    if (branch) return branch
+  }
+  const current = await getGitBranch(projectDir)
+  if (current) return current
+  return 'main'
+}
+
+/**
+ * Resolve and validate a source branch name for creating a new branch.
+ * Ensures the branch exists locally or on the remote, creating a tracking ref if needed.
+ * Returns the local ref name that can be used as the source for git checkout -b.
+ * @param projectDir - optional project root directory (for upstream remote resolution)
+ */
+export async function resolveAndValidateSourceBranch(
+  cwd: string,
+  sourceBranch: string,
+  projectDir?: string,
+): Promise<string> {
+  // Validate the source branch name format first
+  await validateRef(cwd, sourceBranch.replace(/^origin\//, ''))
+
+  // fetch to ensure remote refs are up to date
+  await runGit(cwd, ['fetch', 'origin', '--no-tags', '--quiet']).catch(() => {})
+
+  // strip optional origin/ prefix to get the branch name
+  const branchName = sourceBranch.replace(/^origin\//, '')
+
+  // check if it exists locally
+  const localRef = await captureStdout(cwd, ['rev-parse', '--verify', '--quiet', 'refs/heads/' + branchName])
+  if (localRef !== null) return branchName
+
+  // check if it exists on workspace origin
+  const remoteRef = await captureStdout(cwd, ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/' + branchName])
+  if (remoteRef !== null) {
+    // create a local tracking branch from origin without switching cwd's checkout
+    await runGit(cwd, ['branch', '--track', branchName, 'origin/' + branchName])
+    return branchName
+  }
+
+  // check on the project's upstream origin (workspace origin is local with --shared clone)
+  if (projectDir) {
+    const remoteExists = await captureStdout(projectDir, ['ls-remote', '--heads', 'origin', branchName])
+    if (remoteExists !== null && remoteExists.trim() !== '') {
+      // Fetch the branch from the project's upstream via its remote-tracking ref
+      // In --shared clones, the project dir has the branch as refs/remotes/origin/..., not refs/heads/...
+      await runGit(cwd, ['fetch', projectDir, 'refs/remotes/origin/' + branchName + ':refs/heads/' + branchName]).catch(
+        async () => {
+          // fallback: fetch from upstream then create branch
+          await runGit(projectDir, ['fetch', 'origin', branchName])
+          await runGit(cwd, ['fetch', projectDir, 'refs/remotes/origin/' + branchName + ':refs/heads/' + branchName])
+        },
+      )
+      return branchName
+    }
+  }
+
+  throw new Error(
+    `Source branch "${sourceBranch}" not found locally or on origin. Use a valid branch name like "main" or "origin/main".`,
+  )
+}
+
 export function validateWorkspaceName(name: string): void {
   if (!name || typeof name !== 'string') throw new Error('Workspace name is required')
   if (name.includes('/') || name.includes('\\')) throw new Error('Workspace name cannot contain path separators')
@@ -105,8 +187,9 @@ export function checkoutBranch(cwd: string, name: string): Promise<void> {
   return runGit(cwd, ['checkout', name])
 }
 
-export function createBranch(cwd: string, name: string): Promise<void> {
-  return runGit(cwd, ['checkout', '-b', name])
+export function createBranch(cwd: string, name: string, sourceBranch?: string): Promise<void> {
+  const args = sourceBranch ? ['checkout', '-b', name, sourceBranch] : ['checkout', '-b', name]
+  return runGit(cwd, args)
 }
 
 export interface WorkspaceInfo {
@@ -154,6 +237,7 @@ export async function ensureWorkspace(
   name: string,
   projectName: string,
   branch?: string,
+  sourceBranch?: string,
 ): Promise<WorkspaceResult> {
   const workspacesDir = getWorkspacesDir(projectName)
   const wsPath = resolve(workspacesDir, name)
@@ -179,9 +263,12 @@ export async function ensureWorkspace(
 
   // If a specific branch was requested, check it out
   if (branch) {
+    await validateRef(wsPath, branch)
     await runGit(wsPath, ['checkout', branch]).catch(async () => {
-      const sourceBranch = (await getGitBranch(projectDir)) ?? 'main'
-      await runGit(wsPath, ['checkout', '-b', branch, sourceBranch])
+      const sb = sourceBranch
+        ? await resolveAndValidateSourceBranch(wsPath, sourceBranch, projectDir)
+        : await getDefaultBranch(projectDir)
+      await runGit(wsPath, ['checkout', '-b', branch, sb])
     })
   }
 

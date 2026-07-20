@@ -3,12 +3,83 @@ import { resolve, isAbsolute } from 'node:path'
 import { access } from 'node:fs/promises'
 import stripAnsi from 'strip-ansi'
 import { OUTPUT_LIMITS } from './types.js'
-import { createTool } from './tool-helpers.js'
+import { createTool, requestUserConfirmation } from './tool-helpers.js'
 import { checkAborted, spawnShellProcess } from '../utils/shell.js'
 import { extractAbsolutePathsFromCommand, extractSensitivePathsFromCommand } from './path-security.js'
 import { terminateProcessTree } from '../utils/process-tree.js'
 import { stripTailPipe } from './shell-tail.js'
 import { getSetting, SETTINGS_KEYS } from '../db/settings.js'
+
+/**
+ * Patterns that escape the effective workspace directory.
+ * Handles optional quotes around paths to prevent bypass via quoting.
+ * Patterns match against a quote-stripped version of the command so that
+ * cd "$HOME" (stripped → cd   $HOME) is not accidentally missed.
+ */
+const ESCAPE_PATTERNS = [
+  /\bcd\s+['"]?(?:\.\.|\/|~)/,
+  /\bcd\s+\$/, // cd with variable expansion ($HOME, ${HOME})
+  /\bcd\s+\$\(/, // cd with command substitution $(...)
+  /\bcd\s+`/, // cd with backtick substitution
+  /\bgit\s+-C\s+/,
+  /GIT_DIR=/,
+  /\bgit\s+--work-tree[\s=]/,
+  /\bgit\s+--git-dir[\s=]/,
+]
+
+/**
+ * Check if a command contains workspace escape patterns.
+ * Strips quotes globally so patterns like cd "$PWD/.." are caught (becomes cd $PWD/..).
+ * Then checks individual segments against the original command for variable/substitution
+ * patterns that are masked by quoted strings.
+ */
+export function detectEscapePattern(command: string): string | null {
+  // Strip quotes to normalize paths before matching
+  const normalized = command.replace(/'[^']*'/g, ' ').replace(/"[^"]*"/g, ' ')
+  for (const pattern of ESCAPE_PATTERNS) {
+    const match = normalized.match(pattern)
+    if (match) {
+      return match[0].trim()
+    }
+  }
+  // Catch indirect escapes like cd sub && cd ../.. and cd "$PWD/.."
+  // Also catch variable expansion and command substitution in cd arguments.
+  // Works on the original command (not quote-stripped) so $HOME inside quotes
+  // is still visible.
+  const segments = command.split(/[;&|]|&&|\|\|/)
+  for (const segment of segments) {
+    const trimmed = segment.trim()
+    // Check if this segment does a cd to a parent/absolute/tilde path
+    if (
+      /^cd\s+.+\.\./.test(trimmed) ||
+      /^cd\s+['"]?\//.test(trimmed) ||
+      /^cd\s+['"]?~/.test(trimmed) ||
+      /^cd\s+['"]?\.\./.test(trimmed) ||
+      /^cd\s+.*\$\(/.test(trimmed) || // cd with $(...) substitution
+      /^cd\s+.*`/.test(trimmed) || // cd with backtick substitution
+      /^cd\s+.*\$\{?[A-Za-z_]/.test(trimmed) // cd with variable expansion
+    ) {
+      return trimmed
+    }
+  }
+  return null
+}
+
+/**
+ * Check if a command performs a Git mutation that changes branches or workspace state.
+ * Does NOT strip quotes — doing so would let git "checkout" main bypass detection.
+ */
+export function detectGitMutation(command: string): string | null {
+  // Check for git commands with mutation verbs (on the raw command, no quote stripping)
+  const gitMatch = command.match(
+    /\bgit\s+['"]?(?:checkout|switch|branch\s+(-[dDmcMC]|--delete|--move|--copy|--force|-f)|-b\s+\S+|merge|rebase|reset|cherry-pick|worktree|clone|pull|push|fetch|update-ref|symbolic-ref)/,
+  )
+  if (gitMatch) {
+    return gitMatch[0].trim()
+  }
+
+  return null
+}
 
 let rtkAvailable: boolean | undefined
 
@@ -70,7 +141,7 @@ export const runCommandTool = createTool<RunCommandArgs>(
     function: {
       name: 'run_command',
       description:
-        'Execute a shell command. Returns stdout, stderr, and exit code. Does NOT support trailing "&" for backgrounding — use background_process tool instead.',
+        'Execute a shell command. Returns stdout, stderr, and exit code. Does NOT support trailing "&" for backgrounding — use background_process tool instead.\nCommands run from your working directory automatically — do NOT prepend "cd /path/" to change to a directory you are already in. Doing so triggers unnecessary security confirmations.',
       parameters: {
         type: 'object',
         properties: {
@@ -98,6 +169,30 @@ export const runCommandTool = createTool<RunCommandArgs>(
       return helpers.error(
         'Use background_process tool (action: "start") for background/long-running commands instead of \'&\'. See the tool description for details.',
       )
+    }
+
+    // Detect workspace escape patterns (cd ../.., git -C, GIT_DIR, etc.)
+    const escapeMatch = detectEscapePattern(args.command)
+    if (escapeMatch) {
+      const desc = `Command "${args.command}" contains workspace escape pattern "${escapeMatch}". Allow this command?`
+      const approved = await requestUserConfirmation(context, 'command', desc)
+      if (!approved) {
+        return helpers.error(
+          `User denied: command "${escapeMatch}" would escape the workspace. Use the workspace tool to switch workspaces directly.`,
+        )
+      }
+    }
+
+    // Detect Git mutations (checkout, switch, branch creation, etc.)
+    const mutationMatch = detectGitMutation(args.command)
+    if (mutationMatch) {
+      const desc = `Command "${args.command}" modifies Git state (${mutationMatch}). Allow this Git operation?`
+      const approved = await requestUserConfirmation(context, 'command', desc)
+      if (!approved) {
+        return helpers.error(
+          `User denied: "${mutationMatch}" modifies Git state. Use the workspace tool to switch workspaces or branches.`,
+        )
+      }
     }
 
     const workingDir = args.cwd ? helpers.resolvePath(args.cwd) : context.workdir

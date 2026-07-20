@@ -1,10 +1,11 @@
-import { createTool } from './tool-helpers.js'
+import { createTool, requestUserConfirmation } from './tool-helpers.js'
 import { getGitBranch, listWorkspaces } from '../git/workspace.js'
 
 interface WorkspaceArgs {
   action: 'switch' | 'list' | 'delete'
   target?: string
   branch?: string
+  sourceBranch?: string
 }
 
 export const workspaceTool = createTool<WorkspaceArgs>(
@@ -17,6 +18,13 @@ export const workspaceTool = createTool<WorkspaceArgs>(
         'Manage workspaces for the current session. A workspace is a cloned copy of the project.\n\n' +
         'Use "switch" to move between workspaces. Target "original" for the project root, or a workspace name.\n' +
         'If the workspace does not exist yet, it is created automatically.\n\n' +
+        'You can also change the branch of the current workspace by calling switch with the current\n' +
+        'workspace name and a branch parameter. The branch will be checked out without recreating\n' +
+        'the workspace and without losing uncommitted changes.\n\n' +
+        'If the requested branch does not exist, it will be created. By default it is based on the\n' +
+        'default branch of the project (origin/HEAD). You can specify sourceBranch to base the new\n' +
+        'branch on a different existing branch.\n\n' +
+        'Actions that change the workspace (switch, delete) require explicit user approval via a confirmation dialog.\n\n' +
         'Setup commands (e.g. npm install) are configured via .openfox/workspace.json.\n\n' +
         'Actions:\n' +
         '- switch: Switch to a workspace (target: "original" or a name, optional branch for new workspaces)\n' +
@@ -36,7 +44,11 @@ export const workspaceTool = createTool<WorkspaceArgs>(
           },
           branch: {
             type: 'string',
-            description: 'Optional git branch to check out when creating a new workspace',
+            description: 'Optional git branch to check out when creating or switching to a workspace',
+          },
+          sourceBranch: {
+            type: 'string',
+            description: 'If branch does not exist, base the new branch on this existing branch. Default: origin/HEAD.',
           },
         },
         required: ['action'],
@@ -57,7 +69,22 @@ export const workspaceTool = createTool<WorkspaceArgs>(
           return helpers.error('Parameter "target" is required for action=switch ("original" or a workspace name)')
         }
 
-        const updated = await sessionManager.switchWorkspace(sessionId, args.target, args.branch)
+        const currentSession = sessionManager.getSession(sessionId)
+        const isBranchChange =
+          args.branch !== undefined &&
+          currentSession != null &&
+          args.target !== 'original' &&
+          currentSession.workspace?.split('/').pop() === args.target
+
+        const label = args.target === 'original' ? 'original project' : `workspace "${args.target}"`
+        const desc = isBranchChange
+          ? `Change branch to "${args.branch}" on ${label}`
+          : `Switch to ${label}${args.branch ? ` on branch "${args.branch}"` : ''}`
+
+        const approved = await requestUserConfirmation(context, 'workspace', desc)
+        if (!approved) return helpers.error(`User denied: ${isBranchChange ? 'branch change' : `switch to ${label}`}`)
+
+        const updated = await sessionManager.switchWorkspace(sessionId, args.target, args.branch, args.sourceBranch)
         const wsName = args.target === 'original' ? 'original' : (updated.workspace?.split('/').pop() ?? args.target)
         const branch = await getGitBranch(updated.workspace ?? updated.workdir)
         return helpers.success(
@@ -104,9 +131,10 @@ export const workspaceTool = createTool<WorkspaceArgs>(
         if (!args.target || typeof args.target !== 'string') {
           return helpers.error('Parameter "target" is required for action=delete (the workspace name)')
         }
-        if (args.target === 'original') {
-          return helpers.error('Cannot delete the original workspace')
-        }
+        if (args.target === 'original') return helpers.error('Cannot delete the original workspace')
+
+        const approved = await requestUserConfirmation(context, 'workspace', `Delete workspace "${args.target}"`)
+        if (!approved) return helpers.error(`User denied: delete workspace "${args.target}"`)
 
         await sessionManager.deleteWorkspace(sessionId, args.target)
         return helpers.success(

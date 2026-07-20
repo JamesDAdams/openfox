@@ -85,6 +85,7 @@ describe('SubAgentManager', () => {
       getCachedPrompt: vi.fn().mockReturnValue(undefined),
       setCachedPrompt: vi.fn(),
       getLspManager: vi.fn().mockReturnValue(undefined),
+      getEffectiveWorkdir: vi.fn().mockReturnValue('/test'),
       drainAsapMessages: vi.fn().mockReturnValue([]),
       getCurrentWindowMessages: vi.fn().mockReturnValue([]),
       updateMessage: vi.fn(),

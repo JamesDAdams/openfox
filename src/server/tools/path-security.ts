@@ -812,12 +812,11 @@ export function providePathConfirmation(
     // Event store might not be initialized in tests, continue without event
   }
 
-  if (approved) {
-    // Add paths to session's allowlist (always if approved, or only if alwaysAllow)
-    if (alwaysAllow) {
-      addAllowedPaths(pending.sessionId, pending.paths)
-    } else {
-      // For single approval, still add to allowlist for this session
+  if (approved && alwaysAllow) {
+    // Add real filesystem paths to the allowlist only when alwaysAllow is true.
+    // One-time approvals (alwaysAllow=false or undefined) must not persist.
+    // Skip non-path confirmations (dangerous_command, git_no_verify).
+    if (pending.reason !== 'dangerous_command' && pending.reason !== 'git_no_verify') {
       addAllowedPaths(pending.sessionId, pending.paths)
     }
   }
@@ -870,6 +869,16 @@ export function cancelPathConfirmationsForSession(sessionId: string, reason: str
  */
 export function hasPendingPathConfirmation(callId: string): boolean {
   return pendingConfirmations.has(callId)
+}
+
+/**
+ * Get the session ID associated with a pending confirmation.
+ *
+ * @param callId - The confirmation's unique ID
+ * @returns The session ID, or undefined if no pending confirmation with that callId
+ */
+export function getConfirmationSessionId(callId: string): string | undefined {
+  return pendingConfirmations.get(callId)?.sessionId
 }
 
 /**
