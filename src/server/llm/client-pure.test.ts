@@ -27,7 +27,7 @@ describe('llm client pure helpers', () => {
       { role: 'system', content: 'system' },
       {
         role: 'assistant',
-        content: null,
+        content: '',
         tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'glob', arguments: '{"pattern":"*.ts"}' } }],
       },
       { role: 'tool', content: 'ok', tool_call_id: 'call-1' },
@@ -52,7 +52,7 @@ describe('llm client pure helpers', () => {
     // First assistant message with tool calls includes reasoning
     const firstAssistant = result[0] as unknown as Record<string, unknown>
     expect(firstAssistant['role']).toBe('assistant')
-    expect(firstAssistant['content']).toBeNull()
+    expect(firstAssistant['content']).toBe('')
     expect(firstAssistant['reasoning']).toBe('I need to read the file first')
     expect(firstAssistant['tool_calls']).toBeDefined()
 

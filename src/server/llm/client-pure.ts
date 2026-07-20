@@ -109,7 +109,7 @@ export function getThinking(
 function buildAssistantMessage(msg: LLMMessage, thinkingField?: string): Record<string, unknown> {
   const result: Record<string, unknown> = {
     role: 'assistant',
-    content: msg.content || null,
+    content: msg.toolCalls?.length ? msg.content || '' : msg.content || null,
   }
   if (msg.toolCalls?.length) {
     result['tool_calls'] = convertToolCalls(msg.toolCalls)
