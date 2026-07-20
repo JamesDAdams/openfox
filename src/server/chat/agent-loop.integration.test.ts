@@ -376,7 +376,8 @@ describe('agentLoop integration', () => {
 
     // Stateful conversation: first iteration returns only the user prompt,
     // second iteration includes the assistant tool-call msg + tool result
-    const getConversationMessagesMock = vi.fn()
+    const getConversationMessagesMock = vi
+      .fn()
       .mockResolvedValueOnce([{ role: 'user' as const, content: 'Run a command', source: 'history' as const }])
       .mockResolvedValueOnce([
         { role: 'user' as const, content: 'Run a command', source: 'history' as const },
@@ -386,7 +387,12 @@ describe('agentLoop integration', () => {
           toolCalls: [toolCall],
           source: 'history' as const,
         },
-        { role: 'tool' as const, content: 'Command failed: exit code 1', source: 'history' as const, toolCallId: 'call-1' },
+        {
+          role: 'tool' as const,
+          content: 'Command failed: exit code 1',
+          source: 'history' as const,
+          toolCallId: 'call-1',
+        },
       ])
 
     const assembleRequestMock = vi.fn().mockReturnValue({
@@ -399,9 +405,7 @@ describe('agentLoop integration', () => {
       .mockResolvedValueOnce(makeStreamResult({ toolCalls: [toolCall], finishReason: 'tool_calls' }))
       .mockResolvedValueOnce(makeStreamResult({ content: 'Done', finishReason: 'stop' }))
     ;(executeTools as any).mockResolvedValue({
-      toolMessages: [
-        { role: 'tool', content: 'Command failed: exit code 1', source: 'history', toolCallId: 'call-1' },
-      ],
+      toolMessages: [{ role: 'tool', content: 'Command failed: exit code 1', source: 'history', toolCallId: 'call-1' }],
       stepDoneCalled: false,
     })
 
@@ -424,9 +428,7 @@ describe('agentLoop integration', () => {
 
     // Verify the second LLM call receives the assistant message with content: ''
     const secondCallArgs = assembleRequestMock.mock.calls[1]![0] as { messages: any[] }
-    const assistantMsg = secondCallArgs.messages.find(
-      (m: any) => m.role === 'assistant' && m.toolCalls?.length > 0,
-    )
+    const assistantMsg = secondCallArgs.messages.find((m: any) => m.role === 'assistant' && m.toolCalls?.length > 0)
     expect(assistantMsg).toBeDefined()
     expect(assistantMsg.content).toBe('')
     expect(assistantMsg.toolCalls[0].name).toBe('run_command')

@@ -76,7 +76,6 @@ describe('encodeImageToDataUrl', () => {
 
   if (hasOffscreenCanvas) {
     it('should convert ImageBitmap to data URL when no data array', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const OC = (globalThis as Record<string, unknown>)['OffscreenCanvas'] as new (w: number, h: number) => any
       const canvas = new OC(3, 3)
       const ctx = canvas.getContext('2d')!
