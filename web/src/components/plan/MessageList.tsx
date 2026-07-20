@@ -164,13 +164,20 @@ function WorkflowButton({
 
   useClickOutside(menuRef, () => setMenuOpen(false), menuOpen)
 
+  const hasSubGroups = subGroups && subGroups.length > 0
+
   return (
     <div className="relative flex">
       <button
         onClick={() => onLaunch()}
         data-testid="workflow-run-button"
-        className="px-4 py-1.5 rounded-l text-sm font-medium transition-colors"
-        style={{ backgroundColor: bg, color, border: `1px solid ${border}`, borderRight: 'none' }}
+        className={`px-4 py-1.5 text-sm font-medium transition-colors ${hasSubGroups ? 'rounded-l' : 'rounded'}`}
+        style={{
+          backgroundColor: bg,
+          color,
+          border: `1px solid ${border}`,
+          ...(hasSubGroups ? { borderRight: 'none' } : {}),
+        }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = bgHover
         }}
@@ -180,11 +187,11 @@ function WorkflowButton({
       >
         ▶ {workflowName}
       </button>
-      {subGroups && subGroups.length > 0 && (
+      {hasSubGroups && (
         <div ref={menuRef} className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="px-1.5 py-1.5 rounded-r text-sm font-medium transition-colors"
+            className="px-2.5 py-1.5 rounded-r text-sm font-medium transition-colors"
             style={{ backgroundColor: bg, color, border: `1px solid ${border}` }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = bgHover
