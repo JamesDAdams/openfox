@@ -82,7 +82,11 @@ function toSnapshotMessage(message: import('../../shared/types.js').Message): Sn
  *
  * maxTokens should come from providerManager.getCurrentModelContext()
  */
-export function getSessionState(sessionId: string, maxTokens?: number): FoldedSessionState | undefined {
+export function getSessionState(
+  sessionId: string,
+  maxTokens?: number,
+  defaultMode?: SessionMode,
+): FoldedSessionState | undefined {
   const eventStore = getEventStore()
 
   // Check for the latest snapshot first
@@ -135,7 +139,7 @@ export function getSessionState(sessionId: string, maxTokens?: number): FoldedSe
 
   // If we have a snapshot, use it as the base for messages and replay newer events
   if (latestSnapshot) {
-    const state = foldSessionState(events, initialWindowId, effectiveMaxTokens)
+    const state = foldSessionState(events, initialWindowId, effectiveMaxTokens, undefined, defaultMode)
 
     // Override folded messages with the latest snapshot plus replayed events.
     return {
@@ -144,7 +148,7 @@ export function getSessionState(sessionId: string, maxTokens?: number): FoldedSe
     }
   }
 
-  return foldSessionState(events, initialWindowId, effectiveMaxTokens)
+  return foldSessionState(events, initialWindowId, effectiveMaxTokens, undefined, defaultMode)
 }
 
 /**

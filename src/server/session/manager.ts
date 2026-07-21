@@ -1323,13 +1323,13 @@ export class SessionManager {
    */
   private buildSessionFromDb(dbSession: Session): Session {
     const maxTokens = this.providerManager.getCurrentModelContext()
-    const eventState = getSessionState(dbSession.id, maxTokens)
+    const eventState = getSessionState(dbSession.id, maxTokens, dbSession.mode)
 
     if (!eventState) {
       // No events yet - return defaults from DB
       return {
         ...dbSession,
-        mode: 'planner',
+        mode: dbSession.mode,
         phase: 'plan',
         isRunning: dbSession.isRunning,
         messages: [],

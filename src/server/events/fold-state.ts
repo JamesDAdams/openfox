@@ -131,12 +131,15 @@ export function foldContextState(events: EventLike[], initialWindowId: string): 
   }
 }
 
-export function foldMode(events: EventLike[]): SessionMode {
-  let mode: SessionMode = 'planner'
+export function foldMode(events: EventLike[], defaultMode: SessionMode = 'planner'): SessionMode {
+  let mode = defaultMode
   for (const event of events) {
     if (event.type === 'mode.changed') {
       const data = event.data as Extract<TurnEvent, { type: 'mode.changed' }>['data']
       mode = data.mode
+    } else if (event.type === 'turn.snapshot') {
+      const snapshot = event.data as SessionSnapshot
+      mode = snapshot.mode
     }
   }
   return mode
@@ -201,8 +204,9 @@ export function foldSessionState(
   initialWindowId: string,
   maxTokens: number,
   initialMessages?: SnapshotMessage[],
+  defaultMode?: SessionMode,
 ): FoldedSessionState {
-  const mode = foldMode(events)
+  const mode = foldMode(events, defaultMode)
   const phase = foldPhase(events)
   const isRunning = foldIsRunning(events)
   const messages =

@@ -205,6 +205,28 @@ describe('emitModeChanged', () => {
     const state = getSessionState('s1')
     expect(state!.mode).toBe('chat')
   })
+
+  it('should use defaultMode when no mode.changed event exists', () => {
+    initSession('s1')
+
+    const state = getSessionState('s1', undefined, 'builder')
+    expect(state!.mode).toBe('builder')
+  })
+
+  it('should fall back to planner when no defaultMode and no mode.changed event', () => {
+    initSession('s1')
+
+    const state = getSessionState('s1')
+    expect(state!.mode).toBe('planner')
+  })
+
+  it('should let mode.changed event override defaultMode', () => {
+    initSession('s1')
+    emitModeChanged('s1', 'builder', false)
+
+    const state = getSessionState('s1', undefined, 'planner')
+    expect(state!.mode).toBe('builder')
+  })
 })
 
 describe('emitPhaseChanged', () => {
