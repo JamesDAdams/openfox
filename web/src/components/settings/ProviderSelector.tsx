@@ -4,7 +4,7 @@ import { useConfigStore, getBackendDisplayName, type Provider } from '../../stor
 import { useSessionStore } from '../../stores/session'
 import { ProviderModal, providerFormPayload, type ProviderFormData } from '../shared/ProviderModal'
 import { authFetch } from '../../lib/api'
-import { ChevronDownIcon, ReloadIcon, CheckIcon, EditSmallIcon, StarIcon, StarFilledIcon } from '../shared/icons'
+import { ChevronDownIcon, ReloadIcon, CheckIcon, EditSmallIcon, StarIcon, StarFilledIcon, SearchIcon } from '../shared/icons'
 
 function formatContextWindow(context: number): string {
   if (context >= 1000000) return `${(context / 1000000).toFixed(1)}M`
@@ -20,6 +20,7 @@ export function ProviderSelector() {
   const [expandedProviderIds, setExpandedProviderIds] = useState<string[]>([])
   interface ModelWithConfig {
     id: string
+    name?: string
     contextWindow: number
     source: 'backend' | 'user' | 'default'
   }
@@ -66,9 +67,12 @@ export function ProviderSelector() {
     ? (effectiveModel.split('/').pop()?.replace(/-/g, ' ') ?? effectiveModel)
     : 'No model'
   const isSessionScoped = !!(currentSession && sessionModel)
-  const differsFromDefault = isSessionScoped && sessionModel !== defaultModel
+  const differsFromDefault = isSessionScoped && defaultModel !== null && sessionModel !== defaultModel
 
   const [settingDefault, setSettingDefault] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMode, setSearchMode] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -90,6 +94,20 @@ export function ProviderSelector() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery('')
+      setSearchMode(false)
+    }
+  }, [isOpen])
+
+  // Focus the search input when dropdown opens (search mode button becomes input)
+  useEffect(() => {
+    if (isOpen) {
+      inputRef.current?.focus()
+    }
+  }, [isOpen])
 
   // Auto-expand all providers when menu opens and load their models (once per session)
   useEffect(() => {
@@ -137,13 +155,11 @@ export function ProviderSelector() {
   const activeProvider = providers.find((p) => p.id === effectiveProviderId)
   const isLlmOffline = activeProvider?.status === 'disconnected'
 
-  // Check if a given provider/model pair is the session-active model
   const isSessionActive = (providerId: string, modelId: string): boolean => {
     if (!currentSession) return false
     return currentSession.providerId === providerId && currentSession.providerModel === modelId
   }
 
-  // Check if a given provider/model pair is the global default
   const isDefault = (providerId: string, modelId: string): boolean => {
     if (!defaultModelSelection) return false
     return defaultModelSelection === `${providerId}/${modelId}`
@@ -154,7 +170,7 @@ export function ProviderSelector() {
     try {
       await refreshProviderModels(providerId)
     } catch {
-      // Silently fail - will retry next time dropdown is opened
+      // Silently fail
     } finally {
       setLoadingModels(null)
     }
@@ -176,7 +192,6 @@ export function ProviderSelector() {
     }
 
     if (currentSession) {
-      // Session-scoped: persist provider choice to session (no model specified)
       setSessionProvider(provider.id, undefined)
       setIsOpen(false)
       setExpandedProviderIds([])
@@ -296,21 +311,17 @@ export function ProviderSelector() {
     setShowProviderModal(false)
   }
 
-  // Handle clicking a model name: set it for the session (if session exists) or globally
   const handleModelClick = async (providerId: string, newModel: string) => {
     if (currentSession) {
-      // Optimistic update: immediately reflect the new model in the header
       useSessionStore.setState((state) => ({
         currentSession: state.currentSession ? { ...state.currentSession, providerId, providerModel: newModel } : null,
       }))
-      // Session-scoped: persist model choice to session only
       setSessionProvider(providerId, newModel)
       setExpandedProviderIds([])
       setIsOpen(false)
       return
     }
 
-    // No session: set globally as default via activateProvider (which persists defaultModelSelection)
     const success = await activateProvider(providerId)
     if (success) {
       setExpandedProviderIds([])
@@ -318,7 +329,6 @@ export function ProviderSelector() {
     }
   }
 
-  // Handle clicking the star icon: set as global default
   const handleSetDefault = async (e: React.MouseEvent, providerId: string, modelId: string) => {
     e.stopPropagation()
     setSettingDefault(true)
@@ -331,10 +341,106 @@ export function ProviderSelector() {
     }
   }
 
-  // If no providers configured, show simple model display
   function getVisibleModels(provider: Provider) {
     const hasSelected = provider.models.some((m) => m.selected)
     return hasSelected ? provider.models.filter((m) => m.selected) : provider.models
+  }
+
+  function ModelEntry({ providerId, modelConfig }: { providerId: string; modelConfig: ModelWithConfig }) {
+    const isActive = isSessionActive(providerId, modelConfig.id)
+    const isDef = isDefault(providerId, modelConfig.id)
+    return (
+      <div
+        className={`flex items-center px-4 py-1.5 text-sm hover:bg-bg-tertiary transition-colors group ${
+          loadingModels === 'activating' ? 'opacity-50 cursor-wait' : ''
+        } ${isActive ? 'text-accent-primary' : 'text-text-secondary'}`}
+      >
+        <button
+          type="button"
+          onClick={() => handleModelClick(providerId, modelConfig.id)}
+          disabled={loadingModels === 'activating'}
+          className="flex-1 truncate text-left"
+        >
+          {modelConfig.name ??
+            modelConfig.id.split('/').pop()?.replace(/-/g, ' ') ??
+            modelConfig.id}
+        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+          <span className="text-xs text-text-muted">{formatContextWindow(modelConfig.contextWindow)}</span>
+          {currentSession && (
+            <button
+              type="button"
+              onClick={(e) => handleSetDefault(e, providerId, modelConfig.id)}
+              disabled={settingDefault}
+              className="p-0.5 hover:bg-bg-tertiary rounded transition-colors disabled:opacity-40"
+              title={isDef ? 'Default model' : 'Set as default model'}
+            >
+              {isDef ? (
+                <StarFilledIcon className="w-3.5 h-3.5 text-accent-warning" />
+              ) : (
+                <StarIcon className="w-3.5 h-3.5 text-text-muted hover:text-accent-warning" />
+              )}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleEditModel(providerId, modelConfig)
+            }}
+            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-bg-tertiary rounded transition-opacity"
+            title="Edit model context"
+          >
+            <EditSmallIcon className="w-3 h-3 text-text-muted" />
+          </button>
+          {isActive && (
+            <span className="text-accent-success flex-shrink-0" title="Session model">
+              <CheckIcon className="w-3.5 h-3.5" />
+            </span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const filteredGroups = searchQuery.trim()
+    ? providers
+        .map((p) => ({
+          provider: p,
+          models: getVisibleModels(p).filter((m) => {
+            const q = searchQuery.toLowerCase()
+            const name = (m.name ?? '').toLowerCase()
+            const id = m.id.toLowerCase()
+            const idDisplay = id.replace(/-/g, ' ')
+            return name.includes(q) || id.includes(q) || idDisplay.includes(q)
+          }),
+        }))
+        .filter((g) => g.models.length > 0)
+    : []
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setIsOpen(false)
+      return
+    }
+    if (e.key === 'Enter') {
+      const query = (e.target as HTMLInputElement).value.trim()
+      if (!query) return
+      const q = query.toLowerCase()
+      const matches = providers.flatMap((p) =>
+        getVisibleModels(p)
+          .filter((m) => {
+            const n = (m.name ?? '').toLowerCase()
+            const i = m.id.toLowerCase()
+            const iDisplay = i.replace(/-/g, ' ')
+            return n.includes(q) || i.includes(q) || iDisplay.includes(q)
+          })
+          .map((m) => ({ providerId: p.id, modelId: m.id })),
+      )
+      if (matches.length === 1) {
+        handleModelClick(matches[0]!.providerId, matches[0]!.modelId)
+      }
+    }
   }
 
   if (providers.length === 0) {
@@ -349,7 +455,15 @@ export function ProviderSelector() {
           <span className="text-sm text-accent-error animate-pulse">LLM offline</span>
         ) : (
           <>
-            <span className="text-sm text-accent-primary">{shortModelName}</span>
+            <span className="text-sm text-accent-primary">
+              {activeProvider ? (
+                <>
+                  {activeProvider.name} • {shortModelName}
+                </>
+              ) : (
+                shortModelName
+              )}
+            </span>
             <span
               className={`text-xs px-1.5 py-0.5 rounded-full ${
                 activeProvider?.isLocal
@@ -368,212 +482,190 @@ export function ProviderSelector() {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors group"
-        title="Click to switch provider or model"
-      >
-        {isLlmOffline ? (
-          <span className="text-sm text-accent-error animate-pulse">offline</span>
-        ) : (
-          <>
-            <span className={`text-sm ${differsFromDefault ? 'text-accent-primary italic' : 'text-accent-primary'}`}>
-              {shortModelName}
-            </span>
-            {differsFromDefault && (
-              <span className="text-xs text-text-muted ml-0.5" title="Session-scoped model (different from default)">
-                •
+      {isOpen && providers.length > 0 ? (
+        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-bg-tertiary min-w-72">
+          <SearchIcon className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={searchQuery}
+            onInput={(e) => {
+              setSearchQuery(e.currentTarget.value)
+              setSearchMode(e.currentTarget.value.trim().length > 0)
+            }}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search models..."
+            className="bg-transparent border-none outline-none text-sm text-text-primary w-full placeholder:text-text-muted"
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors group"
+          title="Click to switch provider or model"
+        >
+          {isLlmOffline ? (
+            <span className="text-sm text-accent-error animate-pulse">offline</span>
+          ) : (
+            <>
+              <span className={`text-sm ${differsFromDefault ? 'text-accent-primary italic' : 'text-accent-primary'}`}>
+                {activeProvider ? (
+                  <>
+                    {activeProvider.name} • {shortModelName}
+                  </>
+                ) : (
+                  shortModelName
+                )}
               </span>
-            )}
-            <span
-              className={`text-xs px-1.5 py-0.5 rounded-full ${
-                activeProvider?.isLocal
-                  ? 'text-accent-success bg-accent-success/10'
-                  : 'text-accent-warning bg-accent-warning/10'
-              }`}
-            >
-              {activeProvider?.isLocal ? 'local' : 'api'}
-            </span>
-          </>
-        )}
-        <ChevronDownIcon className={`w-3 h-3 text-text-muted transition-transform`} rotate={isOpen ? 180 : 0} />
-      </button>
+              {differsFromDefault && (
+                <span className="text-xs text-text-muted ml-0.5" title="Session-scoped model (different from default)">
+                  •
+                </span>
+              )}
+              <span
+                className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  activeProvider?.isLocal
+                    ? 'text-accent-success bg-accent-success/10'
+                    : 'text-accent-warning bg-accent-warning/10'
+                }`}
+              >
+                {activeProvider?.isLocal ? 'local' : 'api'}
+              </span>
+            </>
+          )}
+          <ChevronDownIcon className={`w-3 h-3 text-text-muted transition-transform`} rotate={isOpen ? 180 : 0} />
+        </button>
+      )}
 
-      {/* Unified Provider + Model Dropdown */}
       {isOpen && (
         <div className="absolute bottom-full right-0 mb-1 min-w-72 max-w-[100vw] bg-bg-secondary border border-border rounded-lg shadow-lg z-50 overflow-hidden max-h-[80vh] overflow-y-auto">
-          <div className="py-1">
-            {providers.map((provider) => (
-              <div key={provider.id}>
-                <div
-                  className={`px-3 py-2 flex items-center justify-between ${
-                    provider.id === effectiveProviderId ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'
-                  } ${activating ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
-                >
+          {searchMode && (
+            <div key="search-pane" className="py-1">
+              {filteredGroups.length > 0 ? (
+                filteredGroups.map((group) => (
+                  <div key={`search-group-${group.provider.id}`}>
+                    <div className="px-3 py-1.5 text-xs font-medium text-text-muted uppercase tracking-wider">
+                      {group.provider.name}
+                    </div>
+                    {group.models.map((modelConfig) => (
+                      <ModelEntry key={modelConfig.id} providerId={group.provider.id} modelConfig={modelConfig} />
+                    ))}
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-3 text-sm text-text-muted text-center">No models match your search</div>
+              )}
+            </div>
+          )}
+          {!searchMode && (
+            <div className="py-1">
+              {providers.map((provider) => (
+                <div key={provider.id}>
                   <div
-                    onClick={() => !activating && handleProviderClick(provider)}
-                    className="flex flex-col min-w-0 flex-1 cursor-pointer"
+                    className={`px-3 py-2 flex items-center justify-between ${
+                      provider.id === effectiveProviderId ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'
+                    } ${activating ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
                   >
-                    <span
-                      className={`text-sm font-medium truncate ${
-                        provider.id === effectiveProviderId ? 'text-accent-primary' : 'text-text-primary'
-                      }`}
+                    <div
+                      onClick={() => !activating && handleProviderClick(provider)}
+                      className="flex flex-col min-w-0 flex-1 cursor-pointer"
                     >
-                      {provider.name}
-                    </span>
-                    <span className="text-xs text-text-muted truncate">
-                      {provider.backend !== 'unknown' && getBackendDisplayName(provider.backend)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {Boolean(provider.authAdapter) &&
-                      (authStates[provider.id] === 'connected' || provider.credentialRef ? (
-                        <button
-                          type="button"
-                          onClick={(event) => handleDisconnectAccount(event, provider.id)}
-                          disabled={authBusy === provider.id}
-                          className="text-[10px] px-1.5 py-0.5 rounded border border-accent-success/40 text-accent-success hover:bg-accent-success/10 disabled:opacity-50"
-                          title="Disconnect provider account"
-                        >
-                          Connected
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(event) => handleConnectAccount(event, provider.id)}
-                          disabled={authBusy === provider.id}
-                          className="text-[10px] px-1.5 py-0.5 rounded border border-accent-primary/40 text-accent-primary hover:bg-accent-primary/10 disabled:opacity-50"
-                          title="Connect provider account"
-                        >
-                          {authBusy === provider.id
-                            ? 'Starting…'
-                            : authStates[provider.id] === 'error' || authStates[provider.id] === 'expired'
-                              ? 'Retry'
-                              : 'Connect'}
-                        </button>
-                      ))}
-                    {provider.id === effectiveProviderId ? (
-                      <span className="text-accent-success" title="Active provider">
-                        <CheckIcon className="w-4 h-4" />
+                      <span
+                        className={`text-sm font-medium truncate ${
+                          provider.id === effectiveProviderId ? 'text-accent-primary' : 'text-text-primary'
+                        }`}
+                      >
+                        {provider.name}
                       </span>
-                    ) : (
-                      <span className="w-4" />
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleRefreshClick(e, provider.id)
-                      }}
-                      className="p-0.5 hover:bg-bg-tertiary rounded transition-colors"
-                      title="Refresh models"
-                    >
-                      <ReloadIcon
-                        className={`w-4 h-4 ${loadingModels === provider.id ? 'animate-spin' : ''} ${
-                          provider.id === activeProviderId ? 'text-accent-primary' : 'text-text-muted'
-                        }`}
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleChevronClick(provider)
-                      }}
-                      className="p-0.5 hover:bg-bg-tertiary rounded transition-colors"
-                      title="Show models"
-                    >
-                      <ChevronDownIcon
-                        className={`w-4 h-4 transition-transform ${expandedProviderIds.includes(provider.id) ? 'rotate-180' : ''} ${
-                          provider.id === activeProviderId ? 'text-accent-primary' : 'text-text-muted'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Model submenu - shown for expanded provider */}
-                {expandedProviderIds.includes(provider.id) && (
-                  <div className="bg-bg-primary border-t border-border max-h-40 overflow-y-auto">
-                    {loadingModels === provider.id ? (
-                      <div className="px-4 py-2 text-xs text-text-muted">Loading models...</div>
-                    ) : provider.models?.length ? (
-                      getVisibleModels(provider).map((modelConfig) => {
-                        const isActive = isSessionActive(provider.id, modelConfig.id)
-                        const isDef = isDefault(provider.id, modelConfig.id)
-                        return (
-                          <div
-                            key={modelConfig.id}
-                            className={`flex items-center px-4 py-1.5 text-sm hover:bg-bg-tertiary transition-colors group ${
-                              loadingModels === 'activating' ? 'opacity-50 cursor-wait' : ''
-                            } ${isActive ? 'text-accent-primary' : 'text-text-secondary'}`}
+                      <span className="text-xs text-text-muted truncate">
+                        {provider.backend !== 'unknown' && getBackendDisplayName(provider.backend)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {Boolean(provider.authAdapter) &&
+                        (authStates[provider.id] === 'connected' || provider.credentialRef ? (
+                          <button
+                            type="button"
+                            onClick={(event) => handleDisconnectAccount(event, provider.id)}
+                            disabled={authBusy === provider.id}
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-accent-success/40 text-accent-success hover:bg-accent-success/10 disabled:opacity-50"
+                            title="Disconnect provider account"
                           >
-                            {/* Click on model name → session-scoped (or global if no session) */}
-                            <button
-                              type="button"
-                              onClick={() => handleModelClick(provider.id, modelConfig.id)}
-                              disabled={loadingModels === 'activating'}
-                              className="flex-1 truncate text-left"
-                            >
-                              {modelConfig.name ??
-                                modelConfig.id.split('/').pop()?.replace(/-/g, ' ') ??
-                                modelConfig.id}
-                            </button>
-
-                            <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                              <span className="text-xs text-text-muted">
-                                {formatContextWindow(modelConfig.contextWindow)}
-                              </span>
-
-                              {/* Star: filled = default, outline = click to set as default. Hidden when no session since model-name click already sets global default. */}
-                              {currentSession && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleSetDefault(e, provider.id, modelConfig.id)}
-                                  disabled={settingDefault}
-                                  className="p-0.5 hover:bg-bg-tertiary rounded transition-colors disabled:opacity-40"
-                                  title={isDef ? 'Default model' : 'Set as default model'}
-                                >
-                                  {isDef ? (
-                                    <StarFilledIcon className="w-3.5 h-3.5 text-accent-warning" />
-                                  ) : (
-                                    <StarIcon className="w-3.5 h-3.5 text-text-muted hover:text-accent-warning" />
-                                  )}
-                                </button>
-                              )}
-
-                              {/* Edit button */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleEditModel(provider.id, modelConfig)
-                                }}
-                                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-bg-tertiary rounded transition-opacity"
-                                title="Edit model context"
-                              >
-                                <EditSmallIcon className="w-3 h-3 text-text-muted" />
-                              </button>
-
-                              {/* Checkmark: session-active model */}
-                              {isActive && (
-                                <span className="text-accent-success flex-shrink-0" title="Session model">
-                                  <CheckIcon className="w-3.5 h-3.5" />
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })
-                    ) : (
-                      <div className="px-4 py-2 text-xs text-text-muted">No models available</div>
-                    )}
+                            Connected
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(event) => handleConnectAccount(event, provider.id)}
+                            disabled={authBusy === provider.id}
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-accent-primary/40 text-accent-primary hover:bg-accent-primary/10 disabled:opacity-50"
+                            title="Connect provider account"
+                          >
+                            {authBusy === provider.id
+                              ? 'Starting…'
+                              : authStates[provider.id] === 'error' || authStates[provider.id] === 'expired'
+                                ? 'Retry'
+                                : 'Connect'}
+                          </button>
+                        ))}
+                      {provider.id === effectiveProviderId ? (
+                        <span className="text-accent-success" title="Active provider">
+                          <CheckIcon className="w-4 h-4" />
+                        </span>
+                      ) : (
+                        <span className="w-4" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRefreshClick(e, provider.id)
+                        }}
+                        className="p-0.5 hover:bg-bg-tertiary rounded transition-colors"
+                        title="Refresh models"
+                      >
+                        <ReloadIcon
+                          className={`w-4 h-4 ${loadingModels === provider.id ? 'animate-spin' : ''} ${
+                            provider.id === activeProviderId ? 'text-accent-primary' : 'text-text-muted'
+                          }`}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleChevronClick(provider)
+                        }}
+                        className="p-0.5 hover:bg-bg-tertiary rounded transition-colors"
+                        title="Show models"
+                      >
+                        <ChevronDownIcon
+                          className={`w-4 h-4 transition-transform ${expandedProviderIds.includes(provider.id) ? 'rotate-180' : ''} ${
+                            provider.id === activeProviderId ? 'text-accent-primary' : 'text-text-muted'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+
+                  {expandedProviderIds.includes(provider.id) && (
+                    <div className="bg-bg-primary border-t border-border max-h-40 overflow-y-auto">
+                      {loadingModels === provider.id ? (
+                        <div className="px-4 py-2 text-xs text-text-muted">Loading models...</div>
+                      ) : provider.models?.length ? (
+                        getVisibleModels(provider).map((modelConfig) => (
+                          <ModelEntry key={modelConfig.id} providerId={provider.id} modelConfig={modelConfig} />
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-xs text-text-muted">No models available</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="border-t border-border px-3 py-2">
             <button onClick={() => navigate('/onboarding')} className="text-xs text-accent-primary hover:underline">
               Manage providers
