@@ -188,12 +188,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
 
           {/* Specialized rendering for read_file operations */}
           {tool === 'read_file' && status === 'success' && (
-            <ReadFileView
-              result={result}
-              metadata={metadata}
-              filePath={String(args.path ?? '')}
-              heightExpanded={expanded}
-            />
+            <ReadFileView result={result} metadata={metadata} filePath={String(args.path ?? '')} />
           )}
 
           {/* Specialized rendering for return_value */}

@@ -202,7 +202,6 @@ interface ReadFileViewProps {
   result?: string
   metadata?: Record<string, unknown>
   filePath: string
-  heightExpanded?: boolean
 }
 
 function stripLineNumbers(content: string): string {
@@ -213,12 +212,7 @@ function stripLineNumbers(content: string): string {
     .join('\n')
 }
 
-export const ReadFileView = memo(function ReadFileView({
-  result,
-  metadata,
-  filePath,
-  heightExpanded = false,
-}: ReadFileViewProps) {
+export const ReadFileView = memo(function ReadFileView({ result, metadata, filePath }: ReadFileViewProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const language = useMemo(() => getLanguageFromPath(filePath), [filePath])
 
@@ -230,7 +224,7 @@ export const ReadFileView = memo(function ReadFileView({
     return (
       <>
         <div
-          className={`rounded overflow-hidden border border-border ${heightExpanded ? '' : 'max-h-[45vh]'} flex items-center justify-center cursor-pointer hover:border-accent-primary transition-colors`}
+          className={`rounded overflow-hidden border border-border max-h-[45vh] flex items-center justify-center cursor-pointer hover:border-accent-primary transition-colors`}
           onClick={() => setModalOpen(true)}
         >
           <img src={src} alt={filePath} className="max-w-full max-h-[45vh] object-contain" />
@@ -252,9 +246,7 @@ export const ReadFileView = memo(function ReadFileView({
     const strippedContent = stripLineNumbers(content)
 
     return (
-      <div
-        className={`rounded overflow-hidden border border-border ${heightExpanded ? '' : 'max-h-[45vh]'} overflow-y-auto p-2`}
-      >
+      <div className={`rounded overflow-hidden border border-border max-h-[45vh] overflow-y-auto p-2`}>
         <Markdown content={strippedContent} />
       </div>
     )
@@ -267,9 +259,7 @@ export const ReadFileView = memo(function ReadFileView({
   const startLine = startMatch ? parseInt(startMatch[1]!, 10) : 1
 
   return (
-    <div
-      className={`rounded overflow-hidden border border-border ${heightExpanded ? '' : 'max-h-[45vh]'} overflow-y-auto`}
-    >
+    <div className={`rounded overflow-hidden border border-border max-h-[45vh] overflow-y-auto`}>
       <CodeHighlight code={strippedContent} language={language} variant="block" showLineNumbers startLine={startLine} />
     </div>
   )
