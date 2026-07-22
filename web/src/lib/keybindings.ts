@@ -17,6 +17,7 @@ export interface KeybindingsConfig {
   terminalToggle: KeyBinding | null
   quickAction: KeyBinding | null
   modelSelector: KeyBinding | null
+  sessionSearch: KeyBinding | null
   agentSwitching: (KeyBinding | null)[]
 }
 
@@ -26,6 +27,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingsConfig = {
   terminalToggle: { type: 'double-press', key: 'Control', threshold: 300 },
   quickAction: { type: 'double-press', key: 'Shift', threshold: 300 },
   modelSelector: { type: 'chord', key: 'm', modifiers: ['ctrl'] },
+  sessionSearch: { type: 'chord', key: 's', modifiers: ['ctrl'] },
   agentSwitching: [
     { type: 'chord', key: '1', modifiers: ['ctrl'] },
     { type: 'chord', key: '2', modifiers: ['ctrl'] },
@@ -45,6 +47,7 @@ export function parseKeybindings(json: string | undefined | null): KeybindingsCo
       terminalToggle: orDefault('terminalToggle'),
       quickAction: orDefault('quickAction'),
       modelSelector: orDefault('modelSelector'),
+      sessionSearch: orDefault('sessionSearch'),
       agentSwitching: orDefault('agentSwitching'),
     }
   } catch {

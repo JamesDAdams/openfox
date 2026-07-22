@@ -184,6 +184,12 @@ export function KeybindingsTab() {
       binding: config.modelSelector,
       defaultBinding: DEFAULT_KEYBINDINGS.modelSelector,
     },
+    {
+      id: 'sessionSearch',
+      label: 'Search Sessions',
+      binding: config.sessionSearch,
+      defaultBinding: DEFAULT_KEYBINDINGS.sessionSearch,
+    },
     ...config.agentSwitching.map((b, i) => ({
       id: `agentSwitching.${i}`,
       label: `Switch to Agent ${i + 1}`,
@@ -209,6 +215,8 @@ export function KeybindingsTab() {
         updated.quickAction = value
       } else if (id === 'modelSelector') {
         updated.modelSelector = value
+      } else if (id === 'sessionSearch') {
+        updated.sessionSearch = value
       }
 
       setSetting(SETTINGS_KEYS.KEYBINDINGS, JSON.stringify(updated))

@@ -27,13 +27,15 @@ export function highlightMatches(text: string, query: string): React.ReactNode {
     }
   }
 
+  const chars = Array.from(text)
   const parts: React.ReactNode[] = []
   let current = ''
-  let currentMatch: boolean = matched[0] ?? false
+  let currentMatch = matched[0] ?? false
 
-  for (let i = 0; i < text.length; i++) {
+  for (let i = 0; i < chars.length; i++) {
+    const char = chars[i] ?? ''
     if (matched[i] === currentMatch) {
-      current += text[i]!
+      current += char
     } else {
       parts.push(
         currentMatch ? (
@@ -44,8 +46,8 @@ export function highlightMatches(text: string, query: string): React.ReactNode {
           current
         ),
       )
-      current = text[i]!
-      currentMatch = matched[i] as boolean
+      current = char
+      currentMatch = matched[i] ?? false
     }
   }
   parts.push(

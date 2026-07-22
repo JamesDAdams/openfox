@@ -13,6 +13,7 @@ import { ModalFooter } from '../shared/ModalFooter'
 import { EllipsisIcon, SpinIcon, StopIcon, SearchIcon, XCloseIcon } from '../shared/icons'
 import { groupSessionsByDate, formatDateHeader, formatTime } from '../../lib/format-date.js'
 import { fuzzyMatch, highlightMatches } from '../../lib/modal-utils.js'
+import { useBinding, useKeybindings } from '../../hooks/useKeybindings.js'
 
 interface SidebarProps {
   projectId: string
@@ -42,13 +43,20 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
   const currentProject = useProjectStore((state) => state.currentProject)
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [focusedIndex, setFocusedIndex] = useState(-1)
   const searchRef = useRef<HTMLInputElement>(null)
+  const sessionListRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(searchQuery), 150)
-    return () => clearTimeout(t)
-  }, [searchQuery])
+  const wasAutoOpenedRef = useRef(false)
+
+  const keybindings = useKeybindings()
+  useBinding(keybindings.sessionSearch, () => {
+    if (!isOpen) {
+      wasAutoOpenedRef.current = true
+      onClose?.()
+    }
+    searchRef.current?.focus()
+  })
 
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
@@ -87,8 +95,20 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
     })
   }, [projectSessions, searchQuery])
 
-  const isSearching = debouncedQuery.length > 0
+  const isSearching = searchQuery.length > 0
   const hasNoResults = isSearching && filteredSessions.length === 0
+
+  // Reset focused index when search results change
+  useEffect(() => {
+    setFocusedIndex(filteredSessions.length > 0 ? 0 : -1)
+  }, [filteredSessions.length])
+
+  // Scroll focused item into view
+  useEffect(() => {
+    if (focusedIndex < 0) return
+    const el = sessionListRef.current?.querySelector(`[data-sidx="${focusedIndex}"]`)
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [focusedIndex])
 
   const handleDeleteSession = (sessionId: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -130,17 +150,46 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
     setShowDeleteAll(false)
   }
 
+  const handleSessionListClick = (e: React.MouseEvent) => {
+    if (!wasAutoOpenedRef.current) return
+    const link = (e.target as HTMLElement).closest('a[href*="/s/"]')
+    if (link) {
+      wasAutoOpenedRef.current = false
+      onClose?.()
+    }
+  }
+
   const handleClearSearch = () => {
     setSearchQuery('')
-    setDebouncedQuery('')
     searchRef.current?.focus()
   }
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      setSearchQuery('')
-      setDebouncedQuery('')
-      searchRef.current?.blur()
+    switch (e.key) {
+      case 'Escape':
+        setSearchQuery('')
+        searchRef.current?.blur()
+        break
+      case 'ArrowDown':
+        e.preventDefault()
+        setFocusedIndex((prev) => (prev < filteredSessions.length - 1 ? prev + 1 : prev))
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setFocusedIndex((prev) => (prev > 0 ? prev - 1 : 0))
+        break
+      case 'Enter': {
+        e.preventDefault()
+        const session = filteredSessions[focusedIndex]
+        if (session) {
+          navigate(`/p/${projectId}/s/${session.id}`)
+          if (wasAutoOpenedRef.current) {
+            wasAutoOpenedRef.current = false
+            onClose?.()
+          }
+        }
+        break
+      }
     }
   }
 
@@ -204,7 +253,7 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
               placeholder="Search sessions..."
-              className="w-full bg-bg-tertiary border border-border rounded pl-8 pr-8 py-1.5 text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent-primary/50 focus:border-accent-primary transition-colors"
+              className="w-full bg-bg-tertiary border border-border rounded pl-8 pr-8 py-1.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent-primary/50 focus:border-accent-primary transition-colors"
             />
             {searchQuery && (
               <button
@@ -290,7 +339,7 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
             </div>
           ) : (
             <>
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border" ref={sessionListRef} onClick={handleSessionListClick}>
                 {renderSessionGroups(
                   filteredSessions,
                   currentSession,
@@ -300,7 +349,8 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
                   projectId,
                   sessionsWithPendingConfirmations,
                   pendingPathConfirmations,
-                  debouncedQuery,
+                  searchQuery,
+                  focusedIndex,
                 )}
               </div>
               {sessionsPaginationLoading && (
@@ -325,8 +375,11 @@ function renderSessionGroups(
   sessionsWithPendingConfirmations: string[],
   pendingPathConfirmations: PendingPathConfirmation[],
   searchQuery: string,
+  focusedIndex: number,
 ) {
   const groups = groupSessionsByDate(projectSessions)
+
+  let flatIdx = 0
 
   return Array.from(groups).map(([dateKey, daySessions]) => {
     const firstSession = daySessions[0]
@@ -341,7 +394,9 @@ function renderSessionGroups(
 
         {/* Sessions for this day */}
         {daySessions.map((session) => {
+          const idx = flatIdx++
           const isActive = currentSession?.id === session.id
+          const isFocused = idx === focusedIndex
           const hasUnread = unreadSessionIds.includes(session.id)
           const isRunning = session.isRunning
           const hasPendingConfirmation =
@@ -349,9 +404,10 @@ function renderSessionGroups(
           return (
             <div
               key={session.id}
+              data-sidx={idx}
               className={`w-full px-4 py-3 text-left hover:bg-bg-tertiary/50 transition-colors group ${
                 isActive ? 'bg-bg-tertiary' : ''
-              }`}
+              } ${isFocused ? 'bg-accent-primary/10' : ''}`}
             >
               <Link
                 href={`/p/${projectId}/s/${session.id}`}
