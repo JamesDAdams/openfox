@@ -32,7 +32,7 @@ import { createAssemblyResult } from './request-context.js'
 import type { RequestContextMessage } from './request-context.js'
 import { buildCachedPrompt, computeDynamicContextHash, getToolFingerprint } from './dynamic-context.js'
 import { runTopLevelAgentLoop } from './agent-loop.js'
-import { loadAllAgentsDefault, findAgentById } from '../agents/registry.js'
+import { loadAllAgentsDefault, findAgentById, resolveDefaultAgentId } from '../agents/registry.js'
 import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
 import { getRuntimeConfig } from '../runtime-config.js'
@@ -336,7 +336,7 @@ export async function runAgentTurn(
 ): Promise<{ returnValueContent?: string; returnValueResult?: string }> {
   const statsIdentity = resolveStatsIdentity(options)
   const allAgents = await loadAllAgentsDefault()
-  const agentDef = findAgentById(agentId, allAgents) ?? findAgentById('planner', allAgents)!
+  const agentDef = findAgentById(agentId, allAgents) ?? findAgentById(resolveDefaultAgentId(), allAgents)!
 
   if (!options.warmup) {
     injectAgentReminder(options.sessionId, agentDef)

@@ -62,22 +62,24 @@ const providerSchema = z
     transportAdapter: z.string().optional(),
     credentialRef: z.string().optional(),
   })
-  .transform((provider): Provider => ({
-    id: provider.id,
-    ...(provider.preset ? { preset: provider.preset } : {}),
-    name: provider.name ?? provider.id,
-    url: provider.url ?? '',
-    backend: provider.backend ?? 'unknown',
-    ...(provider.apiKey ? { apiKey: provider.apiKey } : {}),
-    models: provider.models ?? [],
-    isActive: provider.isActive ?? false,
-    createdAt: provider.createdAt ?? new Date().toISOString(),
-    ...(provider.isLocal !== undefined ? { isLocal: provider.isLocal } : {}),
-    ...(provider.thinkingField ? { thinkingField: provider.thinkingField } : {}),
-    ...(provider.authAdapter ? { authAdapter: provider.authAdapter } : {}),
-    ...(provider.transportAdapter ? { transportAdapter: provider.transportAdapter } : {}),
-    ...(provider.credentialRef ? { credentialRef: provider.credentialRef } : {}),
-  }))
+  .transform(
+    (provider): Provider => ({
+      id: provider.id,
+      ...(provider.preset ? { preset: provider.preset } : {}),
+      name: provider.name ?? provider.id,
+      url: provider.url ?? '',
+      backend: provider.backend ?? 'unknown',
+      ...(provider.apiKey ? { apiKey: provider.apiKey } : {}),
+      models: provider.models ?? [],
+      isActive: provider.isActive ?? false,
+      createdAt: provider.createdAt ?? new Date().toISOString(),
+      ...(provider.isLocal !== undefined ? { isLocal: provider.isLocal } : {}),
+      ...(provider.thinkingField ? { thinkingField: provider.thinkingField } : {}),
+      ...(provider.authAdapter ? { authAdapter: provider.authAdapter } : {}),
+      ...(provider.transportAdapter ? { transportAdapter: provider.transportAdapter } : {}),
+      ...(provider.credentialRef ? { credentialRef: provider.credentialRef } : {}),
+    }),
+  )
 
 const serverSchema = z.object({
   port: z.number().default(10369),
@@ -152,6 +154,7 @@ const configSchema = z
     llm: llmConfigSchema.optional(),
     visionFallback: visionFallbackSchema.optional(),
     disableAutoSessionTitle: z.boolean().optional(),
+    defaultAgent: z.string().optional(),
   })
   .transform((data) => ({
     providers: data.providers ?? [],
@@ -166,6 +169,7 @@ const configSchema = z
     llm: data.llm,
     visionFallback: data.visionFallback ?? defaultVisionFallback,
     ...(data.disableAutoSessionTitle !== undefined ? { disableAutoSessionTitle: data.disableAutoSessionTitle } : {}),
+    ...(data.defaultAgent !== undefined ? { defaultAgent: data.defaultAgent } : {}),
   }))
 
 // ============================================================================
@@ -219,6 +223,7 @@ export async function saveGlobalConfig(
     ...(config.disableAutoSessionTitle !== undefined
       ? { disableAutoSessionTitle: config.disableAutoSessionTitle }
       : {}),
+    ...(config.defaultAgent !== undefined ? { defaultAgent: config.defaultAgent } : {}),
   }
   await mkdir(dirname(configPath), { recursive: true })
   await writeFile(configPath, JSON.stringify(fullConfig, null, 2))
@@ -265,6 +270,7 @@ export function setDefaultModelSelection(
     workspace: config.workspace ?? { workdir: process.cwd() },
     llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
+    ...(config.defaultAgent !== undefined ? { defaultAgent: config.defaultAgent } : {}),
   }
 }
 
@@ -296,6 +302,7 @@ export function addProvider(config: Partial<GlobalConfig>, provider: Omit<Provid
     workspace: config.workspace ?? { workdir: process.cwd() },
     llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
+    ...(config.defaultAgent !== undefined ? { defaultAgent: config.defaultAgent } : {}),
   }
 }
 
@@ -345,6 +352,7 @@ export function removeProvider(config: Partial<GlobalConfig>, providerId: string
     workspace: config.workspace ?? { workdir: process.cwd() },
     llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
+    ...(config.defaultAgent !== undefined ? { defaultAgent: config.defaultAgent } : {}),
   }
 }
 
@@ -378,5 +386,6 @@ export function activateProvider(config: Partial<GlobalConfig>, providerId: stri
     workspace: config.workspace ?? { workdir: process.cwd() },
     llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
+    ...(config.defaultAgent !== undefined ? { defaultAgent: config.defaultAgent } : {}),
   }
 }

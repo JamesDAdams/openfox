@@ -233,6 +233,8 @@ export const AssistantMessage = memo(function AssistantMessage({
               if (!stats || 'error' in stats) return null
               const shortModel = stats.model.split('/').pop() ?? stats.model
               const modeColor = getAgentColor(agents, stats.mode)
+              const agentInfo = agents.find((a) => a.id === stats.mode)
+              const modeName = agentInfo?.name ?? stats.mode
               const formatTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString())
               const formatSpeed = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toFixed(1))
 
@@ -241,7 +243,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                   <span className="flex-1 h-px bg-border" />
                   <span className="text-text-secondary">{shortModel}</span>
                   <span className="text-text-muted">·</span>
-                  <span style={{ color: modeColor }}>{stats.mode}</span>
+                  <span style={{ color: modeColor }}>{modeName}</span>
                   <span className="text-text-muted">·</span>
                   <span>{stats.totalTime.toFixed(1)}s</span>
                   {stats.toolTime > 0 && (

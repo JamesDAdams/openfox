@@ -22,7 +22,7 @@ import { getEventStore, getCurrentContextWindowId } from '../events/index.js'
 import { createChatMessageMessage } from '../ws/protocol.js'
 import { runAgentTurn, TurnMetrics, createMessageStartEvent } from '../chat/orchestrator.js'
 import { executeSubAgent } from '../sub-agents/manager.js'
-import { loadAllAgentsDefault, findAgentById } from '../agents/registry.js'
+import { loadAllAgentsDefault, findAgentById, resolveDefaultAgentId } from '../agents/registry.js'
 import { getToolRegistryForAgent } from '../tools/index.js'
 import { computeSessionStats } from '../../shared/stats.js'
 import { formatGitDiffFiles } from '../git/diff.js'
@@ -349,7 +349,7 @@ export async function executeWorkflow(
     // Set session mode to match agent step's agentId
     if (step.type === 'agent') {
       const agentStep = step as AgentStep
-      sessionManager.setMode(sessionId, agentStep.agentId ?? 'planner')
+      sessionManager.setMode(sessionId, agentStep.agentId ?? resolveDefaultAgentId())
     }
 
     logger.debug('Workflow step executing', { sessionId, iteration: iterations, stepId: step.id, stepType: step.type })
@@ -425,7 +425,7 @@ export async function executeWorkflow(
             ...(onMessage ? { onMessage } : {}),
           },
           turnMetrics,
-          agentStep.agentId ?? 'planner',
+          agentStep.agentId ?? resolveDefaultAgentId(),
           append,
           {
             ...(!firstEntryForStep.has(step.id) && !agentStep.prompt

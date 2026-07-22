@@ -10,6 +10,7 @@ export interface CRUDListItemProps {
   onEdit?: () => void
   onDuplicate: () => void
   onDelete?: () => void
+  onCancelDelete?: () => void
   actions?: ReactNode
   children?: ReactNode
 }
@@ -21,6 +22,7 @@ export function CRUDListItem({
   onEdit,
   onDuplicate,
   onDelete,
+  onCancelDelete,
   actions,
   children,
 }: CRUDListItemProps) {
@@ -47,7 +49,7 @@ export function CRUDListItem({
               onConfirm={() => {
                 onDelete?.()
               }}
-              onCancel={() => {}}
+              onCancel={() => onCancelDelete?.()}
             />
           ) : (
             <DeleteIcon onClick={() => onDelete?.()} />
@@ -68,6 +70,7 @@ export interface CRUDListItemSimpleProps {
   onEdit?: () => void
   onDuplicate: () => void
   onDelete?: () => void
+  onCancelDelete?: () => void
   actions?: ReactNode
 }
 
@@ -81,6 +84,7 @@ export function CRUDListItemSimple({
   onEdit,
   onDuplicate,
   onDelete,
+  onCancelDelete,
   actions,
 }: CRUDListItemSimpleProps) {
   return (
@@ -91,6 +95,7 @@ export function CRUDListItemSimple({
       onEdit={onEdit}
       onDuplicate={onDuplicate}
       onDelete={onDelete}
+      onCancelDelete={onCancelDelete}
       actions={actions}
     >
       <div className="flex items-center gap-2">

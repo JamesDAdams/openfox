@@ -5,7 +5,6 @@ import { useAgentsStore, getAgentColor } from '../../stores/agents'
 import { AgentsModal } from '../settings/AgentsModal'
 import { useKeybindings } from '../../hooks/useKeybindings'
 import { formatKeybinding } from '../../lib/keybindings'
-
 export function AgentSelector() {
   const currentMode = useSessionStore((state) => state.currentSession?.mode)
   const switchMode = useSessionStore((state) => state.switchMode)

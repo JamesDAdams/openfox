@@ -6,7 +6,7 @@ import type { AgentDefinition } from '../agents/types.js'
 import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
 import { buildTopLevelSystemPrompt } from './prompts.js'
-import { loadAllAgentsDefault, getSubAgents, findAgentById } from '../agents/registry.js'
+import { loadAllAgentsDefault, getSubAgents, findAgentById, resolveDefaultAgentId } from '../agents/registry.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
 import { logger } from '../utils/logger.js'
@@ -46,7 +46,7 @@ async function loadSessionContext(
 function resolveAgentDef(sessionManager: SessionManager, sessionId: string): Promise<AgentDefinition> {
   return loadAllAgentsDefault().then((allAgents) => {
     const session = sessionManager.requireSession(sessionId)
-    return findAgentById(session.mode, allAgents) ?? findAgentById('planner', allAgents)!
+    return findAgentById(session.mode, allAgents) ?? findAgentById(resolveDefaultAgentId(), allAgents)!
   })
 }
 
@@ -94,7 +94,7 @@ export async function computeSessionHash(sessionManager: SessionManager, session
 export async function applyDynamicContext(sessionManager: SessionManager, sessionId: string): Promise<void> {
   const session = sessionManager.requireSession(sessionId)
   const allAgents = await loadAllAgentsDefault()
-  const agentDef = findAgentById(session.mode, allAgents) ?? findAgentById('planner', allAgents)!
+  const agentDef = findAgentById(session.mode, allAgents) ?? findAgentById(resolveDefaultAgentId(), allAgents)!
   const { systemPrompt, tools, hash } = await buildCachedPrompt(sessionManager, sessionId, agentDef)
 
   sessionManager.setCachedPrompt(sessionId, systemPrompt, tools, hash)

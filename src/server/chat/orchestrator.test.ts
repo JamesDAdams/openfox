@@ -162,6 +162,7 @@ vi.mock('../agents/registry.js', () => {
     loadAllAgentsDefault: vi.fn(async () => agents),
     findAgentById: vi.fn((id: string, list: any[]) => list.find((a: any) => a.metadata.id === id)),
     getSubAgents: vi.fn((list: any[]) => list.filter((a: any) => a.metadata.subagent)),
+    resolveDefaultAgentId: vi.fn(() => 'planner'),
   }
 })
 

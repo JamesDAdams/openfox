@@ -53,6 +53,7 @@ vi.mock('../sub-agents/manager.js', () => ({
 vi.mock('../agents/registry.js', () => ({
   loadAllAgentsDefault: vi.fn(async () => []),
   findAgentById: vi.fn(() => undefined),
+  resolveDefaultAgentId: vi.fn(() => 'planner'),
 }))
 
 // Mock tools

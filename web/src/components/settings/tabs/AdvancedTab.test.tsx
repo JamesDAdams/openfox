@@ -11,7 +11,7 @@ vi.mock('wouter', () => ({
 }))
 
 const mockSettings: Record<string, string> = {}
-const mockGetSetting = vi.fn()
+const mockGetSetting = vi.fn().mockResolvedValue('')
 const mockSetSetting = vi.fn()
 
 vi.mock('../../stores/settings', () => ({
@@ -21,6 +21,7 @@ vi.mock('../../stores/settings', () => ({
     CACHE_WARMING: 'cache.warming',
     RETRY_PATTERNS: 'agent.retryPatterns',
     PROXY_URL: 'network.proxyUrl',
+    DEFAULT_AGENT: 'agent.defaultAgent',
   },
   useSettingsStore: vi.fn((selector) => {
     const state = {
@@ -30,6 +31,18 @@ vi.mock('../../stores/settings', () => ({
     }
     return selector(state)
   }),
+}))
+
+vi.mock('../../stores/agents', () => ({
+  useAgentsStore: vi.fn((selector) => {
+    const state = {
+      defaults: [],
+      userItems: [],
+      fetchAgents: vi.fn(),
+    }
+    return selector(state)
+  }),
+  getAgentColor: vi.fn(() => '#6b7280'),
 }))
 
 vi.mock('../useSettingsStore', () => ({

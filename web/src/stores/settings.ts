@@ -29,6 +29,7 @@ export const SETTINGS_KEYS = {
   TOOLS_SHELL: 'tools.shell',
   CONFIRM_ON_WORKSPACE_ACTIONS: 'tools.confirmOnWorkspaceActions',
   PROXY_URL: 'network.proxyUrl',
+  DEFAULT_AGENT: 'agent.defaultAgent',
 } as const
 
 interface SettingsState {

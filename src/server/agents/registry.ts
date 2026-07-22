@@ -16,6 +16,7 @@ import { saveItemToDir } from '../shared/item-loader.js'
 import { logger } from '../utils/logger.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
+import { getSetting, SETTINGS_KEYS } from '../db/settings.js'
 
 const __bundleDir = dirname(fileURLToPath(import.meta.url))
 const DEFAULTS_DIR = join(__bundleDir, 'defaults')
@@ -252,4 +253,40 @@ export async function getOverrideAgentIds(configDir: string, projectDir?: string
   const userOverrides = userAgents.map((agent) => agent.metadata.id).filter((id) => defaultIds.includes(id))
   const projectOverrides = projectAgents.map((agent) => agent.metadata.id).filter((id) => defaultIds.includes(id))
   return [...userOverrides, ...projectOverrides]
+}
+
+/**
+ * Resolve the default agent ID for new sessions.
+ *
+ * Resolution chain:
+ * 1. DB setting (`agent.defaultAgent`) — runtime override via settings UI
+ * 2. Global config file (`defaultAgent`) — persistent config
+ * 3. Environment variable (`OPENFOX_DEFAULT_AGENT`) — env override
+ * 4. Fallback to `'planner'`
+ */
+export function resolveDefaultAgentId(): string {
+  // 1. Check DB setting first (runtime override from settings UI)
+  try {
+    const dbSetting = getSetting(SETTINGS_KEYS.DEFAULT_AGENT)
+    if (dbSetting && dbSetting.trim().length > 0) {
+      return dbSetting.trim()
+    }
+  } catch (err) {
+    logger.debug('Failed to read defaultAgent from DB settings', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // 2. Check runtime config (from config file or env var)
+  try {
+    const config = getRuntimeConfig()
+    if (config.defaultAgent && config.defaultAgent.trim().length > 0) {
+      return config.defaultAgent.trim()
+    }
+  } catch {
+    // Config might not be loaded yet
+  }
+
+  // 3. Fallback to 'planner'
+  return 'planner'
 }

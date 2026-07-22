@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
 import { useAgentsStore, type AgentFull } from '../../stores/agents'
 import { authFetch } from '../../lib/api'
-import { CRUDListHeader } from './CRUDModal'
+import { CRUDListHeader, useConfirmDialog } from './CRUDModal'
 import { AgentGroup } from './agents/AgentListItem'
 import { AgentForm } from './agents/AgentForm'
 
@@ -13,10 +13,11 @@ interface AgentsModalProps {
 }
 
 function toSlug(name: string): string {
-  return name
+  const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '')
+  return slug ? `custom-${slug}` : ''
 }
 
 export function AgentsModal({ isOpen, onClose, initialEditId }: AgentsModalProps) {
@@ -48,6 +49,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId }: AgentsModalProps
     [],
   )
   const [alwaysAllowedNames, setAlwaysAllowedNames] = useState<Set<string>>(new Set())
+  const { requestDelete, clearConfirm, isConfirming } = useConfirmDialog()
 
   const populateFormFromAgent = (agent: AgentFull) => {
     setFormName(agent.metadata.name)
@@ -298,10 +300,19 @@ export function AgentsModal({ isOpen, onClose, initialEditId }: AgentsModalProps
               subagents={userSubAgents}
               isBuiltIn={false}
               alwaysAllowedNames={alwaysAllowedNames}
+              isConfirmingDelete={(id) => isConfirming(id, 'delete')}
               onView={handleView}
               onDuplicate={handleDuplicate}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={(id) => {
+                if (isConfirming(id, 'delete')) {
+                  handleDelete(id)
+                  clearConfirm()
+                } else {
+                  requestDelete(id)
+                }
+              }}
+              onCancelDelete={clearConfirm}
             />
           )}
         </div>

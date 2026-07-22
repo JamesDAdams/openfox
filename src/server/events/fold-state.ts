@@ -1,4 +1,5 @@
 import type { Criterion, SessionMode, SessionPhase, ContextState, Todo } from '../../shared/types.js'
+import { resolveDefaultAgentId } from '../agents/registry.js'
 import type {
   TurnEvent,
   SessionSnapshot,
@@ -131,7 +132,10 @@ export function foldContextState(events: EventLike[], initialWindowId: string): 
   }
 }
 
-export function foldMode(events: EventLike[], defaultMode: SessionMode = 'planner'): SessionMode {
+export function foldMode(events: EventLike[], defaultMode?: SessionMode): SessionMode {
+  if (defaultMode === undefined) {
+    defaultMode = resolveDefaultAgentId()
+  }
   let mode = defaultMode
   for (const event of events) {
     if (event.type === 'mode.changed') {

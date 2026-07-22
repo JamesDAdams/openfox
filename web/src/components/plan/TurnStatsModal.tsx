@@ -1,5 +1,6 @@
 import { Modal } from '../shared/SelfContainedModal'
 import type { TurnStats } from '../../lib/types'
+import { useAgentsStore } from '../../stores/agents'
 
 interface TurnStatsModalProps {
   stats: TurnStats
@@ -7,12 +8,18 @@ interface TurnStatsModalProps {
 }
 
 export function TurnStatsModal({ stats: s, onClose }: TurnStatsModalProps) {
+  const defaults = useAgentsStore((state) => state.defaults)
+  const userItems = useAgentsStore((state) => state.userItems)
+  const agents = [...defaults, ...userItems]
+  const agentInfo = agents.find((a) => a.id === s.mode)
+  const modeName = agentInfo?.name ?? s.mode
+
   return (
     <Modal isOpen={true} onClose={onClose} title="Turn Stats" size="md">
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <p className="text-xs text-text-muted">
-            {s.model} · {s.mode}
+            {s.model} · {modeName}
           </p>
         </div>
 

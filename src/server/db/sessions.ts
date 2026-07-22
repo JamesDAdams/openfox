@@ -7,6 +7,7 @@
 
 import type { Session, SessionSummary, SessionMode, SessionPhase } from '../../shared/types.js'
 import { getDatabase } from './index.js'
+import { resolveDefaultAgentId } from '../agents/registry.js'
 export type DangerLevel = 'normal' | 'dangerous'
 
 function getProjectDangerLevel(projectId: string): DangerLevel {
@@ -39,10 +40,12 @@ export function createSession(
   const id = crypto.randomUUID()
   const dangerLevel = getProjectDangerLevel(projectId)
 
+  const defaultAgent = resolveDefaultAgentId()
+
   db.prepare(
     `
     INSERT INTO sessions (id, project_id, workdir, workspace, branch, phase, mode, workflow_phase, is_running, created_at, updated_at, title, provider_id, provider_model, danger_level)
-    VALUES (?, ?, ?, ?, ?, 'idle', 'planner', 'plan', 0, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, 'idle', ?, 'plan', 0, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     id,
@@ -50,6 +53,7 @@ export function createSession(
     workdir,
     workspace ?? null,
     branch ?? null,
+    defaultAgent,
     now,
     now,
     title ?? null,
@@ -64,7 +68,7 @@ export function createSession(
     workdir,
     ...(workspace ? { workspace } : {}),
     ...(branch ? { branch } : {}),
-    mode: 'planner',
+    mode: defaultAgent,
     phase: 'plan',
     isRunning: false,
     providerId: providerId ?? null,

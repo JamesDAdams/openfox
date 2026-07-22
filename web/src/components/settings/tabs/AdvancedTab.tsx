@@ -11,6 +11,7 @@ import { RetryPatternsEditor, type RetryPatternsValue } from '../RetryPatternsEd
 import { useConfigStore } from '../../../stores/config'
 import { useUpdateStore } from '../../../stores/update'
 import { AutoUpdateModal } from '../../AutoUpdateModal'
+import { useAgentsStore } from '../../../stores/agents'
 
 export function AdvancedTab({ onClose }: { onClose: () => void }) {
   const [, navigate] = useLocation()
@@ -28,6 +29,8 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
 
   const [retryPatterns, setRetryPatterns] = useState<RetryPatternsValue>({ patterns: [], maxRetriesPerTurn: 10 })
   const [proxyUrl, setProxyUrl] = useState('')
+  const [defaultAgent, setDefaultAgent] = useState('')
+  const [defaultAgentLoaded, setDefaultAgentLoaded] = useState(false)
   const [proxyTestText, proxyTestError, proxyTestSuccess, testProxy] = useTestButton()
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const version = useConfigStore((state) => state.version)
@@ -38,6 +41,10 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
   // "Up to date" only answers a manual check; the background check on app
   // load may be hours old by the time this tab is opened.
   const [manuallyChecked, setManuallyChecked] = useState(false)
+  const defaults = useAgentsStore((state) => state.defaults)
+  const userItems = useAgentsStore((state) => state.userItems)
+  const fetchAgents = useAgentsStore((state) => state.fetchAgents)
+  const topLevelAgents = [...defaults, ...userItems].filter((a) => !a.subagent)
 
   useEffect(() => {
     setLocalToggles({
@@ -70,6 +77,22 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     const raw = settings[SETTINGS_KEYS.PROXY_URL]
     if (raw !== undefined) {
       setProxyUrl(raw)
+    }
+  }, [settings])
+
+  useEffect(() => {
+    fetchAgents().catch(() => {})
+  }, [fetchAgents])
+
+  useEffect(() => {
+    getSetting(SETTINGS_KEYS.DEFAULT_AGENT)
+  }, [getSetting])
+
+  useEffect(() => {
+    const val = settings[SETTINGS_KEYS.DEFAULT_AGENT]
+    if (val !== undefined) {
+      setDefaultAgent(val)
+      setDefaultAgentLoaded(true)
     }
   }, [settings])
 
@@ -157,6 +180,34 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       <AutoUpdateModal isOpen={showUpdateModal} onClose={() => setShowUpdateModal(false)} versionInfo={versionInfo} />
+      <hr className="border-border" />
+      <div>
+        <h3 className="text-sm font-medium text-text-primary mb-1">Default Agent</h3>
+        <p className="text-sm text-text-muted mb-3">
+          Choose which agent is used by default for new sessions. The stock Planner is read-only; custom agents can have
+          broader capabilities.
+        </p>
+        <select
+          value={defaultAgentLoaded ? defaultAgent : ''}
+          onChange={(e) => {
+            const val = e.target.value
+            setDefaultAgent(val)
+            setSetting(SETTINGS_KEYS.DEFAULT_AGENT, val)
+          }}
+          className="w-full px-3 py-2 text-sm bg-bg-primary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+        >
+          {!defaultAgentLoaded && <option value="">Loading…</option>}
+          {defaultAgentLoaded && <option value="">System default (planner)</option>}
+          {topLevelAgents.map((agent) => (
+            <option key={agent.id} value={agent.id}>
+              {agent.name}
+            </option>
+          ))}
+        </select>
+        {topLevelAgents.length === 0 && defaultAgentLoaded && (
+          <p className="text-xs text-text-muted mt-1">No agents available. Create one in the Agents modal.</p>
+        )}
+      </div>
       <hr className="border-border" />
       <div>
         <h3 className="text-sm font-medium text-text-primary mb-1">Onboarding</h3>

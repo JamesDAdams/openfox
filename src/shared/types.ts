@@ -106,7 +106,9 @@ export type MessageRole = 'user' | 'assistant' | 'system' | 'tool'
 
 // Segment types for preserving streaming order
 export type MessageSegment =
-  { type: 'text'; content: string } | { type: 'thinking'; content: string } | { type: 'tool_call'; toolCallId: string }
+  | { type: 'text'; content: string }
+  | { type: 'thinking'; content: string }
+  | { type: 'tool_call'; toolCallId: string }
 
 export interface MessageStats {
   providerId: string
@@ -599,6 +601,8 @@ export interface Config {
   workdir: string
   /** Active workflow ID (defaults to "default") */
   activeWorkflowId?: string | undefined
+  /** Default agent ID for new sessions (defaults to "planner") */
+  defaultAgent?: string | undefined
   /** Disable automatic session title generation */
   disableAutoSessionTitle?: boolean
   /** Override path for the global config file (used for test isolation) */

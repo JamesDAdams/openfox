@@ -10,6 +10,7 @@ export function AgentListItem({
   onEdit,
   onDuplicate,
   onDelete,
+  onCancelDelete,
 }: {
   agent: AgentInfo
   isBuiltIn: boolean
@@ -19,6 +20,7 @@ export function AgentListItem({
   onEdit?: () => void
   onDuplicate: () => void
   onDelete?: () => void
+  onCancelDelete?: () => void
 }) {
   const displayTools = agent.allowedTools.filter((t) => !alwaysAllowedNames?.has(t))
   return (
@@ -29,6 +31,7 @@ export function AgentListItem({
       onEdit={onEdit}
       onDuplicate={onDuplicate}
       onDelete={onDelete}
+      onCancelDelete={onCancelDelete}
     >
       <div className="flex items-center gap-2">
         <span
@@ -66,6 +69,8 @@ export function AgentGroup({
   onDuplicate,
   onEdit,
   onDelete,
+  onCancelDelete,
+  isConfirmingDelete,
 }: {
   title: string
   agents: AgentInfo[]
@@ -76,6 +81,8 @@ export function AgentGroup({
   onDuplicate: (id: string) => void
   onEdit?: (id: string) => void
   onDelete?: (id: string) => void
+  onCancelDelete?: (id: string) => void
+  isConfirmingDelete?: (id: string) => boolean
 }) {
   if (agents.length === 0 && subagents.length === 0) return null
   const renderAgentItem = (agent: AgentInfo) => (
@@ -83,12 +90,13 @@ export function AgentGroup({
       key={agent.id}
       agent={agent}
       isBuiltIn={isBuiltIn}
-      isConfirmingDelete={false}
+      isConfirmingDelete={isConfirmingDelete?.(agent.id) ?? false}
       alwaysAllowedNames={alwaysAllowedNames}
       onView={() => onView(agent.id)}
       onEdit={isBuiltIn ? undefined : () => onEdit?.(agent.id)}
       onDuplicate={() => onDuplicate(agent.id)}
       onDelete={isBuiltIn ? undefined : () => onDelete?.(agent.id)}
+      onCancelDelete={isBuiltIn ? undefined : () => onCancelDelete?.(agent.id)}
     />
   )
   return (
