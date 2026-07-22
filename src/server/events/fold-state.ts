@@ -234,6 +234,7 @@ export function foldSessionState(
 
   let cachedSystemPrompt: string | undefined
   let dynamicContextHash: string | undefined
+  let metadataEntriesMerged = false
 
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i]!
@@ -241,8 +242,11 @@ export function foldSessionState(
       const snapshotData = event.data as SessionSnapshot
       if (snapshotData.cachedSystemPrompt && !cachedSystemPrompt) cachedSystemPrompt = snapshotData.cachedSystemPrompt
       if (snapshotData.dynamicContextHash && !dynamicContextHash) dynamicContextHash = snapshotData.dynamicContextHash
-      if (snapshotData.metadataEntries && Object.keys(metadataEntries).length === 0)
-        metadataEntries = snapshotData.metadataEntries
+      if (snapshotData.metadataEntries && !metadataEntriesMerged) {
+        metadataEntries = { ...snapshotData.metadataEntries, ...metadataEntries }
+        metadataEntriesMerged = true
+      }
+      if (cachedSystemPrompt && dynamicContextHash && metadataEntriesMerged) break
     }
   }
 
