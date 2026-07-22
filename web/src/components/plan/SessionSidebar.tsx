@@ -122,45 +122,47 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
         </div>
       </div>
 
-      {/* Workspace & branch info — above separator */}
-      <div className="mt-4 space-y-1.5">
-        <div className="flex items-center gap-2 text-sm">
-          {showEditorLink && workdir ? (
-            <a
-              href={buildWorkspaceUrl(workdir)}
-              className="flex items-center gap-2 min-w-0 flex-1 no-underline group"
-              title="Open workspace in VSCode"
+      {/* Workspace & branch info — above separator. Only shown for git repos. */}
+      {branch !== null && (
+        <div className="mt-4 space-y-1.5">
+          <div className="flex items-center gap-2 text-sm">
+            {showEditorLink && workdir ? (
+              <a
+                href={buildWorkspaceUrl(workdir)}
+                className="flex items-center gap-2 min-w-0 flex-1 no-underline group"
+                title="Open workspace in VSCode"
+              >
+                <FolderIcon className="w-4 h-4 text-text-muted flex-shrink-0" />
+                <span className="truncate text-text-secondary group-hover:text-accent-primary transition-colors">
+                  {workspaceName ?? 'original'}
+                </span>
+              </a>
+            ) : (
+              <>
+                <FolderIcon className="w-4 h-4 text-text-muted flex-shrink-0" />
+                <span className="truncate text-text-secondary">{workspaceName ?? 'original'}</span>
+              </>
+            )}
+            <button
+              onClick={() => setShowWorkspaceModal(true)}
+              className="ml-auto px-2 py-0.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:bg-bg-secondary transition-colors"
             >
-              <FolderIcon className="w-4 h-4 text-text-muted flex-shrink-0" />
-              <span className="truncate text-text-secondary group-hover:text-accent-primary transition-colors">
-                {workspaceName ?? 'original'}
-              </span>
-            </a>
-          ) : (
-            <>
-              <FolderIcon className="w-4 h-4 text-text-muted flex-shrink-0" />
-              <span className="truncate text-text-secondary">{workspaceName ?? 'original'}</span>
-            </>
-          )}
-          <button
-            onClick={() => setShowWorkspaceModal(true)}
-            className="ml-auto px-2 py-0.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:bg-bg-secondary transition-colors"
-          >
-            Edit
-          </button>
+              Edit
+            </button>
+          </div>
+          <div className="h-px bg-border" />
+          <div className="flex items-center gap-2 text-sm">
+            <BranchIcon />
+            <span className="truncate text-text-secondary">{branch}</span>
+            <button
+              onClick={() => setShowBranchModal(true)}
+              className="ml-auto px-2 py-0.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:bg-bg-secondary transition-colors"
+            >
+              Edit
+            </button>
+          </div>
         </div>
-        <div className="h-px bg-border" />
-        <div className="flex items-center gap-2 text-sm">
-          <BranchIcon />
-          <span className="truncate text-text-secondary">{branch ?? 'unknown'}</span>
-          <button
-            onClick={() => setShowBranchModal(true)}
-            className="ml-auto px-2 py-0.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:bg-bg-secondary transition-colors"
-          >
-            Edit
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Diff viewer — between branch and dev server */}
       <DiffViewer />

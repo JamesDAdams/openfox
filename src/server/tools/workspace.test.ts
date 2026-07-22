@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockGetGitBranch = vi.fn()
 const mockListWorkspaces = vi.fn()
+const mockIsGitRepository = vi.fn()
 const mockSwitchWorkspace = vi.fn()
 const mockDeleteWorkspace = vi.fn()
 const mockGetSession = vi.fn()
@@ -11,6 +12,7 @@ const mockRegisterPathConfirmation = vi.fn()
 vi.mock('../git/workspace.js', () => ({
   getGitBranch: (...args: unknown[]) => mockGetGitBranch(...args),
   listWorkspaces: (...args: unknown[]) => mockListWorkspaces(...args),
+  isGitRepository: (...args: unknown[]) => mockIsGitRepository(...args),
 }))
 
 vi.mock('./path-security.js', () => ({
@@ -126,6 +128,14 @@ describe('workspaceTool', () => {
       const result = await workspaceTool.execute({ action: 'switch' }, makeContext())
       expect(result.success).toBe(false)
     })
+
+    it('returns error when project is not a git repository', async () => {
+      mockIsGitRepository.mockResolvedValue(false)
+      const result = await workspaceTool.execute({ action: 'switch', target: 'feat-x' }, makeContext())
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('git')
+      expect(mockSwitchWorkspace).not.toHaveBeenCalled()
+    })
   })
 
   describe('list', () => {
@@ -164,6 +174,7 @@ describe('workspaceTool', () => {
 
   describe('delete', () => {
     it('deletes a workspace after user confirmation', async () => {
+      mockIsGitRepository.mockResolvedValue(true)
       mockRegisterPathConfirmation.mockResolvedValue(true)
       mockDeleteWorkspace.mockResolvedValue({ workspace: null, workdir: '/tmp/project' })
 
@@ -174,6 +185,7 @@ describe('workspaceTool', () => {
     })
 
     it('returns error when user denies delete', async () => {
+      mockIsGitRepository.mockResolvedValue(true)
       mockRegisterPathConfirmation.mockResolvedValue(false)
 
       const result = await workspaceTool.execute({ action: 'delete', target: 'feat-x' }, makeContext())
@@ -190,6 +202,14 @@ describe('workspaceTool', () => {
     it('returns error when target is original', async () => {
       const result = await workspaceTool.execute({ action: 'delete', target: 'original' }, makeContext())
       expect(result.success).toBe(false)
+    })
+
+    it('returns error when project is not a git repository', async () => {
+      mockIsGitRepository.mockResolvedValue(false)
+      const result = await workspaceTool.execute({ action: 'delete', target: 'feat-x' }, makeContext())
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('git')
+      expect(mockDeleteWorkspace).not.toHaveBeenCalled()
     })
   })
 

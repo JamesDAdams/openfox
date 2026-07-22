@@ -529,3 +529,89 @@ describe('Workspace Validation REST API', () => {
     expect(projectBranch).toBeUndefined()
   })
 })
+
+describe('Non-Git Repository Guard', () => {
+  let server: TestServerHandle
+  let testProject: TestProject
+  let projectId: string
+  let sessionId: string
+
+  beforeAll(async () => {
+    server = await createTestServer()
+  })
+
+  afterAll(async () => {
+    await server.close()
+  })
+
+  beforeEach(async () => {
+    testProject = await createTestProject({ template: 'git-repo' })
+    const createRes = await fetch(`${server.url}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Non-Git Test', workdir: testProject.path }),
+    })
+    const data: any = await createRes.json()
+    projectId = data.project.id
+
+    const sessionRes = await fetch(`${server.url}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, title: 'Non-Git Test Session' }),
+    })
+    const sessionData: any = await sessionRes.json()
+    sessionId = sessionData.session.id
+
+    // Remove .git directory to simulate a non-git project
+    const { rmSync } = await import('node:fs')
+    rmSync(`${testProject.path}/.git`, { recursive: true, force: true })
+  })
+
+  afterEach(async () => {
+    await testProject.cleanup()
+  })
+
+  it('POST /api/projects/:id/checkout returns 400 when project is not a git repo', async () => {
+    const res = await fetch(`${server.url}/api/projects/${projectId}/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch: 'main' }),
+    })
+    expect(res.status).toBe(400)
+    const data: any = await res.json()
+    expect(data.error).toContain('git')
+  })
+
+  it('POST /api/projects/:id/checkout-new returns 400 when project is not a git repo', async () => {
+    const res = await fetch(`${server.url}/api/projects/${projectId}/checkout-new`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'new-branch' }),
+    })
+    expect(res.status).toBe(400)
+    const data: any = await res.json()
+    expect(data.error).toContain('git')
+  })
+
+  it('POST /api/sessions/:id/switch-workspace returns 400 when project is not a git repo', async () => {
+    const res = await fetch(`${server.url}/api/sessions/${sessionId}/switch-workspace`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'test-workspace' }),
+    })
+    expect(res.status).toBe(400)
+    const data: any = await res.json()
+    expect(data.error).toContain('git')
+  })
+
+  it('POST /api/sessions/:id/delete-workspace returns 400 when project is not a git repo', async () => {
+    const res = await fetch(`${server.url}/api/sessions/${sessionId}/delete-workspace`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'nonexistent' }),
+    })
+    expect(res.status).toBe(400)
+    const data: any = await res.json()
+    expect(data.error).toContain('git')
+  })
+})

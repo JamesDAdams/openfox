@@ -317,6 +317,18 @@ export async function deleteWorkspace(projectName: string, name: string, project
   logger.info('Deleted workspace', { projectName, name, path: wsPath })
 }
 
+export async function isGitRepository(cwd: string): Promise<boolean> {
+  const { stat } = await import('node:fs/promises')
+  try {
+    const st = await stat(join(cwd, '.git'))
+    if (st.isDirectory()) return true
+  } catch {
+    // .git doesn't exist or can't be read — fall through to rev-parse
+  }
+  const result = await captureStdout(cwd, ['rev-parse', '--git-dir'])
+  return result !== null
+}
+
 async function statSafe(p: string): Promise<{ isDirectory: () => boolean } | null> {
   try {
     const { stat } = await import('node:fs/promises')

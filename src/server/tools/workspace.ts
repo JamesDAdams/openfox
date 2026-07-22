@@ -1,5 +1,5 @@
 import { createTool, requestUserConfirmation } from './tool-helpers.js'
-import { getGitBranch, listWorkspaces } from '../git/workspace.js'
+import { getGitBranch, listWorkspaces, isGitRepository } from '../git/workspace.js'
 
 interface WorkspaceArgs {
   action: 'switch' | 'list' | 'delete'
@@ -69,6 +69,10 @@ export const workspaceTool = createTool<WorkspaceArgs>(
           return helpers.error('Parameter "target" is required for action=switch ("original" or a workspace name)')
         }
 
+        if ((await isGitRepository(context.workdir)) === false) {
+          return helpers.error('Project is not a git repository')
+        }
+
         const currentSession = sessionManager.getSession(sessionId)
         const isBranchChange =
           args.branch !== undefined &&
@@ -132,6 +136,10 @@ export const workspaceTool = createTool<WorkspaceArgs>(
           return helpers.error('Parameter "target" is required for action=delete (the workspace name)')
         }
         if (args.target === 'original') return helpers.error('Cannot delete the original workspace')
+
+        if ((await isGitRepository(context.workdir)) === false) {
+          return helpers.error('Project is not a git repository')
+        }
 
         const approved = await requestUserConfirmation(context, 'workspace', `Delete workspace "${args.target}"`)
         if (!approved) return helpers.error(`User denied: delete workspace "${args.target}"`)

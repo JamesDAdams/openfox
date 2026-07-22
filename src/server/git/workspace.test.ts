@@ -10,6 +10,7 @@ import {
   listBranches,
   listWorkspaces,
   getWorkspacesDir,
+  isGitRepository,
 } from './workspace.js'
 
 vi.mock('node:child_process', () => ({
@@ -311,5 +312,45 @@ describe('resolveAndValidateSourceBranch', () => {
       .mockReturnValueOnce(makeMockProc('', '', 1) as any) // git rev-parse remote fails
       .mockReturnValueOnce(makeMockProc('') as any) // git ls-remote succeeds but returns empty (branch absent)
     await expect(resolveAndValidateSourceBranch(CWD, 'absent-branch', '/tmp/project')).rejects.toThrow('not found')
+  })
+})
+
+describe('isGitRepository', () => {
+  const TEST_DIR = '/tmp/test-project'
+
+  it('returns true when .git directory exists', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as any)
+    const result = await isGitRepository(TEST_DIR)
+    expect(result).toBe(true)
+    expect(stat).toHaveBeenCalledWith(expect.stringContaining('.git'))
+  })
+
+  it('returns true when git rev-parse succeeds (worktree with .git file)', async () => {
+    vi.mocked(stat).mockRejectedValue({ code: 'ENOENT' })
+    vi.mocked(spawn).mockReturnValueOnce(makeMockProc('/path/to/git-dir\n') as any)
+    const result = await isGitRepository(TEST_DIR)
+    expect(result).toBe(true)
+    expect(spawn).toHaveBeenCalledWith('git', ['rev-parse', '--git-dir'], expect.anything())
+  })
+
+  it('returns false when .git does not exist and git rev-parse fails', async () => {
+    vi.mocked(stat).mockRejectedValue({ code: 'ENOENT' })
+    vi.mocked(spawn).mockReturnValueOnce(makeMockProc('', 'fatal: not a git repository', 128) as any)
+    const result = await isGitRepository(TEST_DIR)
+    expect(result).toBe(false)
+  })
+
+  it('returns false when directory does not exist', async () => {
+    vi.mocked(stat).mockRejectedValue({ code: 'ENOENT' })
+    vi.mocked(spawn).mockReturnValueOnce(makeMockProc('', '', 1) as any)
+    const result = await isGitRepository(TEST_DIR)
+    expect(result).toBe(false)
+  })
+
+  it('returns true when git rev-parse succeeds despite .git not being a directory', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => false } as any)
+    vi.mocked(spawn).mockReturnValueOnce(makeMockProc('/path/to/git-dir\n') as any)
+    const result = await isGitRepository(TEST_DIR)
+    expect(result).toBe(true)
   })
 })
