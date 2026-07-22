@@ -44,6 +44,16 @@ export class ValidationError extends OpenFoxError {
   }
 }
 
+export class WorkspaceInUseError extends OpenFoxError {
+  constructor(
+    message: string,
+    public readonly conflictingSessionIds: string[],
+  ) {
+    super(message, 'WORKSPACE_IN_USE')
+    this.name = 'WorkspaceInUseError'
+  }
+}
+
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof OpenFoxError) {
     return ['LLM_ERROR', 'TOOL_EXECUTION_ERROR'].includes(error.code)

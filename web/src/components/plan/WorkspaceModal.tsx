@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'wouter'
 import { useSessionStore } from '../../stores/session'
 import { authFetch } from '../../lib/api'
 import { useModalState } from '../../hooks/useModalState'
@@ -45,11 +46,15 @@ export function WorkspaceModal({
   } = useModalState(onClose)
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([])
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [conflictingSessionIds, setConflictingSessionIds] = useState<string[] | null>(null)
+  const [forceDeleting, setForceDeleting] = useState(false)
 
   useEffect(() => {
     if (!isOpen) return
     resetState()
     setConfirmDelete(null)
+    setConflictingSessionIds(null)
+    setForceDeleting(false)
     authFetch(`/api/projects/${projectId}/workspaces`)
       .then((r) => r.json())
       .then((data: { workspaces: WorkspaceInfo[] }) => {
@@ -89,22 +94,29 @@ export function WorkspaceModal({
   )
 
   const handleDelete = useCallback(
-    async (name: string) => {
+    async (name: string, options?: { force?: boolean }) => {
       setError(null)
+      setConflictingSessionIds(null)
+      setForceDeleting(options?.force === true)
       setBusy(true)
       try {
         const res = await authFetch(`/api/sessions/${sessionId}/delete-workspace`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target: name }),
+          body: JSON.stringify({ target: name, force: options?.force === true }),
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: 'Failed to delete workspace' }))
           setError(err.error)
+          if (err.conflictingSessionIds) {
+            setConflictingSessionIds(err.conflictingSessionIds)
+          }
+          setForceDeleting(false)
           setBusy(false)
           return
         }
         setConfirmDelete(null)
+        setForceDeleting(false)
         await refreshSession(sessionId)
         // Refresh the workspace list
         const listRes = await authFetch(`/api/projects/${projectId}/workspaces`)
@@ -114,6 +126,7 @@ export function WorkspaceModal({
         setLoading(false)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to delete workspace')
+        setForceDeleting(false)
         setBusy(false)
       }
     },
@@ -214,6 +227,8 @@ export function WorkspaceModal({
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
+                          setError(null)
+                          setConflictingSessionIds(null)
                           setConfirmDelete(ws.name)
                         }}
                         className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-xs text-text-muted hover:text-accent-error transition-opacity px-1 py-0.5 rounded"
@@ -241,9 +256,34 @@ export function WorkspaceModal({
         />
 
         {error && (
-          <p className="mt-3 text-sm text-accent-error bg-accent-error/10 p-2 rounded" role="alert">
-            {error}
-          </p>
+          <div className="mt-3 text-sm bg-accent-error/10 p-2 rounded" role="alert">
+            <p className="text-accent-error">{error}</p>
+            {conflictingSessionIds && conflictingSessionIds.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-text-muted">Conflicting sessions:</p>
+                <ul className="space-y-0.5">
+                  {conflictingSessionIds.map((sid) => (
+                    <li key={sid}>
+                      <Link
+                        href={`/p/${projectId}/s/${sid}`}
+                        className="text-xs font-mono text-accent-primary hover:underline break-all"
+                      >
+                        {sid}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => handleDelete(confirmDelete ?? '', { force: true })}
+                  disabled={busy || !confirmDelete}
+                  className="mt-2 text-xs px-2 py-1 rounded bg-accent-warning text-black hover:opacity-90 disabled:opacity-50"
+                  aria-label="Force delete workspace, switching other sessions to original"
+                >
+                  {forceDeleting ? 'Processing...' : 'Force Delete (switch other sessions to original)'}
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </ModalShell>

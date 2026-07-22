@@ -38,6 +38,7 @@ import { createWorkflowRoutes } from './routes/workflows.js'
 import { createDevServerRoutes } from './routes/dev-server.js'
 import { createWorkspaceConfigRoutes } from './routes/workspace-config.js'
 import { createTerminalRoutes } from './routes/terminals.js'
+import { WorkspaceInUseError } from './utils/errors.js'
 import { createDirectoryRoutes } from './routes/directories.js'
 import { createFileSearchRoutes } from './routes/file-search.js'
 import { createAutoUpdateRoutes } from './routes/auto-update.js'
@@ -720,7 +721,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const session = sessionManager.getSession(req.params.id)
     if (!session) return res.status(404).json({ error: 'Session not found' })
 
-    const { target } = req.body
+    const { target, force } = req.body
     if (!target || typeof target !== 'string') return res.status(400).json({ error: 'target is required' })
 
     const project = sessionManager.getProject(session.projectId)
@@ -731,9 +732,15 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
 
     try {
-      const updated = await sessionManager.deleteWorkspace(req.params.id, target)
+      const updated = await sessionManager.deleteWorkspace(req.params.id, target, force === true)
       res.json({ session: updated })
     } catch (err) {
+      if (err instanceof WorkspaceInUseError) {
+        return res.status(409).json({
+          error: err.message,
+          conflictingSessionIds: err.conflictingSessionIds,
+        })
+      }
       res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to delete workspace' })
     }
   })

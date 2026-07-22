@@ -181,7 +181,28 @@ describe('workspaceTool', () => {
       const result = await workspaceTool.execute({ action: 'delete', target: 'feat-x' }, makeContext())
       expect(result.success).toBe(true)
       expect(result.output).toContain('feat-x')
-      expect(mockDeleteWorkspace).toHaveBeenCalledWith('session-1', 'feat-x')
+      expect(mockDeleteWorkspace).toHaveBeenCalledWith('session-1', 'feat-x', false)
+    })
+
+    it('force deletes a workspace with force=true', async () => {
+      mockIsGitRepository.mockResolvedValue(true)
+      mockRegisterPathConfirmation.mockResolvedValue(true)
+      mockDeleteWorkspace.mockResolvedValue({ workspace: null, workdir: '/tmp/project' })
+
+      const result = await workspaceTool.execute({ action: 'delete', target: 'feat-x', force: true }, makeContext())
+      expect(result.success).toBe(true)
+      expect(result.output).toContain('feat-x')
+      expect(mockDeleteWorkspace).toHaveBeenCalledWith('session-1', 'feat-x', true)
+    })
+
+    it('propagates error from deleteWorkspace', async () => {
+      mockIsGitRepository.mockResolvedValue(true)
+      mockRegisterPathConfirmation.mockResolvedValue(true)
+      mockDeleteWorkspace.mockRejectedValue(new Error('Something went wrong'))
+
+      const result = await workspaceTool.execute({ action: 'delete', target: 'feat-x' }, makeContext())
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Something went wrong')
     })
 
     it('returns error when user denies delete', async () => {

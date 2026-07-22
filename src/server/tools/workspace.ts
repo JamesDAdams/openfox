@@ -6,6 +6,7 @@ interface WorkspaceArgs {
   target?: string
   branch?: string
   sourceBranch?: string
+  force?: boolean
 }
 
 export const workspaceTool = createTool<WorkspaceArgs>(
@@ -29,7 +30,7 @@ export const workspaceTool = createTool<WorkspaceArgs>(
         'Actions:\n' +
         '- switch: Switch to a workspace (target: "original" or a name, optional branch for new workspaces)\n' +
         '- list: List all workspaces with their current branch and active status\n' +
-        '- delete: Delete a workspace by name (cannot delete "original")',
+        '- delete: Delete a workspace by name (cannot delete "original"). Use force=true to auto-switch other sessions that reference this workspace.',
       parameters: {
         type: 'object',
         properties: {
@@ -49,6 +50,11 @@ export const workspaceTool = createTool<WorkspaceArgs>(
           sourceBranch: {
             type: 'string',
             description: 'If branch does not exist, base the new branch on this existing branch. Default: origin/HEAD.',
+          },
+          force: {
+            type: 'boolean',
+            description:
+              'For action=delete: force deletion by auto-switching other sessions that reference this workspace to original first.',
           },
         },
         required: ['action'],
@@ -141,10 +147,15 @@ export const workspaceTool = createTool<WorkspaceArgs>(
           return helpers.error('Project is not a git repository')
         }
 
-        const approved = await requestUserConfirmation(context, 'workspace', `Delete workspace "${args.target}"`)
+        const forceDesc = args.force ? ' (will auto-switch other sessions to original)' : ''
+        const approved = await requestUserConfirmation(
+          context,
+          'workspace',
+          `Delete workspace "${args.target}"${forceDesc}`,
+        )
         if (!approved) return helpers.error(`User denied: delete workspace "${args.target}"`)
 
-        await sessionManager.deleteWorkspace(sessionId, args.target)
+        await sessionManager.deleteWorkspace(sessionId, args.target, args.force === true)
         return helpers.success(
           JSON.stringify(
             {

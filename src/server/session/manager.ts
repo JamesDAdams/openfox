@@ -49,7 +49,7 @@ import {
   validateWorkspaceName,
 } from '../git/workspace.js'
 import { resolve } from 'node:path'
-import { SessionNotFoundError } from '../utils/errors.js'
+import { SessionNotFoundError, WorkspaceInUseError } from '../utils/errors.js'
 import { logger } from '../utils/logger.js'
 import { EventEmitter, type Unsubscribe } from '../utils/async.js'
 import { getLspManager as getOrCreateLspManager, shutdownLspManager, type LspManager } from '../lsp/index.js'
@@ -1224,7 +1224,7 @@ export class SessionManager {
    * switches to original first. Throws if target is "original".
    * Refuses deletion if other sessions reference this workspace.
    */
-  async deleteWorkspace(sessionId: string, target: string): Promise<Session> {
+  async deleteWorkspace(sessionId: string, target: string, force = false): Promise<Session> {
     if (target === 'original') throw new Error('Cannot delete the original workspace')
     validateWorkspaceName(target)
 
@@ -1237,10 +1237,24 @@ export class SessionManager {
       (s) => s.id !== sessionId && s.workspace?.split('/').pop() === target,
     )
     if (otherSessionsUsingIt.length > 0) {
-      const otherIds = otherSessionsUsingIt.map((s) => s.id).join(', ')
-      throw new Error(
-        `Workspace "${target}" is in use by other session(s): ${otherIds}. Switch them to original first.`,
-      )
+      if (force) {
+        // Switch all conflicting sessions to original first
+        for (const other of otherSessionsUsingIt) {
+          try {
+            await this.switchWorkspace(other.id, 'original')
+          } catch (err) {
+            throw new Error(
+              `Failed to switch session ${other.id} to original: ${err instanceof Error ? err.message : String(err)}`,
+            )
+          }
+        }
+      } else {
+        const conflictingSessionIds = otherSessionsUsingIt.map((s) => s.id)
+        throw new WorkspaceInUseError(
+          `Workspace "${target}" is in use by other session(s): ${conflictingSessionIds.join(', ')}. Switch them to original first, or retry with force=true.`,
+          conflictingSessionIds,
+        )
+      }
     }
 
     // If currently in the workspace being deleted, switch to original first
