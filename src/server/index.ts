@@ -443,7 +443,11 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       if (sourceBranch) {
         sb = await resolveAndValidateSourceBranch(project.workdir, sourceBranch, project.workdir)
       } else {
-        sb = await getDefaultBranch(project.workdir)
+        sb = await resolveAndValidateSourceBranch(
+          project.workdir,
+          await getDefaultBranch(project.workdir),
+          project.workdir,
+        )
       }
       await createBranch(project.workdir, name, sb)
       // Update all sessions using this project tree
