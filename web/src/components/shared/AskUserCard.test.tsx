@@ -86,6 +86,32 @@ describe('AskUserCard', () => {
     expect(container.textContent).toContain('Send')
   })
 
+  it('does not crash when options is a string instead of array', () => {
+    // LLM sometimes outputs options as a string instead of array — guard against .map() crash
+    useSessionStore.setState({
+      pendingQuestions: [{ callId: 'call-1', question: 'Pick:', type: 'choice', options: undefined }],
+    })
+    const tc = makeToolCall({
+      arguments: { question: 'Pick:', type: 'choice', options: 'option1, option2' },
+    })
+    const container = render(<AskUserCard toolCall={tc} />)
+    // Should fall through to text input instead of crashing
+    expect(container.textContent).toContain('Send')
+    expect(container.textContent).toContain('Skip')
+  })
+
+  it('does not crash when options is null', () => {
+    useSessionStore.setState({
+      pendingQuestions: [{ callId: 'call-1', question: 'Pick:', type: 'choice', options: undefined }],
+    })
+    const tc = makeToolCall({
+      arguments: { question: 'Pick:', type: 'choice', options: null },
+    })
+    const container = render(<AskUserCard toolCall={tc} />)
+    expect(container.textContent).toContain('Send')
+    expect(container.textContent).toContain('Skip')
+  })
+
   it('submits answer on Enter', () => {
     const answerQuestion = vi.fn()
     useSessionStore.setState({

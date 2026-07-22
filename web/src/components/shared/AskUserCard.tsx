@@ -100,7 +100,7 @@ export function AskUserCard({ toolCall }: AskUserCardProps) {
                   Skip
                 </button>
               </div>
-            ) : type === 'choice' && options && options.length > 0 ? (
+            ) : type === 'choice' && Array.isArray(options) && options.length > 0 ? (
               <>
                 <div className="flex flex-col gap-1.5">
                   {options.map((option) => (
