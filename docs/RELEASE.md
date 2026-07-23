@@ -77,7 +77,18 @@ Take the sub-agent's output and wrap it in a version heading with the tag's date
 - PDFs with embedded images are now fully understood by the AI...
 ```
 
-### 4. Present to the user for validation
+### 4. Validate formatting consistency
+
+Before presenting to the user, cross-check your entry against the previous release's entry in CHANGELOG.md:
+
+1. **Bullet format** — every bullet must use **bold lead-in** followed by ` — ` (space, em dash, space). Plain-text bullets are wrong.
+2. **Blank lines** — one blank line between version heading and first category, one between category heading and first bullet.
+3. **Section omission** — drop empty categories entirely.
+4. **Character limit** — max ~100 chars per bullet, punchy and user-first.
+
+Fix any mismatches before moving on.
+
+### 5. Present to the user for validation
 
 Show the proposed changelog entry to the user before committing. Say something like:
 
@@ -85,7 +96,7 @@ Show the proposed changelog entry to the user before committing. Say something l
 
 Wait for the user to approve (or request edits). Only proceed once they sign off.
 
-### 5. Prepend to CHANGELOG.md
+### 6. Prepend to CHANGELOG.md
 
 Once approved, insert the entry at the top of `CHANGELOG.md` (right after `# Changelog`):
 
@@ -110,15 +121,16 @@ Once approved, insert the entry at the top of `CHANGELOG.md` (right after `# Cha
 - Use sentence case for descriptions.
 - Lead with the user-visible outcome, not the implementation detail.
 - If a section is empty, omit it entirely (don't write "Features" with nothing under it).
+- Every bullet must use **bold lead-in** followed by ` — ` (space, em dash, space) then the description. Match the existing formatting exactly — scan the previous entries to confirm consistency before proceeding.
 
-### 6. Commit the changelog
+### 7. Commit the changelog
 
 ```bash
 git add CHANGELOG.md
 git commit -m "docs: update changelog for upcoming release"
 ```
 
-### 7. Bump version and tag
+### 8. Bump version and tag
 
 ```bash
 npm run patch
@@ -126,7 +138,7 @@ npm run patch
 
 This runs `npm version patch` which creates a commit (`2.0.88`) and a tag (`v2.0.88`).
 
-### 8. Publish
+### 9. Publish
 
 ```bash
 npm publish 2>&1 | tail -10
@@ -134,14 +146,14 @@ npm publish 2>&1 | tail -10
 
 This triggers `prepublishOnly` which builds and runs e2e tests.
 
-### 9. Push and create GitHub Release
+### 10. Push and create GitHub Release
 
 ```bash
 git push --follow-tags
 gh release create "$(git describe --tags --abbrev=0)" --generate-notes
 ```
 
-### 10. Sync develop
+### 11. Sync develop
 
 ```bash
 git checkout develop && git merge main --ff-only && git push origin develop
@@ -162,17 +174,17 @@ git checkout develop && git merge main --ff-only && git push origin develop
 ## 2.0.77 - 2026-07-20
 
 ### Features
-- PDFs with embedded images are now fully understood. Diagrams, screenshots, and figures inside PDFs are extracted and sent to vision-capable models as images, or described via a fallback vision model for non-vision models. Previously, embedded images were silently lost.
-- Configure a timeout for slow MCP tools. Set a per-server timeout (in seconds) from the Tools settings tab or via the mcp_config tool. Hanging or slow tool calls now abort gracefully instead of blocking indefinitely.
-- View and manage session metadata in a full-screen modal. Click any metadata section in the sidebar (acceptance criteria, review findings, todos, etc.) to open a spacious modal where you can add, edit, delete, and cycle status on entries without truncation.
+- **PDFs with embedded images are now fully understood** — diagrams, screenshots, and figures inside PDFs are extracted and sent to vision-capable models as images, or described via a fallback vision model for non-vision models. Previously, embedded images were silently lost.
+- **Configure a timeout for slow MCP tools** — set a per-server timeout (in seconds) from the Tools settings tab or via the mcp_config tool. Hanging or slow tool calls now abort gracefully instead of blocking indefinitely.
+- **View and manage session metadata in a full-screen modal** — click any metadata section in the sidebar (acceptance criteria, review findings, todos, etc.) to open a spacious modal where you can add, edit, delete, and cycle status on entries without truncation.
 
 ### Enhancements
-- Workflow button styling polished. The "more options" (⋮) button now has comfortable padding, and the main workflow button shows clean rounded corners when no subgroup menu exists.
+- **Workflow button styling polished** — the "more options" (⋮) button now has comfortable padding, and the main workflow button shows clean rounded corners when no subgroup menu exists.
 
 ### Bug Fixes
-- Agent no longer stalls after a failed tool call on LM Studio / Qwen. Fixed a critical bug where the agent loop would silently stop responding when a tool call failed. The agent now recovers and continues generating normally.
-- MCP servers with broken outputSchema references now connect successfully. Servers like Stitch that include malformed $ref values in their tool schemas no longer crash AJV validation, preventing all tools from loading.
-- Edit & Resend text area now uses full width. When editing a message, the input area expands beyond the usual 75% bubble width, making long edits much easier to work with.
+- **Agent no longer stalls after a failed tool call on LM Studio / Qwen** — fixed a critical bug where the agent loop would silently stop responding when a tool call failed. The agent now recovers and continues generating normally.
+- **MCP servers with broken outputSchema references now connect successfully** — servers like Stitch that include malformed $ref values in their tool schemas no longer crash AJV validation, preventing all tools from loading.
+- **Edit & Resend text area now uses full width** — when editing a message, the input area expands beyond the usual 75% bubble width, making long edits much easier to work with.
 
 ## [2.0.0] - 2026-06-21
 ...

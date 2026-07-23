@@ -4,26 +4,26 @@
 
 ### Features
 
-- Changelog modal shows "What's New" on update, toggleable in settings
-- Ctrl+D toggles the criteria sidebar (right sidebar)
-- Ctrl+S closes the left sidebar when search is already focused
-- 10 new customizable theme tokens for LLM response colors
+- **Changelog modal shows "What's New" on update** — toggleable in settings, auto-shown after an upgrade.
+- **Ctrl+D toggles the criteria sidebar** — right sidebar now has a dedicated keyboard shortcut.
+- **Ctrl+S closes the left sidebar** — when search is already focused, Ctrl+S dismisses the sidebar.
+- **10 new customizable theme tokens for LLM response colors** — fine-tune the look of assistant messages, system messages, thinking labels, and more.
 
 ### Enhancements
 
-- 8 new built-in theme presets (Catppuccin, Night Owl, Rose Pine, etc.)
-- Syntax highlighting adapts to your selected theme preset
-- System theme mode lets you choose separate presets for dark and light
-- Theme editor groups presets by dark/light mode
-- Header tooltips show live keyboard shortcut hints
-- Keybindings settings includes "Toggle Criteria Sidebar" binding
+- **8 new built-in theme presets** — Catppuccin, Night Owl, Rose Pine, and more added to the theme picker.
+- **Syntax highlighting adapts to your selected theme preset** — code blocks now match your chosen color scheme.
+- **System theme mode with separate dark/light presets** — choose different presets for dark and light modes independently.
+- **Theme editor groups presets by dark/light mode** — easier to browse and select when you have many presets.
+- **Header tooltips show live keyboard shortcut hints** — hover over header buttons to see the current keybinding.
+- **Keybindings settings includes "Toggle Criteria Sidebar" binding** — configurable shortcut for showing/hiding the right sidebar.
 
 ### Bug Fixes
 
-- Error banner persists until dismissed or new message sent
-- Selecting a user preset while in system theme mode works correctly
-- Active user preset is properly highlighted in theme picker
-- CHANGELOG.md now ships with the npm package, fixing production builds
+- **Error banner persists until dismissed or new message sent** — no longer disappears prematurely when session state updates.
+- **Selecting a user preset while in system theme mode works correctly** — legacy mode fallback no longer breaks preset selection.
+- **Active user preset is properly highlighted in theme picker** — the currently applied preset shows a clear visual indicator.
+- **CHANGELOG.md ships with the npm package** — production builds no longer fail to find the changelog at runtime.
 
 ## 2.0.87 - 2026-07-22
 
