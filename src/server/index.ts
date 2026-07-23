@@ -246,7 +246,10 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       const path = await import('node:path')
       const { fileURLToPath } = await import('node:url')
       const dirname = path.dirname(fileURLToPath(import.meta.url))
-      const changelogPath = path.resolve(dirname, '../../CHANGELOG.md')
+      let changelogPath = path.resolve(dirname, '../CHANGELOG.md')
+      if (!fs.existsSync(changelogPath)) {
+        changelogPath = path.resolve(dirname, '../../CHANGELOG.md')
+      }
       const content = fs.readFileSync(changelogPath, 'utf-8')
       res.json({ content })
     } catch {
