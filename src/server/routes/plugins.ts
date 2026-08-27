@@ -161,6 +161,9 @@ export function createPluginRoutes(options: {
                   providerAdapters.registerPreset(preset)
                   diagnostic.presets.push(preset.id)
                 },
+                notify(notification) {
+                  providerAdapters.notify(notification)
+                },
               }
               await mod.register(trackingRegistry)
               diagnostic.loaded = true

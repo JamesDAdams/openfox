@@ -97,6 +97,12 @@ export function NotificationSettings() {
       <div className="space-y-3">
         <h3 className="text-sm font-medium text-text-primary">Master Controls</h3>
         <Toggle
+          label="Popup notifications"
+          description="Show the in-app popup (top-right) when a notification arrives"
+          checked={settings.popupEnabled}
+          onChange={(v) => update({ ...settings, popupEnabled: v })}
+        />
+        <Toggle
           label="Sound notifications"
           description="Play sounds when events occur"
           checked={settings.soundEnabled}
