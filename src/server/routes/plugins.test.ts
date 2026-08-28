@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os'
 import { createPluginRoutes } from './plugins.js'
 import { ProviderRegistry } from '../providers/plugins/registry.js'
 import type { ProviderPluginDiagnostic } from '../providers/plugins/index.js'
+import { closeDatabase, initDatabase } from '../db/index.js'
+import { loadConfig } from '../config.js'
 
 function createApp(options?: Partial<Parameters<typeof createPluginRoutes>[0]>) {
   const app = express()
@@ -37,6 +39,10 @@ describe('plugin routes', () => {
   let baseUrl: string
 
   beforeEach(async () => {
+    closeDatabase()
+    const cfg = loadConfig()
+    cfg.database.path = ':memory:'
+    initDatabase(cfg)
     rootDir = await mkdtemp(join(tmpdir(), 'openfox-plugins-'))
     const { app } = createApp({
       config: { mode: 'test', providers: [] } as any,
@@ -118,6 +124,55 @@ describe('plugin routes', () => {
       expect(res.status).toBe(200)
       const body = (await res.json()) as { installed: unknown[] }
       expect(body).toEqual({ installed: [] })
+    })
+  })
+
+  describe('GET /:name/settings and POST /:name/settings', () => {
+    it('returns settings spec and saved values', async () => {
+      const appWithSpec = createApp({
+        config: { mode: 'test', providers: [] } as any,
+      })
+      appWithSpec.providerAdapters.registerSettingsForPlugin('test-plugin', {
+        title: 'Test Plugin Settings',
+        description: 'Configure test plugin options',
+        fields: [
+          { key: 'apiKey', label: 'API Key', type: 'password', required: true },
+          { key: 'enableFeature', label: 'Enable Feature', type: 'boolean', defaultValue: true },
+        ],
+      })
+      const lServer = appWithSpec.app.listen(0)
+      const lUrl = `http://localhost:${(lServer.address() as { port: number }).port}`
+
+      try {
+        const resGet1 = await fetch(`${lUrl}/api/plugins/test-plugin/settings`)
+        expect(resGet1.status).toBe(200)
+        const bodyGet1 = (await resGet1.json()) as {
+          name: string
+          hasSpec: boolean
+          spec: any
+          values: Record<string, unknown>
+        }
+        expect(bodyGet1.hasSpec).toBe(true)
+        expect(bodyGet1.spec.title).toBe('Test Plugin Settings')
+        expect(bodyGet1.values['enableFeature']).toBe(true)
+
+        const resPost = await fetch(`${lUrl}/api/plugins/test-plugin/settings`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ values: { apiKey: 'secret123', enableFeature: false } }),
+        })
+        expect(resPost.status).toBe(200)
+        const bodyPost = (await resPost.json()) as { success: boolean; values: Record<string, unknown> }
+        expect(bodyPost.success).toBe(true)
+        expect(bodyPost.values).toEqual({ apiKey: 'secret123', enableFeature: false })
+
+        const resGet2 = await fetch(`${lUrl}/api/plugins/test-plugin/settings`)
+        const bodyGet2 = (await resGet2.json()) as { values: Record<string, unknown> }
+        // password field must not be echoed back on GET
+        expect(bodyGet2.values).toEqual({ enableFeature: false })
+      } finally {
+        lServer.close()
+      }
     })
   })
 
