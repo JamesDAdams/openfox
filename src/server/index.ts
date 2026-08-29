@@ -231,6 +231,10 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     },
   })
   setMcpManagerForTools(mcpManager)
+  const { setGlobalMcpServersProvider } = await import('./mcp/session-overrides.js')
+  setGlobalMcpServersProvider(() =>
+    mcpManager.getAllServers().map((s) => ({ name: s.name, disabled: s.config.disabled })),
+  )
   setMcpConfigMode(config.mode ?? 'production')
   setMcpConfigPath(config.globalConfigPath)
   setMcpOAuthStoreMode(config.mode ?? 'production')
@@ -828,27 +832,6 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     // maxTokens is no longer passed - it comes from providerManager.getCurrentModelContext() at query time
     const session = sessionManager.createSession(projectId, title, providerId ?? null, model ?? null)
 
-    // Inherit MCP overrides from project for new sessions
-    try {
-      let disabledServers: string[] = []
-      if (project.mcpOverrides) {
-        disabledServers = Object.entries(project.mcpOverrides)
-          .filter(([, override]) => override.disabled)
-          .map(([name]) => name)
-      } else {
-        // No project overrides — inherit from global config
-        disabledServers = mcpManager
-          .getAllServers()
-          .filter((s) => s.config.disabled)
-          .map((s) => s.name)
-      }
-      if (disabledServers.length > 0) {
-        const { setSessionDisabledServers } = await import('./mcp/session-overrides.js')
-        setSessionDisabledServers(session.id, disabledServers)
-      }
-    } catch {
-      // Non-critical — session works without MCP overrides
-    }
     wssExports.broadcastForProject(projectId, session.id, {
       type: 'session.created',
       sessionId: session.id,
