@@ -25,6 +25,10 @@ export const SETTINGS_KEYS = {
   DISPLAY_COLLAPSE_LARGE_TOOL_CALLS: 'display.collapseLargeToolCalls',
   DISPLAY_DEFER_CODE_HIGHLIGHT_WHILE_STREAMING: 'display.deferCodeHighlightWhileStreaming',
   DISPLAY_FEED_VIRTUALIZATION: 'display.feedVirtualization',
+  DISPLAY_MODEL_SELECTOR_HEIGHT: 'display.modelSelectorHeight',
+  DISPLAY_COLLAPSE_PROVIDERS_BY_DEFAULT: 'display.collapseProvidersByDefault',
+  DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT: 'display.collapseFavoritesByDefault',
+  DISPLAY_MODEL_FAVORITES: 'display.modelFavorites',
   LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt',
   CACHE_WARMING: 'cache.warming',
   KEYBINDINGS: 'keybindings',
@@ -81,6 +85,10 @@ export const DISPLAY_SETTINGS_KEYS = [
   SETTINGS_KEYS.DISPLAY_COLLAPSE_LARGE_TOOL_CALLS,
   SETTINGS_KEYS.DISPLAY_DEFER_CODE_HIGHLIGHT_WHILE_STREAMING,
   SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION,
+  SETTINGS_KEYS.DISPLAY_MODEL_SELECTOR_HEIGHT,
+  SETTINGS_KEYS.DISPLAY_COLLAPSE_PROVIDERS_BY_DEFAULT,
+  SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT,
+  SETTINGS_KEYS.DISPLAY_MODEL_FAVORITES,
 ] as const
 
 export function useDisplaySettings() {
@@ -113,6 +121,16 @@ export function useDisplaySettings() {
       ) === 'true',
     feedVirtualization:
       useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION] ?? 'false') === 'true',
+    modelSelectorHeight:
+      useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_MODEL_SELECTOR_HEIGHT] ?? 'default') ||
+      'default',
+    collapseProvidersByDefault:
+      useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_COLLAPSE_PROVIDERS_BY_DEFAULT] ?? 'false') ===
+      'true',
+    collapseFavoritesByDefault:
+      useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT] ?? 'false') ===
+      'true',
+    modelFavoritesRaw: useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_MODEL_FAVORITES] ?? '[]'),
   }
 }
 
