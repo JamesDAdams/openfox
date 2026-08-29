@@ -1743,6 +1743,19 @@ export function ProviderModal({
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  data-testid={`model-configure-${model.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setExpandedModelId(expandedModelId === model.id ? null : model.id)
+                                  }}
+                                  className="p-1 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+                                  title="Configure model parameters"
+                                  aria-label={`Configure ${model.name ?? model.id}`}
+                                >
+                                  <SettingsIcon className="w-4 h-4" />
+                                </button>
                                 {autoConfigState.progress[model.id] === 'probing' ? (
                                   <span className="w-3 h-3 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
                                 ) : autoConfigState.progress[model.id] === 'done' ? (
