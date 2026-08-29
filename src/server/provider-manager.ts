@@ -113,6 +113,7 @@ function mergeModelsWithUserOverrides(
   const claimedByMergedModes = new Set<string>()
   for (const userModel of userModels) {
     if (!userModel.modes?.length) continue
+    claimedByMergedModes.add(normalizeModelId(userModel.id))
     for (const mode of userModel.modes) {
       if (mode.apiModelId) claimedByMergedModes.add(normalizeModelId(mode.apiModelId))
     }
@@ -874,7 +875,9 @@ export function createProviderManager(config: Config, options: ProviderManagerOp
         source: 'user',
         ...(existingModel?.name !== undefined && { name: existingModel.name }),
         ...(existingModel?.apiModelId !== undefined && { apiModelId: existingModel.apiModelId }),
+        ...(existingModel?.requestBody !== undefined && { requestBody: existingModel.requestBody }),
         ...(existingModel?.modes !== undefined && { modes: existingModel.modes }),
+        ...(existingModel?.selected !== undefined && { selected: existingModel.selected }),
         ...(finalTemp !== undefined && { temperature: finalTemp }),
         ...(finalTopP !== undefined && { topP: finalTopP }),
         ...(finalTopK !== undefined && { topK: finalTopK }),
