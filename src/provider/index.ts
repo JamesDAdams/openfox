@@ -101,7 +101,7 @@ export interface ProviderPluginRuntime {
 // Plugin Settings Types
 // ============================================================================
 
-export type PluginSettingFieldType = 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea'
+export type PluginSettingFieldType = 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea' | 'button'
 
 export interface PluginSettingOption {
   label: string
@@ -117,6 +117,8 @@ export interface PluginSettingField {
   options?: PluginSettingOption[]
   placeholder?: string
   required?: boolean
+  buttonLabel?: string
+  action?: string
 }
 
 export interface PluginSettingsSpec {
@@ -126,6 +128,10 @@ export interface PluginSettingsSpec {
   customUiUrl?: string
   getSettings?: () => Promise<Record<string, unknown>> | Record<string, unknown>
   saveSettings?: (values: Record<string, unknown>) => Promise<void> | void
+  executeAction?: (
+    action: string,
+    values: Record<string, unknown>,
+  ) => Promise<Record<string, unknown> | void> | Record<string, unknown> | void
 }
 
 // ============================================================================

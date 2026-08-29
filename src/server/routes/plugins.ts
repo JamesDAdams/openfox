@@ -347,6 +347,30 @@ export function createPluginRoutes(options: {
     res.json({ success: true, values: mergedValues })
   })
 
+  router.post('/:name/action', async (req, res) => {
+    const name = req.params.name as string
+    if (!isValidPluginName(name)) {
+      return res.status(400).json({ error: 'Invalid plugin name' })
+    }
+    const { action, values } = req.body as { action?: string; values?: Record<string, unknown> }
+    if (!action || typeof action !== 'string') {
+      return res.status(400).json({ error: 'action is required' })
+    }
+
+    const spec = providerAdapters.getPluginSettingsSpec(name)
+    if (!spec?.executeAction) {
+      return res.status(404).json({ error: 'Plugin does not define executeAction handler' })
+    }
+
+    try {
+      const result = await spec.executeAction(action, values ?? {})
+      res.json({ success: true, ...(result && typeof result === 'object' ? result : {}) })
+    } catch (err) {
+      logger.error('Plugin action execution failed', { name, action, error: String(err) })
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Action execution failed' })
+    }
+  })
+
   router.get('/open-folder', async (_req, res) => {
     const pluginsDir = join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins')
     await openFolderRoute(pluginsDir, res)

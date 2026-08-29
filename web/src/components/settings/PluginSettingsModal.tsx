@@ -14,6 +14,7 @@ export interface PluginSettingsModalProps {
 export function PluginSettingsModal({ isOpen, onClose, pluginName, pluginDisplayName }: PluginSettingsModalProps) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [spec, setSpec] = useState<PluginSettingsSpec | null>(null)
@@ -58,13 +59,35 @@ export function PluginSettingsModal({ isOpen, onClose, pluginName, pluginDisplay
   const validateRequired = (): string | null => {
     if (!spec?.fields) return null
     for (const field of spec.fields) {
-      if (!field.required) continue
+      if (field.type === 'button' || !field.required) continue
       const v = values[field.key]
       if (v === undefined || v === null || v === '' || (field.type === 'boolean' && v === false)) {
         return `${field.label} is required`
       }
     }
     return null
+  }
+
+  const handleAction = async (field: PluginSettingField) => {
+    setActionLoading(field.key)
+    setError(null)
+    setSuccessMsg(null)
+    try {
+      const res = await authFetch(`/api/plugins/${encodeURIComponent(pluginName)}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: field.action || field.key, values }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error ?? 'Action failed')
+      }
+      setSuccessMsg(data.message ?? 'Action completed successfully!')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed')
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleSave = async () => {
@@ -106,6 +129,20 @@ export function PluginSettingsModal({ isOpen, onClose, pluginName, pluginDisplay
     const val = values[field.key] ?? field.defaultValue ?? ''
 
     switch (field.type) {
+      case 'button':
+        return (
+          <div>
+            {field.label && <label className="text-xs font-medium text-text-primary block mb-1">{field.label}</label>}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleAction(field)}
+              disabled={Boolean(actionLoading) || saving || loading}
+            >
+              {actionLoading === field.key ? 'Executing…' : field.buttonLabel || field.label || 'Run'}
+            </Button>
+          </div>
+        )
       case 'boolean':
         return (
           <label className="flex items-center gap-2 cursor-pointer mt-1">

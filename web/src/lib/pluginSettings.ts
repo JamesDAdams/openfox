@@ -1,4 +1,4 @@
-export type PluginSettingFieldType = 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea'
+export type PluginSettingFieldType = 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea' | 'button'
 
 export interface PluginSettingOption {
   label: string
@@ -14,6 +14,8 @@ export interface PluginSettingField {
   options?: PluginSettingOption[]
   placeholder?: string
   required?: boolean
+  buttonLabel?: string
+  action?: string
 }
 
 export interface PluginSettingsSpec {
