@@ -46,6 +46,12 @@ import {
 } from '../db/sessions.js'
 import { getProject } from '../db/projects.js'
 import {
+  initSessionMcpOverrides,
+  clearSessionOverrides,
+  getSessionDisabledServers,
+  setSessionDisabledServers,
+} from '../mcp/session-overrides.js'
+import {
   ensureWorkspace,
   resolveAndValidateSourceBranch,
   validateRef,
@@ -401,6 +407,13 @@ export class SessionManager {
     // Build full session object
     const session = this.buildSessionFromDb(dbSession)
 
+    // Initialize MCP overrides from project settings / global defaults
+    try {
+      initSessionMcpOverrides(session.id, projectId, project.mcpOverrides)
+    } catch {
+      // Non-critical — session works without MCP overrides
+    }
+
     // Persist the current branch asynchronously — the session is valid without it.
     getGitBranch(effectiveWorkdir)
       .then((branch) => {
@@ -501,6 +514,12 @@ export class SessionManager {
       this.markWarmedUp(newSession.id)
     }
 
+    // Preserve parent session MCP disabled servers in the forked session
+    const parentDisabledServers = getSessionDisabledServers(originalSessionId)
+    if (parentDisabledServers.length > 0) {
+      setSessionDisabledServers(newSession.id, parentDisabledServers)
+    }
+
     this.emit({ type: 'session_updated', session: this.requireSession(newSession.id) })
 
     return this.requireSession(newSession.id)
@@ -586,6 +605,9 @@ export class SessionManager {
     this.warmedUpSessions.delete(id)
     this.announcedPromptHashStore.delete(id)
     this.announcedToolFingerprintStore.delete(id)
+
+    // Clean up session MCP overrides
+    clearSessionOverrides(id)
 
     // Delete session from DB
     dbDeleteSession(id)
