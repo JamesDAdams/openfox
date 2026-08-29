@@ -11,6 +11,7 @@ import { getGlobalConfigDir } from '../../cli/paths.js'
 import { isDirectoryEntry } from '../utils/fs.js'
 import type { ProviderRegistry } from '../providers/plugins/registry.js'
 import type { Config } from '../../shared/types.js'
+import { getSetting, setSetting } from '../db/settings.js'
 
 interface Logger {
   debug: (message: string, context?: Record<string, unknown>) => void
@@ -22,6 +23,10 @@ interface Logger {
 import { openFolder } from '../utils/openFolder.js'
 
 const execFileP = promisify(execFile)
+
+function isValidPluginName(name: string): boolean {
+  return /^[a-zA-Z0-9_.-]+$/.test(name)
+}
 
 async function openFolderRoute(
   dir: string,
@@ -164,6 +169,13 @@ export function createPluginRoutes(options: {
                 registerQuotaProvider(provider) {
                   providerAdapters.registerQuotaProvider(provider)
                 },
+                registerSettings(spec) {
+                  diagnostic.hasSettings = true
+                  providerAdapters.registerSettingsForPlugin(manifest.name, spec)
+                },
+                registerSettingsForPlugin(packageName, spec) {
+                  providerAdapters.registerSettingsForPlugin(packageName, spec)
+                },
               }
               await mod.register(trackingRegistry)
               diagnostic.loaded = true
@@ -191,23 +203,145 @@ export function createPluginRoutes(options: {
     const pluginsDir = join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins')
     try {
       const entries = await readdir(pluginsDir, { withFileTypes: true })
-      const installed: { name: string; version: string | null }[] = []
+      const installed: { name: string; version: string | null; hasSettings: boolean }[] = []
       for (const entry of entries) {
         if (!(await isDirectoryEntry(pluginsDir, entry))) continue
         const pkgPath = join(pluginsDir, entry.name, 'package.json')
         let version: string | null = null
+        let hasSettingsInPkg = false
         try {
           const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
           version = (pkg.version as string) ?? null
+          hasSettingsInPkg = Boolean(pkg.openfox?.hasSettings)
         } catch {
           // ignore if package.json not found or invalid
         }
-        installed.push({ name: entry.name, version })
+        const hasRegisteredSettings = Boolean(providerAdapters.getPluginSettingsSpec(entry.name))
+        const diag = pluginDiagnostics.find((d) => d.packageName === entry.name)
+        const hasSettings = hasSettingsInPkg || hasRegisteredSettings || Boolean(diag?.hasSettings)
+        installed.push({ name: entry.name, version, hasSettings })
       }
       res.json({ installed })
     } catch {
       res.json({ installed: [] })
     }
+  })
+
+  router.get('/:name/settings', async (req, res) => {
+    const name = req.params.name as string
+    if (!isValidPluginName(name)) {
+      return res.status(400).json({ error: 'Invalid plugin name' })
+    }
+    const spec = providerAdapters.getPluginSettingsSpec(name)
+    let values: Record<string, unknown> = {}
+
+    if (spec?.getSettings) {
+      try {
+        values = (await spec.getSettings()) ?? {}
+      } catch (err) {
+        logger.error('Failed to get plugin settings from plugin callback', { name, error: String(err) })
+      }
+    } else {
+      const raw = getSetting(`plugin_settings:${name}`)
+      if (raw) {
+        try {
+          values = JSON.parse(raw) as Record<string, unknown>
+        } catch {
+          values = {}
+        }
+      } else if (spec?.fields) {
+        for (const field of spec.fields) {
+          if (field.defaultValue !== undefined) {
+            values[field.key] = field.defaultValue
+          }
+        }
+      }
+    }
+
+    const clientSpec = spec
+      ? {
+          title: spec.title,
+          description: spec.description,
+          fields: spec.fields,
+          customUiUrl: spec.customUiUrl,
+        }
+      : null
+
+    // Never echo password-type values back to the client. They are stored server-side
+    // and only updated on POST when the client sends a non-empty value.
+    const safeValues: Record<string, unknown> = { ...values }
+    if (spec?.fields) {
+      for (const field of spec.fields) {
+        if (field.type === 'password' && field.key in safeValues) {
+          delete safeValues[field.key]
+        }
+      }
+    }
+
+    res.json({
+      name,
+      hasSpec: Boolean(spec),
+      spec: clientSpec,
+      values: safeValues,
+    })
+  })
+
+  router.post('/:name/settings', async (req, res) => {
+    const name = req.params.name as string
+    if (!isValidPluginName(name)) {
+      return res.status(400).json({ error: 'Invalid plugin name' })
+    }
+    const { values } = req.body as { values?: Record<string, unknown> }
+    if (!values || typeof values !== 'object') {
+      return res.status(400).json({ error: 'values object is required' })
+    }
+
+    const spec = providerAdapters.getPluginSettingsSpec(name)
+
+    // Server-side required-field validation
+    if (spec?.fields) {
+      for (const field of spec.fields) {
+        if (!field.required) continue
+        const v = values[field.key]
+        if (v === undefined || v === null || v === '' || (field.type === 'boolean' && v === false)) {
+          return res.status(400).json({ error: `${field.label} is required` })
+        }
+      }
+    }
+
+    // Merge with existing stored values so empty password fields keep their previous secret
+    let mergedValues = values
+    if (spec?.fields && spec.fields.some((f) => f.type === 'password')) {
+      const raw = getSetting(`plugin_settings:${name}`)
+      if (raw) {
+        try {
+          const existing = JSON.parse(raw) as Record<string, unknown>
+          mergedValues = { ...existing }
+          for (const [k, v] of Object.entries(values)) {
+            // Only overwrite the stored secret when the client sends a non-empty value
+            if (spec.fields.find((f) => f.key === k)?.type === 'password' && (v === '' || v === null)) {
+              continue
+            }
+            mergedValues[k] = v
+          }
+        } catch {
+          mergedValues = values
+        }
+      }
+    }
+
+    setSetting(`plugin_settings:${name}`, JSON.stringify(mergedValues))
+
+    if (spec?.saveSettings) {
+      try {
+        await spec.saveSettings(mergedValues)
+      } catch (err) {
+        logger.error('Failed to save plugin settings via plugin callback', { name, error: String(err) })
+        return res.status(500).json({ error: err instanceof Error ? err.message : 'Save settings failed' })
+      }
+    }
+
+    res.json({ success: true, values: mergedValues })
   })
 
   router.get('/open-folder', async (_req, res) => {

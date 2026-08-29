@@ -29,7 +29,7 @@ const REGISTRY_RESPONSE = {
 }
 
 const INSTALLED_RESPONSE = {
-  installed: [{ name: 'openfox-chatgpt', version: 'v1.0.0' }],
+  installed: [{ name: 'openfox-chatgpt', version: 'v1.0.0', hasSettings: true }],
 }
 
 function createJsonResponse(data: unknown, status = 200): Response {
@@ -153,6 +153,33 @@ describe('PluginsTab', () => {
           method: 'POST',
         }),
       )
+    })
+  })
+
+  it('shows Settings button for installed plugins and opens settings modal', async () => {
+    mockFetch
+      .mockResolvedValueOnce(createJsonResponse(REGISTRY_RESPONSE))
+      .mockResolvedValueOnce(createJsonResponse(INSTALLED_RESPONSE))
+
+    render(<PluginsTab />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Settings/i })).toBeDefined()
+    })
+
+    mockFetch.mockResolvedValueOnce(
+      createJsonResponse({
+        hasSpec: true,
+        spec: { title: 'ChatGPT Settings' },
+        values: {},
+      }),
+    )
+
+    const settingsButton = screen.getByRole('button', { name: /Settings/i })
+    await userEvent.setup().click(settingsButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('ChatGPT Settings')).toBeDefined()
     })
   })
 
