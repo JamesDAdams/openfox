@@ -60,7 +60,7 @@ function sendBrowserNotification(event: SoundEvent) {
   })
 }
 
-function playEvent(event: SoundEvent, agent?: AgentType) {
+export function playEvent(event: SoundEvent, agent?: AgentType) {
   const { settings } = useNotificationSettingsStore.getState()
 
   // Master sound toggle

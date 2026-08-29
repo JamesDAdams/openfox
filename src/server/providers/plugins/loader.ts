@@ -117,6 +117,9 @@ export async function loadProviderPlugins(options: {
         registerSettingsForPlugin(packageName, spec) {
           options.registry.registerSettingsForPlugin(packageName, spec)
         },
+        notify(notification) {
+          options.registry.notify(notification)
+        },
       }
       try {
         const module = (await import(pathToFileURL(join(packageDir, plugin)).href)) as {

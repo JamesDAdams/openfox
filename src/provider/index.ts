@@ -132,6 +132,12 @@ export interface PluginSettingsSpec {
 // Plugin Registry (passed to plugins during registration)
 // ============================================================================
 
+/** A plugin-emitted in-app notification. */
+export interface PluginNotification {
+  title: string
+  body: string
+}
+
 export interface ProviderPluginRegistry {
   registerAuth(adapter: ProviderAuthAdapter): void
   registerTransport(adapter: ProviderTransportAdapter): void
@@ -139,6 +145,8 @@ export interface ProviderPluginRegistry {
   registerQuotaProvider(provider: QuotaProvider): void
   registerSettings(spec: PluginSettingsSpec): void
   registerSettingsForPlugin(packageName: string, spec: PluginSettingsSpec): void
+  /** Emit an in-app notification that surfaces in the UI (toast + history). */
+  notify(notification: PluginNotification): void
   readonly runtime: ProviderPluginRuntime
 }
 

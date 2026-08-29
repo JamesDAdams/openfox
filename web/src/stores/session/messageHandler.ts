@@ -33,7 +33,8 @@ import type {
 import { useDevServerStore } from '../dev-server'
 import { useBackgroundProcessesStore } from '../background-processes'
 import { useTasksStore } from '../tasks'
-import { playNewMessage } from '../../lib/sound'
+import { useNotificationHistoryStore } from '../notificationHistory'
+import { playNewMessage, playEvent } from '../../lib/sound'
 import type { AgentType } from '../notifications'
 import type { SessionState, PendingQuestion, SessionPane } from './types'
 import { handleGlobalSoundEffects, resolveAgentType } from './sounds'
@@ -1093,6 +1094,31 @@ export function handleServerMessage(
 
     case 'tasks.update': {
       useTasksStore.getState().handleTasksUpdate(message.payload as import('@shared/protocol.js').TasksUpdatePayload)
+      break
+    }
+
+    case 'notifications.new': {
+      const payload = message.payload as import('@shared/protocol.js').NotificationsNewPayload
+      const notification = payload.notification
+      useNotificationHistoryStore.getState().addNotification(notification)
+      // Sound (only plays if enabled in notification settings).
+      playEvent('complete')
+      break
+    }
+
+    case 'notifications.deleted': {
+      const payload = message.payload as { id: string }
+      useNotificationHistoryStore.getState().handleDeleted(payload.id)
+      break
+    }
+
+    case 'notifications.read': {
+      useNotificationHistoryStore.getState().handleRead()
+      break
+    }
+
+    case 'notifications.cleared': {
+      useNotificationHistoryStore.getState().handleCleared()
       break
     }
 

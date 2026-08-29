@@ -10,8 +10,12 @@ import {
   ColumnsIcon,
   XCloseIcon,
   ChevronDownIcon,
+  BellIcon,
 } from '../shared/icons'
 import { Link, useLocation } from 'wouter'
+import { useNotificationHistoryStore } from '../../stores/notificationHistory'
+import { NotificationCenter } from '../notifications/NotificationCenter'
+import { NotificationToasts } from '../notifications/NotificationToasts'
 import { useSessionStore } from '../../stores/session'
 import { useProjectStore } from '../../stores/project'
 import { useConfigStore } from '../../stores/config'
@@ -46,8 +50,11 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   const [location, setLocation] = useLocation()
   const [tasksModalOpen, setTasksModalOpen] = useState(false)
   const [quotaModalOpen, setQuotaModalOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
   const runningTaskCount = useTasksStore((state) => state.counts.running)
   const loadCounts = useTasksStore((state) => state.loadCounts)
+  const unreadNotifications = useNotificationHistoryStore((state) => state.unreadCount)
+  const loadNotifications = useNotificationHistoryStore((state) => state.load)
   const activeProjectId = useTasksStore((state) => state.activeProjectId)
   const lastAutoLaunch = useTasksStore((state) => state.lastAutoLaunch)
   const clearAutoLaunch = useTasksStore((state) => state.clearAutoLaunch)
@@ -110,6 +117,10 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
       void loadCounts(project.id)
     }
   }, [project?.id, activeProjectId, loadCounts])
+
+  useEffect(() => {
+    void loadNotifications()
+  }, [loadNotifications])
 
   useEffect(() => {
     startAutoRefresh()
@@ -245,6 +256,20 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
 
       <div className="flex items-center gap-2 flex-shrink-0">
         <div className="hidden md:flex items-center gap-2">
+          <button
+            onClick={() => setNotifOpen(true)}
+            className="relative p-2.5 rounded hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
+            title="Notifications"
+            aria-label="Notifications"
+          >
+            <BellIcon className="w-4 h-4" />
+            {unreadNotifications > 0 && (
+              <span className="absolute top-0.5 right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-accent-success text-white text-[9px] font-semibold flex items-center justify-center">
+                {unreadNotifications > 99 ? '99+' : unreadNotifications}
+              </span>
+            )}
+          </button>
+
           {!isSplit && (
             <button
               onClick={() => {
@@ -393,6 +418,8 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
       {project && (
         <TasksModal isOpen={tasksModalOpen} onClose={() => setTasksModalOpen(false)} projectId={project.id} />
       )}
+      <NotificationCenter isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
+      <NotificationToasts />
       {lastAutoLaunch && (
         <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg bg-bg-secondary border border-border shadow-xl text-sm text-text-primary">
           <span>“{lastAutoLaunch.taskTitle}” auto-launched — a slot freed up.</span>

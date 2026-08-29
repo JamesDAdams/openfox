@@ -21,6 +21,8 @@ export interface NotificationSettings {
   // Master toggles
   soundEnabled: boolean
   browserNotificationEnabled: boolean
+  /** Show the in-app popup toast (top-right) when a notification arrives. */
+  popupEnabled: boolean
 
   // Per-event config (global defaults)
   events: Record<SoundEvent, EventNotificationConfig>
@@ -76,6 +78,7 @@ const DEFAULT_NEW_MESSAGE_CONFIG: EventNotificationConfig = {
 export const DEFAULT_SETTINGS: NotificationSettings = {
   soundEnabled: true,
   browserNotificationEnabled: false,
+  popupEnabled: true,
   events: {
     complete: { ...DEFAULT_EVENT_CONFIG },
     waiting_for_user: { ...DEFAULT_EVENT_CONFIG },
@@ -209,6 +212,7 @@ function mergeWithDefaults(partial: Partial<NotificationSettings>): Notification
   return {
     soundEnabled: partial.soundEnabled ?? DEFAULT_SETTINGS.soundEnabled,
     browserNotificationEnabled: partial.browserNotificationEnabled ?? DEFAULT_SETTINGS.browserNotificationEnabled,
+    popupEnabled: partial.popupEnabled ?? DEFAULT_SETTINGS.popupEnabled,
     events: {
       complete: { ...DEFAULT_EVENT_CONFIG, ...partial.events?.complete },
       waiting_for_user: { ...DEFAULT_EVENT_CONFIG, ...partial.events?.waiting_for_user },

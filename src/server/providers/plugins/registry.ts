@@ -1,5 +1,6 @@
 import type { Provider } from '../../../shared/types.js'
 import type {
+  PluginNotification,
   PluginSettingsSpec,
   ProviderAuthAdapter,
   ProviderPluginRegistry,
@@ -15,8 +16,17 @@ export class ProviderRegistry implements ProviderPluginRegistry {
   private readonly presets = new Map<string, ProviderPreset>()
   private readonly quotaProviders: QuotaProvider[] = []
   private readonly pluginSettingsSpecs = new Map<string, PluginSettingsSpec>()
+  private notifyFn: ((notification: PluginNotification) => void) | null = null
 
   constructor(readonly runtime: ProviderPluginRuntime) {}
+
+  setNotify(fn: (notification: PluginNotification) => void): void {
+    this.notifyFn = fn
+  }
+
+  notify(notification: PluginNotification): void {
+    this.notifyFn?.(notification)
+  }
 
   registerAuth(adapter: ProviderAuthAdapter): void {
     this.register(this.authAdapters, adapter.id, adapter, 'auth adapter')

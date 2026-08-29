@@ -176,6 +176,9 @@ export function createPluginRoutes(options: {
                 registerSettingsForPlugin(packageName, spec) {
                   providerAdapters.registerSettingsForPlugin(packageName, spec)
                 },
+                notify(notification) {
+                  providerAdapters.notify(notification)
+                },
               }
               await mod.register(trackingRegistry)
               diagnostic.loaded = true
