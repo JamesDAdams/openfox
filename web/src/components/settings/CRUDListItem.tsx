@@ -65,6 +65,7 @@ export interface CRUDListItemSimpleProps {
   id: string
   name: string
   description?: string
+  extraBadge?: ReactNode
   isBuiltIn: boolean
   isConfirmingDelete: boolean
   onView?: () => void
@@ -79,6 +80,7 @@ export function CRUDListItemSimple({
   id,
   name,
   description,
+  extraBadge,
   isBuiltIn,
   isConfirmingDelete,
   onView,
@@ -102,6 +104,7 @@ export function CRUDListItemSimple({
       <div className="flex items-center gap-2">
         <span className="text-text-primary text-sm font-medium">{name}</span>
         <span className="text-text-muted text-xs font-mono">{id}</span>
+        {extraBadge}
       </div>
       {description && <p className="text-text-muted text-xs truncate">{description}</p>}
     </CRUDListItem>

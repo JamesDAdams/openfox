@@ -1,6 +1,7 @@
 import type { SkillInfo } from '../../lib/skills-actions'
 import { Toggle } from '../shared/Toggle'
 import { CRUDListItemSimple } from './CRUDListItem'
+import { formatTokens } from '../../lib/mcp-utils'
 
 interface SkillListItemProps {
   skill: SkillInfo
@@ -30,6 +31,11 @@ export function SkillListItem({
       id={skill.id}
       name={skill.name}
       description={skill.description}
+      extraBadge={
+        skill.estimatedTokens !== undefined && skill.estimatedTokens > 0 ? (
+          <span className="text-xs text-text-muted">{formatTokens(skill.estimatedTokens)} tokens</span>
+        ) : undefined
+      }
       isBuiltIn={isBuiltIn}
       isConfirmingDelete={isConfirmingDelete}
       onView={onView}

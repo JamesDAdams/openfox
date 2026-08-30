@@ -21,6 +21,7 @@ export function DisplayTab() {
   const showStats = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_STATS, 'true')
   const showAgentDefinitions = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS, 'true')
   const showWorkflowBars = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS, 'true')
+  const fullscreenSlashCommand = useSetting(SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND, 'false')
   const nativeScrollbars = useSetting(SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS, 'false')
   const nativeScrollbarsCodeBlocks = useSetting(SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS_CODE_BLOCKS, 'false')
   const collapseLargeToolCalls = useSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_LARGE_TOOL_CALLS, 'false')
@@ -71,6 +72,12 @@ export function DisplayTab() {
       key: SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS,
       label: 'Show workflow bars',
       description: 'Display workflow start and end markers',
+    },
+    {
+      key: SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND,
+      label: 'Fullscreen slash commands view',
+      description: 'Choose whether the commands view uses default sizing or fills the available screen height.',
+      defaultValue: 'false',
     },
   ] as const
 
@@ -125,6 +132,7 @@ export function DisplayTab() {
     [SETTINGS_KEYS.DISPLAY_SHOW_STATS]: showStats.value,
     [SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS]: showAgentDefinitions.value,
     [SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS]: showWorkflowBars.value,
+    [SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND]: fullscreenSlashCommand.value,
     [SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS]: nativeScrollbars.value,
     [SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS_CODE_BLOCKS]: nativeScrollbarsCodeBlocks.value,
     [SETTINGS_KEYS.DISPLAY_COLLAPSE_LARGE_TOOL_CALLS]: collapseLargeToolCalls.value,

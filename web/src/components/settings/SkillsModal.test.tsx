@@ -116,4 +116,62 @@ describe('SkillsContent', () => {
       expect(authFetch).toHaveBeenCalledWith('/api/skills?workdir=%2Foriginal%2Fproject')
     })
   })
+
+  it('renders skills in subdirectories under collapsed-by-default collapsible sections', () => {
+    const nestedSkill1: SkillInfo = {
+      id: 'nested-1',
+      name: 'Nested Skill 1',
+      description: 'Nested 1',
+      version: '1',
+      enabled: false,
+      group: 'dev-tools',
+      estimatedTokens: 120,
+      source: 'global-openfox',
+      path: '/tmp/skills/dev-tools/nested-1/SKILL.md',
+      legacy: false,
+      readOnly: false,
+      warnings: [],
+    }
+    const nestedSkill2: SkillInfo = {
+      id: 'nested-2',
+      name: 'Nested Skill 2',
+      description: 'Nested 2',
+      version: '1',
+      enabled: false,
+      group: 'dev-tools',
+      estimatedTokens: 80,
+      source: 'global-openfox',
+      path: '/tmp/skills/dev-tools/nested-2/SKILL.md',
+      legacy: false,
+      readOnly: false,
+      warnings: [],
+    }
+    useSkillsStore.setState({
+      defaults: [],
+      userItems: [{ ...skill, estimatedTokens: 50 }, nestedSkill1, nestedSkill2],
+      projectItems: [],
+      items: [{ ...skill, estimatedTokens: 50 }, nestedSkill1, nestedSkill2],
+    })
+
+    render(<SkillsContent isOpen={false} />)
+
+    // Regular skill is rendered directly with its tokens
+    expect(screen.getByText('My Skill')).toBeTruthy()
+    expect(screen.getByText(/~50\s+tokens/)).toBeTruthy()
+
+    // Subdirectory card header is rendered with name, skill count and total tokens
+    expect(screen.getByText('dev-tools')).toBeTruthy()
+    expect(screen.getByText('(2 skills)')).toBeTruthy()
+    expect(screen.getByText(/~200\s+tokens/)).toBeTruthy()
+
+    // Nested skills are collapsed by default
+    expect(screen.queryByText('Nested Skill 1')).toBeNull()
+
+    // Expanding the group shows nested skills with their individual tokens
+    fireEvent.click(screen.getByText('dev-tools'))
+    expect(screen.getByText('Nested Skill 1')).toBeTruthy()
+    expect(screen.getByText(/~120\s+tokens/)).toBeTruthy()
+    expect(screen.getByText('Nested Skill 2')).toBeTruthy()
+    expect(screen.getByText(/~80\s+tokens/)).toBeTruthy()
+  })
 })
