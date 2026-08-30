@@ -4,8 +4,9 @@ import { useSessionStats } from '../../hooks/useSessionStats'
 import { computeSessionStats } from '@shared/stats.js'
 import { useGitStatus } from '../../hooks/useGitStatus'
 import { useScopedContext, useScopedPaneState } from '../../stores/session/session-scope'
-import { useConfigStore } from '../../stores/config'
-import { useSettingsStore, SETTINGS_KEYS } from '../../stores/settings'
+import { useConfig } from '../../hooks/useConfig'
+import { SETTINGS_KEYS } from '../../lib/resources'
+import { useSetting } from '../../hooks/useSetting'
 import { useUpdateStore } from '../../stores/update'
 import { authFetch } from '../../lib/api'
 import { pathBasename } from '../../lib/path'
@@ -35,7 +36,7 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
 
   const aggregateStats = useSessionStats(messages)
   const { branch } = useGitStatus()
-  const version = useConfigStore((state) => state.version)
+  const version = useConfig().config?.version ?? null
   const { currentSession: session, sessionId } = useScopedContext()
   const liveTurnStats = useScopedPaneState(
     sessionId,
@@ -58,7 +59,7 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
 
   const workspaceName = pathBasename(session?.workspace ?? '') || null
 
-  const showEditorLink = useSettingsStore((s) => s.settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR]) === 'true'
+  const showEditorLink = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR).value === 'true'
 
   const updateStatus = useUpdateStore((state) => state.status)
   const checkForUpdate = useUpdateStore((state) => state.check)

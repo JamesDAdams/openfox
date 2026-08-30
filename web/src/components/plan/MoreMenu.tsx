@@ -1,11 +1,13 @@
 import { ScrollArea } from '../shared/ScrollArea'
 import { useEffect, useState, useRef } from 'react'
 import { MoreIcon, AttachIcon } from '../shared/icons'
-import { useCommandsStore } from '../../stores/commands'
-import { CommandsModal } from '../settings/CommandsModal'
 import { useSessionStore } from '../../stores/session'
-import { useWorkflowsStore, type WorkflowInfo, useAllWorkflows } from '../../stores/workflows'
+import { type WorkflowInfo } from '../../lib/workflows-actions'
+import { CommandsModal } from '../settings/CommandsModal'
 import { WorkflowsModal } from '../settings/WorkflowsModal'
+import { useResource } from '../../hooks/useResource'
+import { useWorkflows } from '../../hooks/useWorkflows'
+import { commandsResource, commandResource } from '../../lib/resources'
 import { dedupById } from '../../lib/modal-utils'
 import { SCOPE_LABELS } from '../../lib/workflow-scope'
 import { shouldAutofocus } from '../../lib/device'
@@ -59,25 +61,15 @@ export function MoreMenu({
   const searchRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const commandDefaults = useCommandsStore((state) => state.defaults)
-  const commandUserItems = useCommandsStore((state) => state.userItems)
-  const commandProjectItems = useCommandsStore((state) => state.projectItems)
-  const fetchCommands = useCommandsStore((state) => state.fetchCommands)
-
-  const fetchWorkflows = useWorkflowsStore((state) => state.fetchWorkflows)
   const currentWorkdir = useSessionStore((state) => state.currentSession?.workdir)
 
-  const commands = dedupById(dedupById(commandDefaults, commandUserItems), commandProjectItems)
+  const { data: commandData } = useResource(commandsResource, currentWorkdir)
+  const commands = commandData
+    ? dedupById(dedupById(commandData.defaults, commandData.userItems), commandData.projectItems)
+    : []
   // Workflows: keep every scope visible so same-id workflows in different scopes
   // are distinguishable instead of silently collapsed.
-  const workflows = useAllWorkflows()
-
-  useEffect(() => {
-    if (isOpen) {
-      if (tab === 'commands') fetchCommands(currentWorkdir)
-      else if (tab === 'workflows') fetchWorkflows(currentWorkdir)
-    }
-  }, [isOpen, tab, fetchCommands, fetchWorkflows, currentWorkdir])
+  const { workflows } = useWorkflows(currentWorkdir)
 
   useEffect(() => {
     if (isOpen) {
@@ -137,7 +129,7 @@ export function MoreMenu({
   const filteredWorkflows = workflows.filter((w) => !search || w.name.toLowerCase().includes(search.toLowerCase()))
 
   const handleSelectCommand = async (commandId: string) => {
-    const full = await useCommandsStore.getState().fetchCommand(commandId, currentWorkdir)
+    const full = await commandResource.refresh(commandId, currentWorkdir)
     if (full) {
       onSendCommand(full.prompt, full.metadata.agentMode, textareaContent, attachments)
     }

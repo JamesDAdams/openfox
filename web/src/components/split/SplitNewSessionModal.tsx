@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { useProjectStore } from '../../stores/project'
+import { useProjects } from '../../hooks/useProjects'
 import { useSessionStore } from '../../stores/session'
 import { Modal } from '../shared/Modal'
 import { Button } from '../shared/Button'
@@ -34,8 +34,7 @@ function filterProjects(projects: Project[], query: string): Project[] {
 
 /** Project picker for creating a session straight into the split view. */
 export function SplitNewSessionModal({ isOpen, onClose }: SplitNewSessionModalProps) {
-  const projects = useProjectStore((state) => state.projects)
-  const listProjects = useProjectStore((state) => state.listProjects)
+  const { projects } = useProjects()
   const createSession = useSessionStore((state) => state.createSession)
   const openPane = useSessionStore((state) => state.openPane)
   const resetPendingSessionCreate = useSessionStore((state) => state.resetPendingSessionCreate)
@@ -58,9 +57,8 @@ export function SplitNewSessionModal({ isOpen, onClose }: SplitNewSessionModalPr
       setQuery('')
       setActiveIndex(0)
       if (shouldAutofocus()) inputRef.current?.focus()
-      void listProjects()
     }
-  }, [isOpen, listProjects])
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen || activeIndex < 0) return

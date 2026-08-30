@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { authFetch } from '../../../lib/api'
+import { useResource } from '../../../hooks/useResource'
+import { providersResource } from '../../../lib/resources'
 import { PlusLgIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, GripVerticalIcon } from '../../shared/icons'
 import { ProviderModal, providerFormPayload, type ProviderFormData } from '../../shared/ProviderModal'
 import { getBackendDisplayName, type ProviderInfo } from '../types'
@@ -29,6 +31,7 @@ export const ConnectLLMStep = forwardRef<ConnectLLMStepHandle, ConnectLLMStepPro
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [reorderError, setReorderError] = useState(false)
   const orderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { data: providersData } = useResource(providersResource)
 
   useEffect(() => {
     return () => {
@@ -37,52 +40,22 @@ export const ConnectLLMStep = forwardRef<ConnectLLMStepHandle, ConnectLLMStepPro
   }, [])
 
   useEffect(() => {
-    fetchExistingProviders()
-  }, [])
-
-  async function fetchExistingProviders() {
-    try {
-      const response = await authFetch('/api/providers')
-      if (response.ok) {
-        const data = (await response.json()) as {
-          providers: Array<{
-            id: string
-            name: string
-            url: string
-            backend: string
-            apiKey?: string
-            isLocal?: boolean
-            thinkingField?: string
-            sendReasoningInMessages?: boolean
-            models?: Array<{
-              id: string
-              contextWindow: number
-              supportsVision?: boolean
-              thinkingEnabled?: boolean
-              thinkingLevel?: string
-              nonThinkingEnabled?: boolean
-            }>
-          }>
-        }
-        const mapped: ProviderInfo[] = data.providers.map((p) => ({
-          id: p.id,
-          name: p.name,
-          url: p.url,
-          backend: p.backend as ProviderInfo['backend'],
-          model: null,
-          apiKey: p.apiKey,
-          isLocal: p.isLocal,
-          thinkingField: p.thinkingField,
-          sendReasoningInMessages: p.sendReasoningInMessages,
-          models: p.models,
-        }))
-        setExistingProviders(mapped)
-        setProviders(mapped)
-      }
-    } catch {
-      /* empty */
-    }
-  }
+    if (!providersData) return
+    const mapped: ProviderInfo[] = providersData.providers.map((p) => ({
+      id: p.id,
+      name: p.name,
+      url: p.url,
+      backend: p.backend as ProviderInfo['backend'],
+      model: null,
+      apiKey: p.apiKey,
+      isLocal: p.isLocal,
+      thinkingField: p.thinkingField,
+      sendReasoningInMessages: p.sendReasoningInMessages,
+      models: p.models,
+    }))
+    setExistingProviders(mapped)
+    setProviders(mapped)
+  }, [providersData])
 
   async function handleSave(formData: ProviderFormData) {
     const isTemporary = formData.id.startsWith('temp-')
@@ -201,9 +174,8 @@ export const ConnectLLMStep = forwardRef<ConnectLLMStepHandle, ConnectLLMStepPro
 
   async function restoreProviderOrder() {
     try {
-      const response = await authFetch('/api/providers')
-      if (!response.ok) return
-      const data = (await response.json()) as { providers: Array<{ id: string }> }
+      const data = await providersResource.refresh()
+      if (!data) return
       const serverIds = data.providers.map((p) => p.id)
       setProviders((current) => {
         const serverIdSet = new Set(serverIds)

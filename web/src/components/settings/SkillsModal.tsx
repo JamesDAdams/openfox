@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../shared/Button'
-import { useSkillsStore, type SkillFull, type SkillInfo } from '../../stores/skills'
+import {
+  createSkill,
+  updateSkill,
+  deleteSkill,
+  toggleSkill,
+  selectDirectory,
+  removeDirectory,
+  installSkill,
+  type SkillFull,
+  type SkillInfo,
+} from '../../lib/skills-actions'
+import { useResource } from '../../hooks/useResource'
+import { skillsResource, skillResource, skillDefaultResource } from '../../lib/resources'
 import { useSessionStore } from '../../stores/session/store'
 import { useConfirmDialog, FormField, ErrorBanner, DestinationSelector } from './CRUDModal'
 import { ItemsHeader } from '../shared/ItemsHeader'
@@ -11,6 +23,8 @@ import { useCRUDForm } from './useCRUDForm'
 import { SkillLibraryPanel } from './SkillLibraryPanel'
 import { SkillListItem } from './SkillListItem'
 import { SkillDeleteModal } from './SkillDeleteModal'
+import { Toggle } from '../shared/Toggle'
+import { formatTokens } from '../../lib/mcp-utils'
 type SkillFormData = {
   name: string
   id: string
@@ -23,25 +37,15 @@ type SkillFormData = {
 }
 
 export function SkillsContent({ isOpen }: { isOpen: boolean }) {
-  const defaults = useSkillsStore((state) => state.defaults)
-  const userItems = useSkillsStore((state) => state.userItems)
-  const projectItems = useSkillsStore((state) => state.projectItems)
-  const items = useSkillsStore((state) => state.items)
-  const selectedDirectory = useSkillsStore((state) => state.selectedDirectory)
-  const diagnostics = useSkillsStore((state) => state.diagnostics)
-  const loading = useSkillsStore((state) => state.loading)
-  const fetchSkills = useSkillsStore((state) => state.fetchSkills)
-  const setWorkdir = useSkillsStore((state) => state.setWorkdir)
-  const fetchSkill = useSkillsStore((state) => state.fetchSkill)
-  const fetchDefaultContent = useSkillsStore((state) => state.fetchDefaultContent)
-  const createSkill = useSkillsStore((state) => state.createSkill)
-  const updateSkill = useSkillsStore((state) => state.updateSkill)
-  const deleteSkillAction = useSkillsStore((state) => state.deleteSkill)
-  const selectDirectory = useSkillsStore((state) => state.selectDirectory)
-  const removeDirectory = useSkillsStore((state) => state.removeDirectory)
-  const installSkill = useSkillsStore((state) => state.installSkill)
-  const toggleSkill = useSkillsStore((state) => state.toggleSkill)
   const currentSession = useSessionStore((state) => state.currentSession)
+  const workdir = currentSession?.workdir
+  const { data, refresh, loading } = useResource(skillsResource, workdir)
+  const defaults = data?.defaults ?? []
+  const userItems = data?.userItems ?? []
+  const projectItems = data?.projectItems ?? []
+  const items = data?.items ?? []
+  const selectedDirectory = data?.selectedDirectory ?? null
+  const diagnostics = data?.diagnostics ?? []
   const [pendingDelete, setPendingDelete] = useState<SkillInfo | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -53,14 +57,11 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
 
   useEffect(() => {
     if (isOpen) {
-      const sessionWorkdir = currentSession?.workdir ?? null
-      setWorkdir(sessionWorkdir)
-      fetchSkills(sessionWorkdir)
       setView('list')
       setEditingId(null)
       clearConfirm()
     }
-  }, [isOpen, fetchSkills, setWorkdir, clearConfirm, currentSession?.workdir])
+  }, [isOpen, clearConfirm])
 
   const setSkillFormData = (skill: SkillFull, readOnly: boolean, newId?: string, newName?: string) => {
     setFormData({
@@ -77,14 +78,14 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
   const handleView = async (skillId: string) => {
     const isDefault = defaults.some((d) => d.id === skillId)
     if (isDefault) {
-      const content = await fetchDefaultContent(skillId)
+      const content = await skillDefaultResource.refresh(skillId)
       if (!content) return
       setSkillFormData(content, true)
       setEditingId(skillId)
       setFormError('')
       setView('edit')
     } else {
-      const skill = await fetchSkill(skillId)
+      const skill = await skillResource.refresh(skillId, workdir)
       if (!skill) return
       setSkillFormData(skill, true)
       setEditingId(skillId)
@@ -95,7 +96,9 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
 
   const handleDuplicate = async (skillId: string) => {
     const isDefault = defaults.some((d) => d.id === skillId)
-    const content = isDefault ? await fetchDefaultContent(skillId) : await fetchSkill(skillId)
+    const content = isDefault
+      ? await skillDefaultResource.refresh(skillId)
+      : await skillResource.refresh(skillId, workdir)
     if (!content) return
     const newId = `${skillId}-copy-${Date.now()}`
     setSkillFormData(content, false, newId, `${content.metadata.name} (copy)`)
@@ -118,7 +121,7 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
   }
 
   const handleEdit = async (skillId: string) => {
-    const skill = await fetchSkill(skillId)
+    const skill = await skillResource.refresh(skillId, workdir)
     if (!skill) return
     setSkillFormData(skill, false)
     setEditingId(skillId)
@@ -130,13 +133,13 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
     if (!pendingDelete) return
     setDeleting(true)
     setDeleteError('')
-    const result = await deleteSkillAction(pendingDelete.id)
+    const result = await deleteSkill(pendingDelete.id, workdir)
     setDeleting(false)
     if (!result.success) {
       setDeleteError(result.error ?? 'Failed to delete skill.')
       return
     }
-    await fetchSkills()
+    await refresh()
     setPendingDelete(null)
     clearConfirm()
   }
@@ -162,8 +165,8 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
     }
 
     const result = editingId
-      ? await updateSkill(editingId, skill)
-      : await createSkill(skill, formData.destination as 'project' | 'user')
+      ? await updateSkill(editingId, skill, workdir)
+      : await createSkill(skill, formData.destination as 'project' | 'user', workdir)
 
     setSaving(false)
 
@@ -286,24 +289,99 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
     )
   }
 
-  function EditableSkillItems({ items }: { items: SkillInfo[] }) {
-    return items.map((skill) => (
+  function GroupedSkillItems({ items, isBuiltIn }: { items: SkillInfo[]; isBuiltIn?: boolean }) {
+    const ungrouped = items.filter((s) => !s.group)
+    const grouped = items.filter((s) => Boolean(s.group))
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+    const toggleGroup = (group: string) => {
+      setExpandedGroups((prev) => {
+        const next = new Set(prev)
+        if (next.has(group)) next.delete(group)
+        else next.add(group)
+        return next
+      })
+    }
+
+    const groups = grouped.reduce<Record<string, SkillInfo[]>>((acc, skill) => {
+      const g = skill.group!
+      if (!acc[g]) acc[g] = []
+      acc[g]!.push(skill)
+      return acc
+    }, {})
+
+    const renderItem = (skill: SkillInfo) => (
       <SkillListItem
         key={skill.id}
         skill={skill}
-        isBuiltIn={false}
+        isBuiltIn={isBuiltIn ?? false}
         isConfirmingDelete={false}
         onView={() => handleView(skill.id)}
-        onEdit={() => handleEdit(skill.id)}
+        onEdit={!isBuiltIn ? () => handleEdit(skill.id) : undefined}
         onDuplicate={() => handleDuplicate(skill.id)}
-        onDelete={() => {
-          setDeleteError('')
-          setPendingDelete(skill)
-        }}
-        onToggle={() => toggleSkill(skill.id)}
+        onDelete={
+          !isBuiltIn
+            ? () => {
+                setDeleteError('')
+                setPendingDelete(skill)
+              }
+            : undefined
+        }
+        onToggle={() => toggleSkill(skill.id, workdir)}
         readOnly={skill.readOnly}
       />
-    ))
+    )
+
+    const groupNames = Object.keys(groups).sort()
+
+    return (
+      <div className="space-y-2">
+        {ungrouped.map(renderItem)}
+        {groupNames.map((g) => {
+          const groupSkills = groups[g]!
+          const isExpanded = expandedGroups.has(g)
+          const totalGroupTokens = groupSkills.reduce((sum, s) => sum + (s.estimatedTokens ?? 0), 0)
+          const allEnabled = groupSkills.length > 0 && groupSkills.every((s) => s.enabled)
+
+          const handleToggleFolder = () => {
+            const targetState = !allEnabled
+            for (const s of groupSkills) {
+              if (s.enabled !== targetState) {
+                void toggleSkill(s.id, workdir)
+              }
+            }
+          }
+
+          return (
+            <div key={g} className="rounded border border-border bg-bg-tertiary overflow-hidden">
+              <div
+                className="flex items-center justify-between p-3 hover:bg-bg-primary/50 transition-colors cursor-pointer"
+                onClick={() => toggleGroup(g)}
+              >
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className="text-sm font-medium text-text-primary">{g}</span>
+                  <span className="text-xs text-text-muted">({groupSkills.length} skills)</span>
+                  {totalGroupTokens > 0 && (
+                    <span className="text-xs text-text-muted">{formatTokens(totalGroupTokens)} tokens</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Toggle enabled={allEnabled} onClick={handleToggleFolder} label={`Toggle all skills in ${g}`} />
+                  <span className="text-xs text-text-muted cursor-pointer" onClick={() => toggleGroup(g)}>
+                    {isExpanded ? '▲' : '▼'}
+                  </span>
+                </div>
+              </div>
+              {isExpanded && (
+                <div className="border-t border-border p-2 space-y-2 bg-bg-secondary/30">
+                  {groupSkills.map(renderItem)}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   return (
@@ -319,10 +397,10 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
       />
       <SkillLibraryPanel
         selectedDirectory={selectedDirectory}
-        onSelect={selectDirectory}
-        onRemove={removeDirectory}
-        onRefresh={fetchSkills}
-        onInstall={installSkill}
+        onSelect={(path) => selectDirectory(path, workdir)}
+        onRemove={() => removeDirectory(workdir)}
+        onRefresh={() => void refresh()}
+        onInstall={(skillPackage) => installSkill(skillPackage, workdir)}
       />
       {diagnostics.length > 0 && (
         <div className="mb-3 rounded border border-accent-warning/40 bg-accent-warning/10 p-2 text-xs text-text-secondary">
@@ -345,45 +423,29 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
         {defaults.length > 0 && (
           <div>
             <h3 className="text-xs font-medium text-text-secondary mb-2 uppercase tracking-wide">Built-in</h3>
-            <div className="space-y-2">
-              {defaults.map((skill) => (
-                <SkillListItem
-                  key={skill.id}
-                  skill={skill}
-                  isBuiltIn={true}
-                  isConfirmingDelete={false}
-                  onView={() => handleView(skill.id)}
-                  onDuplicate={() => handleDuplicate(skill.id)}
-                  onToggle={() => toggleSkill(skill.id)}
-                />
-              ))}
-            </div>
+            <GroupedSkillItems items={defaults} isBuiltIn={true} />
           </div>
         )}
 
         {userItems.length > 0 && (
           <ItemsHeader>
-            <EditableSkillItems items={userItems} />
+            <GroupedSkillItems items={userItems} />
           </ItemsHeader>
         )}
 
         {items.some((skill) => ['global-shared', 'selected', 'project-shared'].includes(skill.source)) && (
           <div className="mt-4">
             <h3 className="text-xs font-medium text-text-secondary mb-2 uppercase tracking-wide">Shared</h3>
-            <div className="space-y-2">
-              <EditableSkillItems
-                items={items.filter((skill) => ['global-shared', 'selected', 'project-shared'].includes(skill.source))}
-              />
-            </div>
+            <GroupedSkillItems
+              items={items.filter((skill) => ['global-shared', 'selected', 'project-shared'].includes(skill.source))}
+            />
           </div>
         )}
 
         {projectItems.length > 0 && (
           <div className="mt-4">
             <h3 className="text-xs font-medium text-text-secondary mb-2 uppercase tracking-wide">Project</h3>
-            <div className="space-y-2">
-              <EditableSkillItems items={projectItems} />
-            </div>
+            <GroupedSkillItems items={projectItems} />
           </div>
         )}
       </CRUDListView>

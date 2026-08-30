@@ -5,7 +5,8 @@ import { flushSync } from 'react-dom'
 import { act } from 'react'
 import { ChatFeedItems } from './ChatFeedItems'
 import { FEED_REVEAL_EVENT } from './feed-window'
-import { SETTINGS_KEYS, useSettingsStore } from '../../stores/settings'
+import { SETTINGS_KEYS, settingResource } from '../../lib/resources'
+import { clearCache } from '../../lib/resourceCache'
 import type { DisplayItem } from './groupMessages'
 
 class MockIntersectionObserver {
@@ -98,9 +99,11 @@ describe('ChatFeedItems stable keys', () => {
   })
 })
 
+vi.mock('../../lib/api', () => ({ authFetch: vi.fn() }))
+
 describe('ChatFeedItems default (virtualization off)', () => {
   beforeEach(() => {
-    useSettingsStore.setState({ settings: {} })
+    clearCache()
   })
 
   it('mounts every item with no placeholders or sentinel by default', () => {
@@ -123,7 +126,7 @@ describe('ChatFeedItems default (virtualization off)', () => {
 
 describe('ChatFeedItems containment styling', () => {
   it('applies no content-visibility containment to mounted items when virtualization is off', () => {
-    useSettingsStore.setState({ settings: {} })
+    clearCache()
     const items = [msg('a', 'user', 'Alpha'), msg('b', 'assistant', 'Beta')]
 
     const container = document.createElement('div')
@@ -141,7 +144,8 @@ describe('ChatFeedItems containment styling', () => {
   })
 
   it('applies content-visibility containment to mounted items when virtualization is on', () => {
-    useSettingsStore.setState({ settings: { [SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION]: 'true' } })
+    clearCache()
+    settingResource.write('true', SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION)
     const items = Array.from({ length: 34 }, (_, i) => msg(`m${i}`, 'user', `Content ${i}`))
 
     const container = document.createElement('div')
@@ -161,7 +165,8 @@ describe('ChatFeedItems containment styling', () => {
 
 describe('ChatFeedItems progressive rendering', () => {
   beforeEach(() => {
-    useSettingsStore.setState({ settings: { [SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION]: 'true' } })
+    clearCache()
+    settingResource.write('true', SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION)
     MockIntersectionObserver.instances = []
     vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
   })

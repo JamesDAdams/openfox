@@ -1,7 +1,8 @@
 import { ScrollArea } from '../shared/ScrollArea'
 import { useGitStatus } from '../../hooks/useGitStatus'
 import { useScopedContext } from '../../stores/session/session-scope'
-import { useSettingsStore, SETTINGS_KEYS } from '../../stores/settings'
+import { SETTINGS_KEYS } from '../../lib/resources'
+import { useSetting } from '../../hooks/useSetting'
 import { buildEditorUrl } from '../../lib/editor-link'
 import { truncateMiddle } from '../../lib/path'
 
@@ -71,7 +72,7 @@ function DiffRow({ file, showEditorLink, workdir }: DiffRowProps) {
 
 export function DiffViewer() {
   const { diff } = useGitStatus()
-  const showEditorLink = useSettingsStore((s) => s.settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR]) === 'true'
+  const showEditorLink = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR).value === 'true'
   const { currentSession: session } = useScopedContext()
   const workdir = session?.workspace ?? session?.workdir
 

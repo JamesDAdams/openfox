@@ -23,8 +23,9 @@ vi.mock('../lib/api', () => ({
   authFetch: vi.fn(),
 }))
 
-import { useTasksStore } from '../stores/tasks'
 import { authFetch } from '../lib/api'
+import { summariesResource } from '../lib/resources'
+import { clearCache } from '../lib/resourceCache'
 
 const { listHomeSessionsMock, listSessionsMock, ensureFullSessionListMock } = vi.hoisted(() => ({
   listHomeSessionsMock: vi.fn(),
@@ -48,32 +49,34 @@ vi.mock('../stores/session', () => ({
   },
 }))
 
-const { listProjectsMock, deleteProjectMock } = vi.hoisted(() => ({
-  listProjectsMock: vi.fn(),
+const { deleteProjectMock } = vi.hoisted(() => ({
   deleteProjectMock: vi.fn(),
+}))
+
+const projectFixtures = [
+  {
+    id: 'p1',
+    name: 'Project Alpha',
+    workdir: '/tmp/alpha',
+    createdAt: '2024-01-01',
+    updatedAt: '2024-01-01',
+  },
+  {
+    id: 'p2',
+    name: 'Project Beta',
+    workdir: '/tmp/beta',
+    createdAt: '2024-01-02',
+    updatedAt: '2024-01-02',
+  },
+]
+
+vi.mock('../hooks/useProjects', () => ({
+  useProjects: () => ({ projects: projectFixtures, refresh: vi.fn(), loading: false }),
 }))
 
 vi.mock('../stores/project', () => ({
   useProjectStore: (selector?: any) => {
     const state = {
-      projects: [
-        {
-          id: 'p1',
-          name: 'Project Alpha',
-          workdir: '/tmp/alpha',
-          createdAt: '2024-01-01',
-          updatedAt: '2024-01-01',
-        },
-        {
-          id: 'p2',
-          name: 'Project Beta',
-          workdir: '/tmp/beta',
-          createdAt: '2024-01-02',
-          updatedAt: '2024-01-02',
-        },
-      ],
-      loading: false,
-      listProjects: listProjectsMock,
       deleteProject: deleteProjectMock,
     }
     return selector ? selector(state) : state
@@ -110,16 +113,11 @@ beforeEach(() => {
   listHomeSessionsMock.mockClear()
   listSessionsMock.mockClear()
   ensureFullSessionListMock.mockClear()
-  useTasksStore.setState({
-    tasks: [],
-    gates: [],
-    settings: { slotLimit: 1, queuePaused: false },
-    counts: { open: 0, todo: 0, inProgress: 0, running: 0, queued: 0, done: 0 },
-    summaries: {},
-    activeProjectId: null,
-    lastError: null,
-    lastAutoLaunch: null,
-  })
+  // Seed the per-project counts so useResource serves from cache and no
+  // out-of-act fetch fires on mount.
+  clearCache()
+  summariesResource.write({ counts: { open: 4, todo: 1, inProgress: 2, running: 1, queued: 1, done: 3 } }, 'p1')
+  summariesResource.write({ counts: { open: 0, todo: 0, inProgress: 0, running: 0, queued: 0, done: 0 } }, 'p2')
   const authFetchMock = vi.mocked(authFetch)
   authFetchMock.mockReset()
   authFetchMock.mockImplementation(async (url: string) => {

@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { ChevronDownIcon, SearchIcon, EditSmallIcon } from './icons'
 import { ProviderModal, providerFormPayload, type ProviderFormData } from './ProviderModal'
 import { authFetch } from '../../lib/api'
-import { useConfigStore } from '../../stores/config'
+import { providersResource } from '../../lib/resources'
 import { useModelSearch, ModelEntryRow } from '../settings/model-list'
 import type { Provider } from '../../stores/config'
 import { shouldAutofocus } from '../../lib/device'
@@ -33,13 +33,14 @@ export function ModelPicker({ providers, value, onChange, defaultLabel = 'Defaul
   }
 
   async function handleSaveProvider(formData: ProviderFormData) {
+    // Authorized transient read: provider detail for the model picker form.
     const response = await authFetch(`/api/providers/${formData.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(providerFormPayload(formData)),
     })
     if (response.ok) {
-      await useConfigStore.getState().fetchConfig()
+      await providersResource.refresh()
     }
     setEditingProvider(null)
     setShowProviderModal(false)

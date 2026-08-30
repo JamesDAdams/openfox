@@ -17,14 +17,15 @@ vi.mock('../../stores/session', () => ({
   }),
 }))
 
-vi.mock('../../stores/project', () => ({
-  useProjectStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      projects: [
-        { id: 'p1', name: 'acme-app' },
-        { id: 'p2', name: 'blog' },
-      ],
-    }),
+vi.mock('../../hooks/useProjects', () => ({
+  useProjects: () => ({
+    projects: [
+      { id: 'p1', name: 'acme-app' },
+      { id: 'p2', name: 'blog' },
+    ],
+    refresh: vi.fn(),
+    loading: false,
+  }),
 }))
 
 vi.mock('wouter', () => ({

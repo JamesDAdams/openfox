@@ -1,8 +1,8 @@
 import { ScrollArea } from '../shared/ScrollArea'
 import { useState, useEffect, useMemo } from 'react'
 import { useRoute } from 'wouter'
-import { authFetch } from '../../lib/api'
-import { useDisplaySettings, useSettingsStore, DISPLAY_SETTINGS_KEYS } from '../../stores/settings'
+import { readonlySessionResource } from '../../lib/resources'
+import { useDisplaySettings } from '../../hooks/useDisplaySettings'
 import { groupMessages, type DisplayItem } from './groupMessages.js'
 import { ChatFeedItems } from './ChatFeedItems'
 import { Spinner } from '../shared/Spinner'
@@ -23,26 +23,16 @@ export function ReadonlySessionView() {
     setLoading(true)
     setError(null)
     try {
-      const res = await authFetch(`/api/sessions/${sessionId}?full=true`)
-      if (!res.ok) {
-        setError(`Failed to load session (${res.status})`)
-        setLoading(false)
-        return
-      }
-      const data = await res.json()
-      setSession(data.session ?? null)
-      setMessages((data.messages as Message[]) ?? [])
-      setHiddenCount((data.hiddenCount as number) ?? 0)
+      const data = await readonlySessionResource.refresh(sessionId)
+      setSession(data?.session ?? null)
+      setMessages(data?.messages ?? [])
+      setHiddenCount(data?.hiddenCount ?? 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    useSettingsStore.getState().getSettings([...DISPLAY_SETTINGS_KEYS])
-  }, [])
 
   useEffect(() => {
     loadSession()

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'wouter'
 import type { ProjectTask, TaskStatus } from '@shared/types.js'
-import type { AgentInfo } from '../../stores/agents'
-import { getAgentColor } from '../../stores/agents'
+import type { AgentInfo } from '../../lib/agents-actions'
+import { getAgentColor } from '../../lib/agents-actions'
 import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
 import {
   EllipsisIcon,

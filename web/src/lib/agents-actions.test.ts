@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { authFetch } from '../lib/api'
-import { clearCache } from '../lib/resourceCache'
-import { useAgentsStore, type AgentFull } from './agents'
+import { authFetch } from './api'
+import { clearCache } from './resourceCache'
+import { createAgent, updateAgent, deleteAgent, duplicateAgent, type AgentFull } from './agents-actions'
 
-vi.mock('../lib/api', () => ({
+vi.mock('./api', () => ({
   authFetch: vi.fn(),
 }))
 
@@ -26,7 +26,7 @@ function jsonResponse(data: unknown = {}): Response {
   } as Response
 }
 
-describe('AgentsStore project scoping', () => {
+describe('Agents mutations project scoping', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearCache()
@@ -34,7 +34,7 @@ describe('AgentsStore project scoping', () => {
   })
 
   it('sends the project workdir when creating an agent and refreshing the list', async () => {
-    await useAgentsStore.getState().createAgent(agent, 'project', '/projects/client app')
+    await createAgent(agent, 'project', '/projects/client app')
 
     expect(authFetch).toHaveBeenNthCalledWith(
       1,
@@ -45,7 +45,7 @@ describe('AgentsStore project scoping', () => {
   })
 
   it('sends the project workdir when updating an agent and refreshing the list', async () => {
-    await useAgentsStore.getState().updateAgent(agent.metadata.id, agent, 'C:\\projects\\client')
+    await updateAgent(agent.metadata.id, agent, 'C:\\projects\\client')
 
     expect(authFetch).toHaveBeenNthCalledWith(
       1,
@@ -56,14 +56,14 @@ describe('AgentsStore project scoping', () => {
   })
 
   it('keeps global requests unchanged when no project workdir is available', async () => {
-    await useAgentsStore.getState().createAgent(agent, 'user')
+    await createAgent(agent, 'user')
 
     expect(authFetch).toHaveBeenNthCalledWith(1, '/api/agents', expect.objectContaining({ method: 'POST' }))
     expect(authFetch).toHaveBeenNthCalledWith(2, '/api/agents')
   })
 
   it('deletes an agent then refreshes the scoped list', async () => {
-    await useAgentsStore.getState().deleteAgent(agent.metadata.id, '/repo/a')
+    await deleteAgent(agent.metadata.id, '/repo/a')
 
     expect(authFetch).toHaveBeenNthCalledWith(
       1,
@@ -74,7 +74,7 @@ describe('AgentsStore project scoping', () => {
   })
 
   it('duplicates an agent then refreshes the scoped list', async () => {
-    await useAgentsStore.getState().duplicateAgent(agent.metadata.id, 'project', '/repo/a')
+    await duplicateAgent(agent.metadata.id, 'project', '/repo/a')
 
     expect(authFetch).toHaveBeenNthCalledWith(
       1,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { XCloseSmallIcon, ReloadIcon } from '../../shared/icons'
-import { SETTINGS_KEYS } from '../../../stores/settings'
-import { useSettingsStoreState } from '../useSettingsStore'
+import { SETTINGS_KEYS, setSetting } from '../../../lib/resources'
+import { useSetting } from '../../../hooks/useSetting'
 import {
   parseKeybindings,
   formatKeybinding,
@@ -159,9 +159,8 @@ function KeybindingRow({
 }
 
 export function KeybindingsTab() {
-  const { settings, loading, setSetting } = useSettingsStoreState()
-  const raw = settings[SETTINGS_KEYS.KEYBINDINGS]
-  const isLoading = loading[SETTINGS_KEYS.KEYBINDINGS] ?? false
+  const { value: raw, loading } = useSetting(SETTINGS_KEYS.KEYBINDINGS)
+  const isLoading = loading
   const config = parseKeybindings(raw)
   const [recording, setRecording] = useState<string | null>(null)
 
@@ -227,9 +226,9 @@ export function KeybindingsTab() {
         updated.criteriaSidebar = value
       }
 
-      setSetting(SETTINGS_KEYS.KEYBINDINGS, JSON.stringify(updated))
+      void setSetting(SETTINGS_KEYS.KEYBINDINGS, JSON.stringify(updated))
     },
-    [raw, setSetting],
+    [raw],
   )
 
   const handleBindingRecorded = useCallback(
@@ -242,7 +241,7 @@ export function KeybindingsTab() {
   )
 
   const handleReset = () => {
-    setSetting(SETTINGS_KEYS.KEYBINDINGS, JSON.stringify(DEFAULT_KEYBINDINGS))
+    void setSetting(SETTINGS_KEYS.KEYBINDINGS, JSON.stringify(DEFAULT_KEYBINDINGS))
   }
 
   return (

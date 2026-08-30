@@ -6,32 +6,18 @@ import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ToolsTab } from './ToolsTab'
 
-const mockSettings: Record<string, string> = {}
-const mockGetSetting = vi.fn()
-const mockSetSetting = vi.fn()
-
-vi.mock('../../../stores/settings', () => ({
-  SETTINGS_KEYS: {
-    SEARCH_ENGINE: 'search.engine',
-    SEARCH_TAVILY_API_KEY: 'search.tavilyApiKey',
-    SEARCH_SEARXNG_URL: 'search.searxngUrl',
-    SEARCH_SEARXNG_API_KEY: 'search.searxngApiKey',
-    TOOLS_USE_RTK: 'tools.useRtk',
-    CONFIRM_ON_WORKSPACE_ACTIONS: 'confirm.onWorkspaceActions',
-    TOOLS_SHELL: 'tools.shell',
-  },
-  useSettingsStore: vi.fn((selector) => {
-    const state = { settings: mockSettings, getSetting: mockGetSetting, setSetting: mockSetSetting }
-    return selector(state)
-  }),
+const { mockSettings, mockSetSetting } = vi.hoisted(() => ({
+  mockSettings: {} as Record<string, string>,
+  mockSetSetting: vi.fn(),
 }))
 
-vi.mock('../useSettingsStore', () => ({
-  useSettingsStoreState: () => ({
-    settings: mockSettings,
-    getSetting: mockGetSetting,
-    setSetting: mockSetSetting,
-  }),
+vi.mock('../../../hooks/useSetting', () => ({
+  useSetting: (key: string, fallback = '') => ({ value: mockSettings[key] ?? fallback, loading: false }),
+}))
+
+vi.mock('../../../lib/resources', async (importOriginal) => ({
+  ...(await importOriginal()),
+  setSetting: mockSetSetting,
 }))
 
 vi.mock('wouter', () => ({ useLocation: () => ['/', vi.fn()] }))

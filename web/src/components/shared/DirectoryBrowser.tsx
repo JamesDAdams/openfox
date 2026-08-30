@@ -40,6 +40,7 @@ export function DirectoryBrowser({ onSelect, onClose, initialPath }: DirectoryBr
     setFocusedIndex(-1)
     try {
       const url = path ? `/api/directories?path=${encodeURIComponent(path)}` : '/api/directories'
+      // Authorized transient read: directory listings are interactive browser queries, not shared state.
       const response = await authFetch(url)
       const data = await response.json()
       setListing(data)

@@ -2,6 +2,7 @@ import { ScrollArea } from '../shared/ScrollArea'
 import { useCallback, useEffect, useState } from 'react'
 import { useSessionStore } from '../../stores/session'
 import { authFetch } from '../../lib/api'
+import { sessionBranchesResource } from '../../lib/resources'
 import { useModalState } from '../../hooks/useModalState'
 import { ModalShell } from '../shared/ModalShell'
 import { BranchIcon } from '../shared/icons'
@@ -43,11 +44,11 @@ export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
     setSourceBranch('')
     setBranches([])
     setDefaultBranch('')
-    authFetch(`/api/sessions/${sessionId}/branches`)
-      .then((r) => r.json())
-      .then((data: { branches: BranchInfo[]; defaultBranch?: string }) => {
-        setBranches(data.branches)
-        setDefaultBranch(data.defaultBranch ?? '')
+    sessionBranchesResource
+      .refresh(sessionId)
+      .then((data) => {
+        setBranches(data?.branches ?? [])
+        setDefaultBranch(data?.defaultBranch ?? '')
         setLoading(false)
       })
       .catch(() => {

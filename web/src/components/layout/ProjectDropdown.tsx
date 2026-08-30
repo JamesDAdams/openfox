@@ -15,10 +15,9 @@ interface ProjectDropdownProps {
 
 export function ProjectDropdown({ projects, currentProject }: ProjectDropdownProps) {
   const [, navigate] = useLocation()
-  const loadProject = useProjectStore((state) => state.loadProject)
+  const setCurrentProjectId = useProjectStore((state) => state.setCurrentProjectId)
   const toggleStar = useProjectStore((state) => state.toggleStar)
   const createProject = useProjectStore((state) => state.createProject)
-  const listProjects = useProjectStore((state) => state.listProjects)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showBrowser, setShowBrowser] = useState(false)
   const baseWorkdir = useWorkdir()
@@ -28,14 +27,13 @@ export function ProjectDropdown({ projects, currentProject }: ProjectDropdownPro
       const basename = pathBasename(path)
       const project = await createProject(basename, path)
       if (project && 'id' in project) {
-        await listProjects()
         setShowBrowser(false)
         navigate(`/p/${project.id}`)
         return true
       }
       return false
     },
-    [createProject, listProjects, navigate],
+    [createProject, navigate],
   )
 
   const sortedProjects = useMemo(() => {
@@ -70,7 +68,7 @@ export function ProjectDropdown({ projects, currentProject }: ProjectDropdownPro
     href: `/p/${proj.id}`,
     closeOnClick: true,
     onClick: () => {
-      loadProject(proj.id)
+      setCurrentProjectId(proj.id)
     },
   }))
 

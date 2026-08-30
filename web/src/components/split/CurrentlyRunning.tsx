@@ -3,7 +3,7 @@ import { useLocation } from 'wouter'
 import { Button } from '../shared/Button'
 import { ColumnsIcon } from '../shared/icons'
 import { useSessionStore } from '../../stores/session'
-import { useProjectStore } from '../../stores/project'
+import { useProjects } from '../../hooks/useProjects'
 import { formatRelativeDate } from '../../lib/format-date'
 
 const PHASE_LABELS: Record<string, string> = {
@@ -25,7 +25,7 @@ export function CurrentlyRunning() {
   const [, navigate] = useLocation()
   const sessions = useSessionStore((state) => state.sessions)
   const sessionsWithPendingConfirmations = useSessionStore((state) => state.sessionsWithPendingConfirmations)
-  const projects = useProjectStore((state) => state.projects)
+  const { projects } = useProjects()
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects])
 
   const eligible = useMemo(

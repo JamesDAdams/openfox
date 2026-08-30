@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { useTerminalStore } from '../../stores/terminal'
-import { useSettingsStore, SETTINGS_KEYS } from '../../stores/settings'
+import { SETTINGS_KEYS } from '../../lib/resources'
+import { useSetting } from '../../hooks/useSetting'
 import { DEFAULT_TERMINAL_FONT } from '../../lib/fonts'
 import { wsClient } from '../../lib/ws'
 import type { ServerMessage } from '@shared/protocol.js'
@@ -23,15 +24,11 @@ export function TerminalPane({ sessionId, onClose, onEscape, autoFocus }: Termin
 
   const writeSession = useTerminalStore((state) => state.writeSession)
   const resizeSession = useTerminalStore((state) => state.resizeSession)
-  const terminalFont = useSettingsStore((s) => s.settings[SETTINGS_KEYS.DISPLAY_TERMINAL_FONT] ?? DEFAULT_TERMINAL_FONT)
+  const terminalFont = useSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT, DEFAULT_TERMINAL_FONT).value
 
   useEffect(() => {
     sessionIdRef.current = sessionId
   }, [sessionId])
-
-  useEffect(() => {
-    useSettingsStore.getState().getSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT)
-  }, [])
 
   useEffect(() => {
     if (!onEscape) return

@@ -4,19 +4,29 @@ import { createPortal } from 'react-dom'
 import { useFloatingPanel } from '../../hooks/useFloatingPanel'
 import { getSlashAtCursor } from '../../lib/getSlashAtCursor'
 import { SCOPE_LABELS } from '../../lib/workflow-scope'
+import { SETTINGS_KEYS } from '../../lib/resources'
+import { useSetting } from '../../hooks/useSetting'
 import type { WorkflowInfo } from '../../lib/parse-slash-command'
 import type { CommandInfo } from '../../lib/parse-slash-command'
 import type { WorkflowScope } from '@shared/types.js'
 
+export interface SkillSlashInfo {
+  id: string
+  name: string
+  description?: string
+}
+
 export type SlashSuggestion =
   | { type: 'workflow'; id: string; name: string; scope: WorkflowScope; paramCount: number }
   | { type: 'command'; id: string; name: string; paramCount: number }
+  | { type: 'skill'; id: string; name: string; description?: string }
 
 interface SlashAutocompleteProps {
   text: string
   cursorPos: number
   workflows: WorkflowInfo[]
   commands: CommandInfo[]
+  skills?: SkillSlashInfo[]
   onSelect: (suggestion: SlashSuggestion, startIndex: number) => void
   /**
    * When provided, the dropdown renders into a portal fixed to this anchor
@@ -31,7 +41,7 @@ export interface SlashAutocompleteHandle {
 }
 
 const SlashAutocomplete = forwardRef<SlashAutocompleteHandle, SlashAutocompleteProps>(function SlashAutocomplete(
-  { text, cursorPos, workflows, commands, onSelect, anchorRef },
+  { text, cursorPos, workflows, commands, skills = [], onSelect, anchorRef },
   ref,
 ) {
   const slash = getSlashAtCursor(text, cursorPos)
@@ -70,7 +80,20 @@ const SlashAutocomplete = forwardRef<SlashAutocompleteHandle, SlashAutocompleteP
         name: c.name,
         paramCount: 0,
       }))
-    return [...wf, ...cmd]
+    const skl: SlashSuggestion[] = skills
+      .filter(
+        (s) =>
+          s.id.toLowerCase().includes(q) ||
+          s.name.toLowerCase().includes(q) ||
+          (s.description && s.description.toLowerCase().includes(q)),
+      )
+      .map((s) => ({
+        type: 'skill' as const,
+        id: s.id,
+        name: s.name,
+        description: s.description,
+      }))
+    return [...wf, ...cmd, ...skl]
   })()
 
   // Reset selection when suggestions change
@@ -123,6 +146,7 @@ const SlashAutocomplete = forwardRef<SlashAutocompleteHandle, SlashAutocompleteP
   useImperativeHandle(ref, () => ({ handleKeyDown }), [handleKeyDown])
 
   const { panelRef, layout } = useFloatingPanel(anchorRef, !!slash && suggestions.length > 0)
+  const isFullscreen = useSetting(SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND, 'false').value === 'true'
 
   if (!slash || suggestions.length === 0) return null
 
@@ -143,7 +167,15 @@ const SlashAutocomplete = forwardRef<SlashAutocompleteHandle, SlashAutocompleteP
             if (slash) onSelect(item, slash.startIndex)
           }}
         >
-          <span className={`font-medium ${item.type === 'workflow' ? 'text-accent-primary' : 'text-accent-warning'}`}>
+          <span
+            className={`font-medium ${
+              item.type === 'workflow'
+                ? 'text-accent-primary'
+                : item.type === 'skill'
+                  ? 'text-accent-success'
+                  : 'text-accent-warning'
+            }`}
+          >
             /{item.id}
           </span>
           <span className="truncate flex-1">{item.name}</span>
@@ -152,7 +184,12 @@ const SlashAutocomplete = forwardRef<SlashAutocompleteHandle, SlashAutocompleteP
               {SCOPE_LABELS[item.scope]}
             </span>
           )}
-          {item.paramCount > 0 && (
+          {item.type === 'skill' && (
+            <span className="text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5 rounded whitespace-nowrap">
+              Skill
+            </span>
+          )}
+          {item.type !== 'skill' && item.paramCount > 0 && (
             <span className="text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5 rounded">
               {item.paramCount} param{item.paramCount > 1 ? 's' : ''}
             </span>
@@ -162,6 +199,57 @@ const SlashAutocomplete = forwardRef<SlashAutocompleteHandle, SlashAutocompleteP
     </div>
   )
 
+  if (isFullscreen) {
+    const targetTop = (() => {
+      if (typeof document !== 'undefined') {
+        const topHeader = document.querySelector('header')
+        if (topHeader) {
+          return Math.round(topHeader.getBoundingClientRect().bottom + 10)
+        }
+      }
+      return 42
+    })()
+
+    if (anchorRef) {
+      const panel = (
+        <div
+          ref={panelRef}
+          role="listbox"
+          className="fixed z-[100]"
+          style={{
+            top: targetTop,
+            left: layout?.left ?? 0,
+            width: layout?.width,
+            bottom: window.innerHeight - (layout?.top ?? 0) + 8,
+          }}
+        >
+          <div className="bg-bg-secondary border border-border rounded-lg shadow-2xl h-full flex flex-col overflow-hidden">
+            <ScrollArea className="flex-1 h-full max-h-none">{itemsMarkup}</ScrollArea>
+          </div>
+        </div>
+      )
+      return createPortal(panel, document.body)
+    }
+
+    return (
+      <div
+        ref={containerRef}
+        className="fixed z-50 left-2 right-2 md:left-auto md:right-auto"
+        style={{
+          top: `${targetTop}px`,
+          bottom: '84px',
+          left: containerRef.current?.getBoundingClientRect().left ?? undefined,
+          width: containerRef.current?.getBoundingClientRect().width ?? undefined,
+        }}
+        role="listbox"
+      >
+        <div className="bg-bg-secondary border border-border rounded-lg shadow-2xl h-full flex flex-col overflow-hidden">
+          <ScrollArea className="flex-1 h-full max-h-none">{itemsMarkup}</ScrollArea>
+        </div>
+      </div>
+    )
+  }
+
   if (anchorRef) {
     const panel = (
       <div
@@ -170,9 +258,9 @@ const SlashAutocomplete = forwardRef<SlashAutocompleteHandle, SlashAutocompleteP
         className="fixed z-[100]"
         style={{ top: layout?.top ?? 0, left: layout?.left ?? 0, width: layout?.width }}
       >
-        <ScrollArea className="bg-bg-secondary border border-border rounded-lg shadow-lg max-h-64">
-          {itemsMarkup}
-        </ScrollArea>
+        <div className="bg-bg-secondary border border-border rounded-lg shadow-2xl max-h-64 flex flex-col overflow-hidden">
+          <ScrollArea className="max-h-64">{itemsMarkup}</ScrollArea>
+        </div>
       </div>
     )
     return createPortal(panel, document.body)
@@ -180,9 +268,9 @@ const SlashAutocomplete = forwardRef<SlashAutocompleteHandle, SlashAutocompleteP
 
   return (
     <div ref={containerRef} className="absolute bottom-full left-0 right-0 mb-2 z-50" role="listbox">
-      <ScrollArea className="bg-bg-secondary border border-border rounded-lg shadow-lg max-h-64">
-        {itemsMarkup}
-      </ScrollArea>
+      <div className="bg-bg-secondary border border-border rounded-lg shadow-2xl max-h-64 flex flex-col overflow-hidden">
+        <ScrollArea className="max-h-64">{itemsMarkup}</ScrollArea>
+      </div>
     </div>
   )
 })

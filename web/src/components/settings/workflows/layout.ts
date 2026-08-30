@@ -1,5 +1,5 @@
-import type { WorkflowStep } from '../../../stores/workflows'
-import type { AgentInfo } from '../../../stores/agents'
+import type { WorkflowStep } from '../../../lib/workflows-actions'
+import type { AgentInfo } from '../../../lib/agents-actions'
 
 export const NODE_W = 150
 export const NODE_H = 54

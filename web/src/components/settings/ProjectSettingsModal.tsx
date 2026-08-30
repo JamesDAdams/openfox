@@ -6,9 +6,13 @@ import { McpServerCard } from './McpServerCard'
 import { ModalFooter } from '../shared/ModalFooter'
 import { useProjectStore } from '../../stores/project'
 import { useResource } from '../../hooks/useResource'
-import { agentsResource } from '../../lib/resources'
-import { useWorkspaceConfigStore, type WorkspaceConfigResponse } from '../../stores/workspace-config'
-import { useMcpStore } from '../../stores/mcp'
+import {
+  agentsResource,
+  mcpServersResource,
+  workspaceConfigResource,
+  saveWorkspaceConfig,
+  type WorkspaceConfigResponse,
+} from '../../lib/resources'
 import { mcpStatusColor, mcpStatusDot } from '../../lib/mcp-utils'
 import { wsClient } from '../../lib/ws'
 import { authFetch } from '../../lib/api'
@@ -23,10 +27,7 @@ interface ProjectSettingsModalProps {
 
 export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettingsModalProps) {
   const updateProject = useProjectStore((state) => state.updateProject)
-  const wsConfig = useWorkspaceConfigStore((s) => s.config)
-  const wsLoading = useWorkspaceConfigStore((s) => s.loading)
-  const fetchWsConfig = useWorkspaceConfigStore((s) => s.fetchConfig)
-  const saveWsConfig = useWorkspaceConfigStore((s) => s.saveConfig)
+  const { data: wsConfig, loading: wsLoading } = useResource(workspaceConfigResource, project.workdir)
   const { data } = useResource(agentsResource, project.workdir)
   const defaultAgents = data?.defaults ?? []
   const userAgents = data?.userItems ?? []
@@ -100,9 +101,8 @@ export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettin
       setRootDirDirty(false)
       setMcpDirty(false)
       setExpandedServers(new Set())
-      fetchWsConfig(project.workdir)
     }
-  }, [isOpen, project, fetchWsConfig])
+  }, [isOpen, project])
 
   useEffect(() => {
     if (wsConfig?.setup && wsConfig.setup.length > 0) {
@@ -114,7 +114,7 @@ export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettin
     setMcpOverrides(wsConfig?.mcpOverrides ?? {})
   }, [wsConfig])
 
-  const mcpServers = useMcpStore((s) => s.servers)
+  const mcpServers = useResource(mcpServersResource).data ?? []
 
   const getServerOverride = (name: string) => mcpOverrides[name] ?? {}
   const isServerDisabled = (name: string) => {
@@ -205,8 +205,8 @@ export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettin
       const wsConfigPayload: WorkspaceConfigResponse = {}
       if (setupDirty) wsConfigPayload.setup = setup
       if (rootDirDirty) wsConfigPayload.rootDir = rootDir.trim()
-      if (mcpDirty) wsConfigPayload.mcpOverrides = mcpOverrides
-      await saveWsConfig(project.workdir, wsConfigPayload)
+      if (Object.keys(mcpOverrides).length > 0) wsConfigPayload.mcpOverrides = mcpOverrides
+      await saveWorkspaceConfig(project.workdir, wsConfigPayload)
     }
     setInstructionsDirty(false)
     setDangerLevelDirty(false)
@@ -228,7 +228,6 @@ export function ProjectSettingsModal({ isOpen, onClose, project }: ProjectSettin
     rootDirDirty,
     mcpDirty,
     updateProject,
-    saveWsConfig,
     project.workdir,
     handleClose,
   ])

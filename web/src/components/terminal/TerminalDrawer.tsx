@@ -1,7 +1,7 @@
 import { ScrollArea } from '../shared/ScrollArea'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useTerminalStore } from '../../stores/terminal'
-import { useProjectStore } from '../../stores/project'
+import { useCurrentProject } from '../../hooks/useCurrentProject'
 import { useSessionStore } from '../../stores/session/store'
 import { TerminalPane } from './TerminalPane'
 import { PlusSquareIcon, XCloseIcon } from '../shared/icons'
@@ -25,7 +25,7 @@ export function TerminalDrawer({ isOpen, onClose }: TerminalDrawerProps) {
   const sessions = useTerminalStore((state) => state.sessions)
   const setWorkdir = useTerminalStore((state) => state.setWorkdir)
   const fetchSessions = useTerminalStore((state) => state.fetchSessions)
-  const currentProject = useProjectStore((state) => state.currentProject)
+  const currentProject = useCurrentProject()
   const currentSession = useSessionStore((state) => state.currentSession)
   const [isLoading, setIsLoading] = useState(true)
   const terminalRef = useRef<HTMLDivElement>(null)

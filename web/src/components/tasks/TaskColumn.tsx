@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { ProjectTask } from '@shared/types.js'
-import type { AgentInfo } from '../../stores/agents'
+import type { AgentInfo } from '../../lib/agents-actions'
 import { TaskCard, type TaskDragHandlers, type TaskCallbacks } from './TaskCard'
 
 type TaskColumnCallbacks = TaskCallbacks & { onDropOnColumn: () => void }

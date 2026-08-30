@@ -5,6 +5,11 @@ export function getSessionToken(): string | null {
   return localStorage.getItem('openfox_token')
 }
 
+export function hasStoredToken(): boolean {
+  if (typeof window === 'undefined') return false
+  return localStorage.getItem('openfox_token') !== null
+}
+
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = localStorage.getItem('openfox_token')
   const headers = {

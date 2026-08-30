@@ -39,7 +39,7 @@ import type { AgentType } from '../notifications'
 import type { SessionState, PendingQuestion, SessionPane } from './types'
 import { handleGlobalSoundEffects, resolveAgentType } from './sounds'
 import { getBuffer, scheduleStreamingFlush, cancelStreamingFlush } from './streamingBuffer'
-import { useMcpStore, type McpServerInfo } from '../mcp'
+import { mcpServersResource, type McpServerInfo } from '../../lib/resources'
 import {
   emptyPane,
   paneFromFlat,
@@ -1059,7 +1059,9 @@ export function handleServerMessage(
       const payload = message.payload as { servers?: McpServerInfo[] }
       if (payload?.servers) {
         const sorted = [...payload.servers].sort((a, b) => a.name.localeCompare(b.name))
-        useMcpStore.getState().setServers(sorted)
+        // WS write-through: update the cache entry directly so every subscriber
+        // converges without a refetch (and no refetch storm).
+        mcpServersResource.write(sorted)
       }
       window.dispatchEvent(new CustomEvent('mcp-servers-changed'))
       break

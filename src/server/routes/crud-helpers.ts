@@ -143,6 +143,10 @@ export function createCrudRoutes<T extends { metadata: { id: string; name: strin
     res.json({ ids })
   })
 
+  // Register extra routes before the /:id bucket so static sub-paths
+  // (e.g. GET /template-variables) are not shadowed by the id wildcard.
+  config.extraRoutes?.(router)
+
   router.get('/:id', async (req, res) => {
     const { id } = req.params
     const effectiveProjectDir = resolveProjectDir(req, projectDir)
@@ -252,8 +256,6 @@ export function createCrudRoutes<T extends { metadata: { id: string; name: strin
     }
     res.status(201).json(duplicated)
   })
-
-  config.extraRoutes?.(router)
 
   return router
 }

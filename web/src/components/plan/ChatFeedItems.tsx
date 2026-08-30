@@ -5,7 +5,7 @@ import { ChatMessage } from './ChatMessage'
 import { AssistantMessage } from './AssistantMessage'
 import { SubAgentContainer } from './SubAgentContainer'
 import { FEED_REVEAL_EVENT } from './feed-window'
-import { useDisplaySettings } from '../../stores/settings'
+import { useDisplaySettings } from '../../hooks/useDisplaySettings'
 
 const ITEM_CONTAINMENT_STYLE = { contentVisibility: 'auto', containIntrinsicSize: 'auto 200px' } as const
 const PLACEHOLDER_STYLE = { contentVisibility: 'auto', containIntrinsicSize: '160px', minHeight: '160px' } as const

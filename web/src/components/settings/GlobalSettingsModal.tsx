@@ -70,7 +70,7 @@ export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProp
 
         {/* Tab content - scrolls independently, scrollbar at modal edge */}
         <ScrollArea className="flex-1 min-h-0 px-4 pb-4">
-          {activeTab === 'instructions' && <InstructionsTab isOpen={isOpen} />}
+          {activeTab === 'instructions' && <InstructionsTab />}
           {activeTab === 'skills' && <SkillsContent isOpen={isOpen} />}
           {activeTab === 'plugins' && <PluginsTab />}
           {activeTab === 'notifications' && <NotificationSettings />}

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useLocation } from 'wouter'
-import { useProjectStore } from '../stores/project'
+import { projectsResource } from '../lib/resources'
+import { useConfig } from '../hooks/useConfig'
 import { Modal } from './shared/SelfContainedModal'
 import { Button } from './shared/Button'
 import { Input } from './shared/Input'
@@ -17,7 +18,7 @@ interface CreateProjectModalProps {
 
 export function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps) {
   const [, navigate] = useLocation()
-  const listProjects = useProjectStore((state) => state.listProjects)
+  const { config } = useConfig()
   const [projectName, setProjectName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -28,13 +29,9 @@ export function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps)
   // Fetch workdir from config when modal opens
   useEffect(() => {
     if (isOpen) {
-      authFetch('/api/config')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.workdir) {
-            setWorkdir(data.workdir)
-          }
-        })
+      if (config?.workdir) {
+        setWorkdir(config.workdir)
+      }
       setProjectName('')
       setError(null)
       setLoading(false)
@@ -44,7 +41,7 @@ export function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps)
         if (shouldAutofocus()) inputRef.current?.focus()
       }, 100)
     }
-  }, [isOpen])
+  }, [isOpen, config?.workdir])
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -98,7 +95,7 @@ export function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps)
       const project = data.project
 
       onClose()
-      await listProjects()
+      await projectsResource.refresh()
       navigate(`/p/${project.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create project')

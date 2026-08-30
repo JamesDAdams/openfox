@@ -4,9 +4,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TaskEditor } from './TaskEditor'
 import { useTasksStore } from '../../stores/tasks'
-import { useWorkflowsStore } from '../../stores/workflows'
-import { useCommandsStore } from '../../stores/commands'
-import { useProjectStore } from '../../stores/project'
+import { clearCache } from '../../lib/resourceCache'
+import { workflowsResource, projectsResource } from '../../lib/resources'
 import { authFetch } from '../../lib/api'
 import type { ProjectTask } from '@shared/types.js'
 
@@ -61,11 +60,6 @@ describe('TaskEditor', () => {
     document.body.innerHTML = ''
     localStorage.clear()
     useTasksStore.setState({
-      tasks: [],
-      gates: [],
-      settings: { slotLimit: 1, queuePaused: false },
-      counts: { open: 0, todo: 0, inProgress: 0, running: 0, queued: 0, done: 0 },
-      activeProjectId: null,
       lastError: null,
       lastAutoLaunch: null,
     })
@@ -80,8 +74,7 @@ describe('TaskEditor', () => {
     )
     // Neutralize the cold-start fetches (asserted in their own test) so other
     // tests can seed the stores directly without an async refetch wiping them.
-    useWorkflowsStore.setState({ defaults: [], userItems: [], projectItems: [], fetchWorkflows: vi.fn() })
-    useCommandsStore.setState({ defaults: [], userItems: [], projectItems: [], fetchCommands: vi.fn() })
+    clearCache()
     vi.mocked(authFetch).mockReset()
     vi.mocked(authFetch).mockResolvedValue({ ok: true, json: async () => ({}) } as unknown as Response)
   })
@@ -243,12 +236,20 @@ describe('TaskEditor', () => {
   })
 
   it('renders the slash autocomplete into a portal so it is not clipped by the modal', async () => {
-    useWorkflowsStore.setState({
-      defaults: [{ id: 'review', name: 'PR Review', description: '', version: '1', scope: 'builtin' }],
-      userItems: [],
-      projectItems: [],
+    vi.mocked(authFetch).mockImplementation(async (url: string) => {
+      if (url === '/api/workflows') {
+        return {
+          ok: true,
+          json: async () => ({
+            defaults: [{ id: 'review', name: 'PR Review', description: '', version: '1', scope: 'builtin' }],
+            userItems: [],
+            projectItems: [],
+          }),
+        } as unknown as Response
+      }
+      return { ok: true, json: async () => ({}) } as unknown as Response
     })
-    useCommandsStore.setState({ defaults: [], userItems: [], projectItems: [] })
+    await workflowsResource.refresh()
     render(<TaskEditor projectId="proj-1" onClose={() => {}} onSaved={() => {}} />)
     const promptEl = screen.getByPlaceholderText(/Describe the task/i) as HTMLTextAreaElement
     const user = userEvent.setup()
@@ -261,30 +262,26 @@ describe('TaskEditor', () => {
     })
   })
 
-  it('fetches workflows and commands on mount so the slash menu is populated from a cold start', async () => {
-    const wfState = useWorkflowsStore.getState()
-    const cmdState = useCommandsStore.getState()
-    const projState = useProjectStore.getState()
-    const fetchWorkflows = vi.fn()
-    const fetchCommands = vi.fn()
-    useWorkflowsStore.setState({ fetchWorkflows })
-    useCommandsStore.setState({ fetchCommands })
-    useProjectStore.setState({
-      projects: [
-        { id: 'proj-1', name: 'Proj', workdir: '/tmp/proj', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
-      ],
+  it('loads workflows and commands via the resource cache so the slash menu is populated from a cold start', async () => {
+    vi.mocked(authFetch).mockImplementation(async (url: string) => {
+      if (url === '/api/projects') {
+        return {
+          ok: true,
+          json: async () => ({
+            projects: [
+              { id: 'proj-1', name: 'Proj', workdir: '/tmp/proj', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+            ],
+          }),
+        } as unknown as Response
+      }
+      return { ok: true, json: async () => ({}) } as unknown as Response
     })
-    try {
-      render(<TaskEditor projectId="proj-1" onClose={() => {}} onSaved={() => {}} />)
-      await waitFor(() => {
-        expect(fetchWorkflows).toHaveBeenCalledWith('/tmp/proj')
-        expect(fetchCommands).toHaveBeenCalledWith('/tmp/proj')
-      })
-    } finally {
-      useWorkflowsStore.setState(wfState)
-      useCommandsStore.setState(cmdState)
-      useProjectStore.setState(projState)
-    }
+    await projectsResource.refresh()
+    render(<TaskEditor projectId="proj-1" onClose={() => {}} onSaved={() => {}} />)
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenCalledWith('/api/workflows?workdir=%2Ftmp%2Fproj')
+      expect(authFetch).toHaveBeenCalledWith('/api/commands?workdir=%2Ftmp%2Fproj')
+    })
   })
 
   describe('agent selection', () => {

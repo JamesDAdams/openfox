@@ -1,5 +1,5 @@
-import type { WorkflowStep, TemplateVariable } from '../../../stores/workflows'
-import type { AgentInfo } from '../../../stores/agents'
+import type { WorkflowStep, TemplateVariable } from '../../../lib/workflows-actions'
+import type { AgentInfo } from '../../../lib/agents-actions'
 import { resolveAgent, STEP_TYPES } from './layout'
 
 const inputClass =

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction } from 'react'
 import { useSessionStore, useIsRunning, useQueuedMessages } from '../../stores/session'
 import { useScopedPaneState } from '../../stores/session/session-scope'
-import { useWorkflowsStore, selectAllWorkflows } from '../../stores/workflows'
-import { useCommandsStore } from '../../stores/commands'
+import { useResource } from '../../hooks/useResource'
+import { useWorkflows } from '../../hooks/useWorkflows'
+import { commandsResource, commandResource, skillsResource, selectActiveSkills } from '../../lib/resources'
 import { authFetch } from '../../lib/api'
 import { parseSlashCommand, extractTemplateParams } from '../../lib/parse-slash-command'
 import { insertSuggestionAtCursor, focusTextareaAt, resolveSlashParamIds } from '../../lib/composer-utils'
@@ -28,8 +29,8 @@ import { AgentSelector } from './AgentSelector'
 import { DangerLevelSelector } from './DangerLevelSelector'
 import { ProviderSelector } from '../settings/ProviderSelector'
 import { McpSelector } from './McpSelector'
-import { SETTINGS_KEYS } from '../../stores/settings'
-import { useSettingsStore } from '../../stores/settings'
+import { SETTINGS_KEYS } from '../../lib/resources'
+import { useSetting } from '../../hooks/useSetting'
 import {
   AtMentionAutocomplete,
   type AtMentionAutocompleteHandle,
@@ -100,6 +101,7 @@ export function ChatInput({
   clearInput,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const composerWrapRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevLenRef = useRef(0)
   const cursorPosRef = useRef(0)
@@ -107,6 +109,7 @@ export function ChatInput({
   const slashAutocompleteRef = useRef<SlashAutocompleteHandle>(null)
 
   const isRunning = useIsRunning(sessionId)
+  const perSessionMcpEnabled = useSetting(SETTINGS_KEYS.FEATURES_PER_SESSION_MCP, 'false').value === 'true'
   const stopGeneration = useSessionStore((state) => state.stopGeneration)
   const cancelQueued = useSessionStore((state) => state.cancelQueued)
   const queuedMessages = useQueuedMessages(sessionId)
@@ -130,7 +133,6 @@ export function ChatInput({
     null,
   )
   const warmupSentRef = useRef(false)
-  const loadedWorkdirRef = useRef<string | undefined>(undefined)
   const sendingRef = useRef(false)
   const [activeSlashParams, setActiveSlashParams] = useState<string[]>([])
   // Records the scope chosen via the slash autocomplete so the launch resolves
@@ -139,14 +141,13 @@ export function ChatInput({
 
   const { sendMessage, launchWorkflow } = useScrolledSend(setAutoScroll, sessionId)
 
-  // Eagerly load workflows and commands so slash autocomplete always has data.
-  // Scoped to the session's project workdir; reloads when the active project changes.
-  useEffect(() => {
-    if (loadedWorkdirRef.current === workdir) return
-    loadedWorkdirRef.current = workdir
-    useWorkflowsStore.getState().fetchWorkflows(workdir)
-    useCommandsStore.getState().fetchCommands(workdir)
-  }, [workdir])
+  const { data: commandsData } = useResource(commandsResource, workdir)
+  const commands = commandsData
+    ? dedupById(dedupById(commandsData.defaults, commandsData.userItems), commandsData.projectItems)
+    : []
+  const { workflows } = useWorkflows(workdir)
+  const { data: skillsData } = useResource(skillsResource, workdir)
+  const activeSkills = selectActiveSkills(skillsData)
 
   // Clear inline param hints when input is emptied (after send, escape, etc.)
   useEffect(() => {
@@ -407,9 +408,6 @@ export function ChatInput({
     // Detect slash commands: /workflow-id arg1 arg2 or /command-name arg1 arg2
     const trimmed = input.trim()
     if (trimmed.startsWith('/')) {
-      const workflows = selectAllWorkflows(useWorkflowsStore.getState())
-      const allCommands = useCommandsStore.getState()
-      const commands = dedupById(dedupById(allCommands.defaults, allCommands.userItems), allCommands.projectItems)
       const slashResult = parseSlashCommand(input, workflows, commands)
       if (slashResult?.workflowId) {
         const pending = selectedSlashScopeRef.current
@@ -432,7 +430,7 @@ export function ChatInput({
       }
       if (slashResult?.commandId) {
         // Fetch command, resolve params, send as message
-        allCommands.fetchCommand(slashResult.commandId, workdir).then((full) => {
+        commandResource.refresh(slashResult.commandId, workdir).then((full) => {
           if (full) {
             // Map positional args to named params by order of appearance in the prompt
             const paramNames = extractTemplateParams(full.prompt)
@@ -495,7 +493,7 @@ export function ChatInput({
       if (suggestion.type === 'workflow') {
         selectedSlashScopeRef.current = { id: suggestion.id, scope: suggestion.scope }
       }
-      setActiveSlashParams(resolveSlashParamIds(suggestion))
+      setActiveSlashParams(resolveSlashParamIds(suggestion, workdir))
     },
     [input, setInput],
   )
@@ -612,6 +610,7 @@ export function ChatInput({
         />
 
         <div
+          ref={composerWrapRef}
           className={`flex items-end gap-3 p-3 rounded transition-colors ${
             dragOver ? 'bg-accent-primary/10' : 'bg-primary'
           }`}
@@ -645,11 +644,9 @@ export function ChatInput({
               ref={slashAutocompleteRef}
               text={input}
               cursorPos={cursorPosRef.current}
-              workflows={(() => selectAllWorkflows(useWorkflowsStore.getState()))()}
-              commands={(() => {
-                const s = useCommandsStore.getState()
-                return dedupById(dedupById(s.defaults, s.userItems), s.projectItems)
-              })()}
+              workflows={workflows}
+              commands={commands}
+              skills={activeSkills}
               onSelect={handleSelectSlash}
             />
             {activeSlashParams.length > 0 &&
@@ -711,7 +708,7 @@ export function ChatInput({
             <DangerLevelSelector />
           </div>
           <div className="flex items-center gap-2">
-            {useSettingsStore((s) => s.settings)[SETTINGS_KEYS.FEATURES_PER_SESSION_MCP] === 'true' && <McpSelector />}
+            {perSessionMcpEnabled && <McpSelector />}
             <ProviderSelector />
           </div>
         </div>

@@ -1,5 +1,5 @@
-import type { WorkflowStep, WorkflowCondition } from '../../../stores/workflows'
-import type { AgentInfo } from '../../../stores/agents'
+import type { WorkflowStep, WorkflowCondition } from '../../../lib/workflows-actions'
+import type { AgentInfo } from '../../../lib/agents-actions'
 import { ArrowRightIcon, ChevronDownIcon } from '../../shared/icons'
 import { CONDITION_TYPES } from './layout'
 

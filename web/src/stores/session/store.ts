@@ -6,7 +6,7 @@ import type { SessionSummary, Message, Session, ContextState, WorkflowExecution 
 import type { QueuedMessage, PendingQuestionPayload } from '@shared/protocol.js'
 import { wsClient } from '../../lib/ws'
 import { useConfigStore } from '../config'
-import { useProjectStore } from '../project'
+import { projectsResource } from '../../lib/resources'
 import { useBackgroundProcessesStore } from '../background-processes'
 import { writeSplitLayout, isSplitRoute } from '../../lib/splitPersistence'
 import type { SessionState, SessionPane, PendingPathConfirmation } from './types'
@@ -414,7 +414,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
               get().listSessions(activeProjectId)
             }
           }
-          useProjectStore.getState().listProjects()
+          void projectsResource.refresh()
           // Reload the active session on (re)connect only when it has not been
           // loaded yet (first connect, or after any disconnect/reconnect which
           // clears loadedSessionIds). The route-level useSessionLoader already
@@ -512,9 +512,8 @@ export const useSessionStore = create<SessionState>((set, get) => {
         set({ showPasswordModal: false })
         get().connect()
 
-        const { listProjects } = useProjectStore.getState()
+        void projectsResource.refresh()
         const { fetchConfig } = useConfigStore.getState()
-        listProjects()
         fetchConfig()
 
         get().connect()

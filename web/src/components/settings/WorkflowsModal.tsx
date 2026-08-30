@@ -5,14 +5,22 @@ import { Modal } from '../shared/SelfContainedModal'
 import { Button } from '../shared/Button'
 import { EditButton } from '../shared/IconButton'
 import {
-  useWorkflowsStore,
+  createWorkflow,
+  updateWorkflow,
+  deleteWorkflow,
   type WorkflowFull,
   type WorkflowStep,
   type WorkflowCondition,
   type WorkflowParameter,
-} from '../../stores/workflows'
+} from '../../lib/workflows-actions'
 import { useResource } from '../../hooks/useResource'
-import { agentsResource } from '../../lib/resources'
+import {
+  agentsResource,
+  workflowsResource,
+  templateVariablesResource,
+  workflowResource,
+  workflowDefaultResource,
+} from '../../lib/resources'
 import { ArrowRightIcon, EyeIcon, MinusIcon, PlusIcon, ZoomFitIcon } from '../shared/icons'
 import { CollapsibleSection } from '../shared/CollapsibleSection'
 import {
@@ -62,18 +70,12 @@ const labelClass = 'block text-[11px] text-text-secondary mb-0.5'
 const DEFAULT_STEPS: WorkflowStep[] = []
 
 export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: WorkflowsModalProps) {
-  const defaults = useWorkflowsStore((state) => state.defaults)
-  const userItems = useWorkflowsStore((state) => state.userItems)
-  const projectItems = useWorkflowsStore((state) => state.projectItems)
-  const loading = useWorkflowsStore((state) => state.loading)
-  const templateVariables = useWorkflowsStore((state) => state.templateVariables)
-  const fetchWorkflows = useWorkflowsStore((state) => state.fetchWorkflows)
-  const fetchWorkflow = useWorkflowsStore((state) => state.fetchWorkflow)
-  const fetchDefaultContent = useWorkflowsStore((state) => state.fetchDefaultContent)
-  const fetchTemplateVariables = useWorkflowsStore((state) => state.fetchTemplateVariables)
-  const createWorkflow = useWorkflowsStore((state) => state.createWorkflow)
-  const updateWorkflow = useWorkflowsStore((state) => state.updateWorkflow)
-  const deleteWorkflowAction = useWorkflowsStore((state) => state.deleteWorkflow)
+  const { data: workflowsData, loading } = useResource(workflowsResource, projectDir)
+  const defaults = workflowsData?.defaults ?? []
+  const userItems = workflowsData?.userItems ?? []
+  const projectItems = workflowsData?.projectItems ?? []
+  const { data: templateVariablesData } = useResource(templateVariablesResource)
+  const templateVariables = templateVariablesData?.variables ?? []
 
   const { requestDelete, clearConfirm, isConfirming } = useConfirmDialog()
 
@@ -107,14 +109,12 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
 
   useEffect(() => {
     if (isOpen) {
-      fetchWorkflows(projectDir)
-      fetchTemplateVariables()
       setSelectedNodeKey(null)
       setSelectedEdgeKey(null)
       if (initialEditId) {
         const isDefault = defaults.some((d) => d.id === initialEditId)
         if (isDefault) {
-          fetchDefaultContent(initialEditId, projectDir).then((workflow) => {
+          workflowDefaultResource.refresh(initialEditId, projectDir).then((workflow) => {
             if (!workflow) return
             populateForm(
               {
@@ -129,7 +129,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
             )
           })
         } else {
-          fetchWorkflow(initialEditId, projectDir).then((workflow) => {
+          workflowResource.refresh(initialEditId, projectDir).then((workflow) => {
             if (!workflow) return
             populateForm(workflow, { editingId: initialEditId, isReadOnly: false })
           })
@@ -140,7 +140,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
         setIsReadOnly(false)
       }
     }
-  }, [isOpen, fetchWorkflows, fetchWorkflow, fetchDefaultContent, fetchTemplateVariables, initialEditId, projectDir])
+  }, [isOpen, initialEditId, projectDir])
 
   const populateForm = (
     workflow: {
@@ -154,7 +154,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
       }
       entryStep: string
       settings: { maxIterations: number }
-      steps: import('../../stores/workflows').WorkflowStep[]
+      steps: import('../../lib/workflows-actions').WorkflowStep[]
       startCondition?: WorkflowCondition
     },
     extra?: Partial<{ editingId: string | null; isReadOnly: boolean; selectedNodeKey: null; selectedEdgeKey: null }>,
@@ -179,7 +179,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
 
   const handleEdit = async (workflowId: string, scope?: WorkflowScope) => {
     setEditingScope(scope)
-    const workflow = await fetchWorkflow(workflowId, projectDir, scope)
+    const workflow = await workflowResource.refresh(workflowId, projectDir, scope)
     if (!workflow) return
     populateForm(workflow, { editingId: workflowId, isReadOnly: false, selectedNodeKey: null, selectedEdgeKey: null })
   }
@@ -262,8 +262,8 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
   const fetchWorkflowContent = async (workflowId: string, scope?: WorkflowScope) => {
     const isDefault = defaults.some((d) => d.id === workflowId)
     return isDefault
-      ? await fetchDefaultContent(workflowId, projectDir)
-      : await fetchWorkflow(workflowId, projectDir, scope)
+      ? await workflowDefaultResource.refresh(workflowId, projectDir)
+      : await workflowResource.refresh(workflowId, projectDir, scope)
   }
 
   const handleDuplicate = async (workflowId: string, scope?: WorkflowScope) => {
@@ -304,7 +304,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
   }
 
   const handleDelete = async (workflowId: string, scope: WorkflowScope) => {
-    await deleteWorkflowAction(workflowId, scope, projectDir)
+    await deleteWorkflow(workflowId, scope, projectDir)
     clearConfirm()
   }
 

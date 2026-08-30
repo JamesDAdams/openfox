@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { authFetch } from '../../../lib/api'
+import { useConfig } from '../../../hooks/useConfig'
 import { DirectoryBrowser } from '../../shared/DirectoryBrowser'
 import { appUrl } from '../../../lib/basePath'
 
@@ -10,35 +10,23 @@ interface ProjectsFolderStepProps {
 export function ProjectsFolderStep({ onNext }: ProjectsFolderStepProps) {
   const [workdir, setWorkdir] = useState('')
   const [showBrowser, setShowBrowser] = useState(false)
+  const { config } = useConfig()
 
   useEffect(() => {
-    authFetch('/api/config')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.workdir) {
-          setWorkdir(data.workdir)
-        } else {
-          fetch(appUrl('/api/directories?path=') + encodeURIComponent('/home'))
-            .then((r) => r.json())
-            .then((dirData) => {
-              if (dirData.current) {
-                setWorkdir(dirData.current)
-              }
-            })
-            .catch(() => {})
-        }
-      })
-      .catch(() => {
-        fetch(appUrl('/api/directories?path=') + encodeURIComponent('/home'))
-          .then((r) => r.json())
-          .then((data) => {
-            if (data.current) {
-              setWorkdir(data.current)
-            }
-          })
-          .catch(() => {})
-      })
-  }, [])
+    if (config?.workdir) {
+      setWorkdir(config.workdir)
+    } else {
+      // Authorized transient read: home-directory probe when config has no workdir.
+      fetch(appUrl('/api/directories?path=') + encodeURIComponent('/home'))
+        .then((r) => r.json())
+        .then((dirData) => {
+          if (dirData.current) {
+            setWorkdir(dirData.current)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [config?.workdir])
 
   return (
     <div className="max-w-xl mx-auto">

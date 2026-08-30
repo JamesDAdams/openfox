@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { DevServerConfig, DevServerState, DevServerStatus } from '@shared/dev-server.js'
 import type { ServerMessage, DevServerOutputPayload, DevServerStatePayload } from '@shared/protocol.js'
+// Authorized exception: dev-server state is WS-driven; REST is one-shot lifecycle actions (start/stop/marker) and list reads are fresh-on-mount polls.
 import { authFetch } from '../lib/api'
 import { createLogBuffer } from './utils'
 

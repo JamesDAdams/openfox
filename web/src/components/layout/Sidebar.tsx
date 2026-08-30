@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useLocation, Link } from 'wouter'
 import { useSessionStore } from '../../stores/session'
 import type { PendingPathConfirmation } from '../../stores/session/types'
-import { useProjectStore } from '../../stores/project'
+import { useCurrentProject } from '../../hooks/useCurrentProject'
 import type { SessionSummary } from '@shared/types.js'
 import { ProjectSettingsModal } from '../settings/ProjectSettingsModal'
 import { DropdownMenu } from '../shared/DropdownMenu'
@@ -16,6 +16,7 @@ import { groupSessionsByDate, formatDateHeader, formatTime } from '../../lib/for
 import { fuzzyMatch, highlightMatches } from '../../lib/modal-utils.js'
 import { shouldAutofocus } from '../../lib/device'
 import { useBinding, useKeybindings } from '../../hooks/useKeybindings.js'
+import { hasStoredToken } from '../../lib/api'
 import { useResizable } from '../../hooks/useResizable'
 import { ResizeHandle } from '../shared/ResizeHandle'
 import { useSidebarStore } from '../../stores/sidebar'
@@ -48,7 +49,7 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
   const pendingPathConfirmations = useSessionStore((state) => state.pendingPathConfirmations)
   const toggleFavorite = useSessionStore((state) => state.toggleFavorite)
 
-  const currentProject = useProjectStore((state) => state.currentProject)
+  const currentProject = useCurrentProject()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [focusedIndex, setFocusedIndex] = useState(-1)
@@ -68,7 +69,8 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
 
   const wasAutoOpenedRef = useRef(false)
 
-  const keybindings = useKeybindings()
+  const connectionStatus = useSessionStore((state) => state.connectionStatus)
+  const keybindings = useKeybindings(connectionStatus === 'connected' || hasStoredToken())
   useBinding(keybindings.sessionSearch, () => {
     if (isOpen && document.activeElement === searchRef.current) {
       onClose?.()

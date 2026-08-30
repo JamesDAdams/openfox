@@ -34,13 +34,8 @@ vi.mock('../../stores/session', () => ({
   },
 }))
 
-vi.mock('../../stores/project', () => ({
-  useProjectStore: (selector?: any) => {
-    const state = {
-      currentProject: { id: 'project-1', name: 'Project', workdir: '/tmp/project' },
-    }
-    return selector ? selector(state) : state
-  },
+vi.mock('../../hooks/useCurrentProject', () => ({
+  useCurrentProject: () => ({ id: 'project-1', name: 'Project', workdir: '/tmp/project' }),
 }))
 
 vi.mock('../settings/ProjectSettingsModal', () => ({

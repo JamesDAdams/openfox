@@ -1,22 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Button } from '../../shared/Button'
-import { SETTINGS_KEYS } from '../../../stores/settings'
-import { useSettingsStoreState } from '../useSettingsStore'
+import { SETTINGS_KEYS, setSetting } from '../../../lib/resources'
+import { useSetting } from '../../../hooks/useSetting'
 
-export function InstructionsTab({ isOpen }: { isOpen: boolean }) {
-  const { settings, loading, getSetting, setSetting } = useSettingsStoreState()
-  const globalInstructions = settings[SETTINGS_KEYS.GLOBAL_INSTRUCTIONS] ?? ''
-  const isLoading = loading[SETTINGS_KEYS.GLOBAL_INSTRUCTIONS] ?? false
+export function InstructionsTab() {
+  const { value: globalInstructions, loading } = useSetting(SETTINGS_KEYS.GLOBAL_INSTRUCTIONS)
+  const isLoading = loading
 
   const [localValue, setLocalValue] = useState(globalInstructions)
   const [isDirty, setIsDirty] = useState(false)
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (isOpen) {
-      getSetting(SETTINGS_KEYS.GLOBAL_INSTRUCTIONS)
-    }
-  }, [isOpen, getSetting])
 
   useEffect(() => {
     setLocalValue(globalInstructions)

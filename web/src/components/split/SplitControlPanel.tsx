@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useSessionStore } from '../../stores/session'
-import { useProjectStore } from '../../stores/project'
+import { useProjects } from '../../hooks/useProjects'
 import { ChevronUpIcon, ChevronDownIcon, XCloseIcon, PlusIcon } from '../shared/icons'
 import { AggregateStats } from './AggregateStats'
 import { SplitNewSessionModal } from './SplitNewSessionModal'
@@ -33,7 +33,7 @@ export function SplitControlPanel({ collapsed = false, layout, onLayoutChange }:
   const reorderPane = useSessionStore((state) => state.reorderPane)
   const openPane = useSessionStore((state) => state.openPane)
   const isPaneOpen = useSessionStore((state) => state.isPaneOpen)
-  const projects = useProjectStore((state) => state.projects)
+  const { projects } = useProjects()
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects])
 
   const sortedSessions = useMemo(() => {

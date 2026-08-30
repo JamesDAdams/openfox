@@ -11,7 +11,6 @@ import type { Message } from '@shared/types.js'
 /* ------------------------------------------------------------------ */
 
 const mockSessionStore = vi.fn() as Mock
-const mockSettingsStore = vi.fn() as Mock
 const mockConfigStore = vi.fn() as Mock
 const mockUpdateStore = vi.fn() as Mock
 
@@ -20,10 +19,8 @@ vi.mock('../../stores/session', () => ({
     selector ? selector(mockSessionStore()) : mockSessionStore(),
 }))
 
-vi.mock('../../stores/settings', () => ({
-  useSettingsStore: (selector?: (s: unknown) => unknown) =>
-    selector ? selector(mockSettingsStore()) : mockSettingsStore(),
-  SETTINGS_KEYS: { DISPLAY_SHOW_OPEN_IN_EDITOR: 'display.showOpenInEditor' },
+vi.mock('../../hooks/useSetting', () => ({
+  useSetting: (_key: string, fallback = '') => ({ value: fallback, loading: false }),
 }))
 
 vi.mock('../../stores/config', () => ({
@@ -78,7 +75,6 @@ beforeEach(() => {
     currentSession: { id: 's1', projectId: 'p1', metadataEntries: {}, workdir: '/tmp/project' },
   })
 
-  mockSettingsStore.mockReturnValue({ settings: {} })
   mockConfigStore.mockReturnValue({ version: '1.0.0' })
   mockUpdateStore.mockReturnValue({ status: 'idle', check: vi.fn() })
 })

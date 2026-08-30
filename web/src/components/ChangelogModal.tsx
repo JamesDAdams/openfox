@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { Modal } from './shared/Modal'
 import { Markdown } from './shared/Markdown'
 import { Toggle } from './shared/Toggle'
-import { authFetch } from '../lib/api'
-import { useSettingsStoreState } from './settings/useSettingsStore'
-import { SETTINGS_KEYS } from '../stores/settings'
+import { changelogResource, SETTINGS_KEYS, setSetting } from '../lib/resources'
+import { useSetting } from '../hooks/useSetting'
 
 interface ChangelogModalProps {
   isOpen: boolean
@@ -15,33 +14,22 @@ interface ChangelogModalProps {
 export function ChangelogModal({ isOpen, onClose, since }: ChangelogModalProps) {
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const { settings, getSetting, setSetting } = useSettingsStoreState()
-  const showOnUpdate = settings[SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE] !== 'false'
-
-  useEffect(() => {
-    if (!isOpen) return
-    getSetting(SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE)
-  }, [isOpen, getSetting])
+  const showOnUpdate = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE, 'true', isOpen).value !== 'false'
 
   useEffect(() => {
     if (!isOpen) return
     setLoading(true)
-    const url = since ? `/api/changelog?since=${encodeURIComponent(since)}` : '/api/changelog'
-    authFetch(url)
-      .then((res) => res.json())
-      .then((data) => {
-        setContent(data.content as string)
-      })
-      .catch(() => {
-        setContent('# Changelog\n\nFailed to load changelog.')
-      })
+    changelogResource
+      .refresh(since)
+      .then((data) => setContent(data ?? '# Changelog\n\nFailed to load changelog.'))
+      .catch(() => setContent('# Changelog\n\nFailed to load changelog.'))
       .finally(() => setLoading(false))
   }, [isOpen, since])
 
   const handleToggleShowOnUpdate = useCallback(() => {
     const newValue = showOnUpdate ? 'false' : 'true'
-    setSetting(SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE, newValue)
-  }, [showOnUpdate, setSetting])
+    void setSetting(SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE, newValue)
+  }, [showOnUpdate])
 
   return (
     <Modal

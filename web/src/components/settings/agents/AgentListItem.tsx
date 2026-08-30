@@ -1,4 +1,4 @@
-import type { AgentInfo } from '../../../stores/agents'
+import type { AgentInfo } from '../../../lib/agents-actions'
 import { CRUDListItem } from '../CRUDListItem'
 
 export function AgentListItem({

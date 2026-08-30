@@ -724,6 +724,7 @@ export function ProviderModal({
 
   useEffect(() => {
     if (!isOpen) return
+    // Authorized transient read: provider presets are a one-shot form load.
     void authFetch('/api/provider-presets')
       .then(async (response) =>
         response.ok ? ((await response.json()) as { presets: ProviderPreset[] }) : { presets: [] },
@@ -1001,6 +1002,7 @@ export function ProviderModal({
   }
 
   async function refreshProviderAuthStatus(providerId: string) {
+    // Authorized transient read: provider auth status is a one-shot check, not shared state.
     const response = await authFetch(`/api/provider-auth/${providerId}/status`)
     if (!response.ok) return 'error' as const
     const data = (await response.json()) as { state: 'disconnected' | 'pending' | 'connected' | 'expired' | 'error' }
@@ -1067,6 +1069,7 @@ export function ProviderModal({
       const params = new URLSearchParams({ url })
       if (formApiKey) params.set('apiKey', formApiKey)
       if (formBackend) params.set('backend', formBackend)
+      // Authorized transient read: provider models catalog is an interactive connectivity test result, not shared state.
       const response = formTransportAdapter
         ? await authFetch(`/api/providers/${await ensureDraftProvider()}/models`)
         : await authFetch(`/api/providers/models?${params.toString()}`)

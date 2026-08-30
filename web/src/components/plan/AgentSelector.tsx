@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { ChevronDownIcon, CheckIcon } from '../shared/icons'
-import { getAgentColor } from '../../stores/agents'
+import { getAgentColor } from '../../lib/agents-actions'
 import { AgentsModal } from '../settings/AgentsModal'
 import { useKeybindings } from '../../hooks/useKeybindings'
 import { useClickOutside } from '../../hooks/useClickOutside'

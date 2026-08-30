@@ -4,8 +4,8 @@ import { Button } from '../../shared/Button'
 import { Toggle } from '../../shared/Toggle'
 import { Input } from '../../shared/Input'
 import { mcpStatusColor, mcpStatusDot } from '../../../lib/mcp-utils'
-import { SETTINGS_KEYS } from '../../../stores/settings'
-import { useSettingsStoreState } from '../useSettingsStore'
+import { SETTINGS_KEYS, setSetting, mcpServersResource } from '../../../lib/resources'
+import { useSetting } from '../../../hooks/useSetting'
 import { useTestButton } from '../../../hooks/useTestButton'
 import { CRUDListView } from '../CRUDListView'
 import { useConfirmDialog, FormField, ErrorBanner } from '../CRUDModal'
@@ -331,7 +331,14 @@ function McpFormActions({
 }
 
 export function ToolsTab() {
-  const { settings, getSetting, setSetting } = useSettingsStoreState()
+  const searchEngineSetting = useSetting(SETTINGS_KEYS.SEARCH_ENGINE).value
+  const tavilyKeySetting = useSetting(SETTINGS_KEYS.SEARCH_TAVILY_API_KEY).value
+  const searxngUrlSetting = useSetting(SETTINGS_KEYS.SEARCH_SEARXNG_URL).value
+  const searxngKeySetting = useSetting(SETTINGS_KEYS.SEARCH_SEARXNG_API_KEY).value
+  const useRtkSetting = useSetting(SETTINGS_KEYS.TOOLS_USE_RTK).value
+  const confirmWorkspaceSetting = useSetting(SETTINGS_KEYS.CONFIRM_ON_WORKSPACE_ACTIONS).value
+  const shellSetting = useSetting(SETTINGS_KEYS.TOOLS_SHELL).value
+  const perSessionMcpSetting = useSetting(SETTINGS_KEYS.FEATURES_PER_SESSION_MCP).value
 
   // ── Search Engine state ──
   const [searchEngine, setSearchEngine] = useState('')
@@ -347,26 +354,17 @@ export function ToolsTab() {
   const [searxngTestText, searxngTestError, searxngTestSuccess, testSearxng] = useTestButton()
 
   useEffect(() => {
-    getSetting(SETTINGS_KEYS.SEARCH_ENGINE)
-    getSetting(SETTINGS_KEYS.SEARCH_TAVILY_API_KEY)
-    getSetting(SETTINGS_KEYS.SEARCH_SEARXNG_URL)
-    getSetting(SETTINGS_KEYS.SEARCH_SEARXNG_API_KEY)
-    getSetting(SETTINGS_KEYS.TOOLS_USE_RTK)
-    getSetting(SETTINGS_KEYS.CONFIRM_ON_WORKSPACE_ACTIONS)
-  }, [getSetting])
-
-  useEffect(() => {
-    if (settings[SETTINGS_KEYS.SEARCH_ENGINE] !== undefined) {
-      setSearchEngine(settings[SETTINGS_KEYS.SEARCH_ENGINE] ?? '')
-      setTavilyKey(settings[SETTINGS_KEYS.SEARCH_TAVILY_API_KEY] ?? '')
-      setSearxngUrl(settings[SETTINGS_KEYS.SEARCH_SEARXNG_URL] ?? '')
-      setSearxngKey(settings[SETTINGS_KEYS.SEARCH_SEARXNG_API_KEY] ?? '')
+    if (searchEngineSetting !== '') {
+      setSearchEngine(searchEngineSetting)
+      setTavilyKey(tavilyKeySetting)
+      setSearxngUrl(searxngUrlSetting)
+      setSearxngKey(searxngKeySetting)
     }
-  }, [settings])
+  }, [searchEngineSetting, tavilyKeySetting, searxngUrlSetting, searxngKeySetting])
 
   function handleEngineChange(engine: string) {
     setSearchEngine(engine)
-    setSetting(SETTINGS_KEYS.SEARCH_ENGINE, engine)
+    void setSetting(SETTINGS_KEYS.SEARCH_ENGINE, engine)
   }
 
   function handleTestTavily() {
@@ -399,6 +397,7 @@ export function ToolsTab() {
   const [rtkStatus, setRtkStatus] = useState<'checking' | 'available' | 'unavailable'>('checking')
 
   useEffect(() => {
+    // Authorized transient read: one-shot RTK availability probe on mount.
     authFetch('/api/tools/rtk-check')
       .then((r) => r.json())
       .then((data) => setRtkStatus(data.available ? 'available' : 'unavailable'))
@@ -409,14 +408,14 @@ export function ToolsTab() {
   const [shells, setShells] = useState<{ id: string; label: string; available: boolean }[]>([])
 
   useEffect(() => {
-    getSetting(SETTINGS_KEYS.TOOLS_SHELL)
+    // Authorized transient read: one-shot shell discovery on mount.
     authFetch('/api/tools/shells')
       .then((r) => r.json())
       .then((data) => setShells(data.shells ?? []))
       .catch(() => setShells([]))
-  }, [getSetting])
+  }, [])
 
-  const currentShell = settings[SETTINGS_KEYS.TOOLS_SHELL] || 'cmd'
+  const currentShell = shellSetting || 'cmd'
 
   // ── MCP state ──
   const [servers, setServers] = useState<McpServerState[]>([])
@@ -442,9 +441,15 @@ export function ToolsTab() {
 
   const loadServers = useCallback(async () => {
     try {
-      const res = await authFetch('/api/mcp/servers')
-      const data = await res.json()
-      const sorted = (data.servers ?? []).sort((a: McpServerState, b: McpServerState) => a.name.localeCompare(b.name))
+      const data = await mcpServersResource.refresh()
+      const normalized: McpServerState[] = (data ?? []).map((s) => ({
+        name: s.name,
+        status: s.status as McpServerState['status'],
+        tools: s.tools.map((t) => ({ ...t, inputSchema: t.inputSchema ?? {} })),
+        estimatedTokens: s.estimatedTokens,
+        config: { ...s.config, transport: s.config.transport ?? 'stdio' },
+      }))
+      const sorted = normalized.sort((a: McpServerState, b: McpServerState) => a.name.localeCompare(b.name))
       setServers(sorted)
     } catch {
       /* ignore */
@@ -770,7 +775,7 @@ export function ToolsTab() {
               {shells.map((shell) => (
                 <button
                   key={shell.id}
-                  onClick={() => setSetting(SETTINGS_KEYS.TOOLS_SHELL, shell.id)}
+                  onClick={() => void setSetting(SETTINGS_KEYS.TOOLS_SHELL, shell.id)}
                   disabled={!shell.available}
                   title={shell.available ? undefined : 'Not found on this machine'}
                   className={`px-3 py-1.5 rounded text-sm border transition-colors ${
@@ -820,16 +825,11 @@ export function ToolsTab() {
             </div>
           </div>
           <Toggle
-            enabled={settings[SETTINGS_KEYS.TOOLS_USE_RTK] === 'true'}
-            onClick={() =>
-              setSetting(
-                SETTINGS_KEYS.TOOLS_USE_RTK,
-                settings[SETTINGS_KEYS.TOOLS_USE_RTK] === 'true' ? 'false' : 'true',
-              )
-            }
+            enabled={useRtkSetting === 'true'}
+            onClick={() => void setSetting(SETTINGS_KEYS.TOOLS_USE_RTK, useRtkSetting === 'true' ? 'false' : 'true')}
           />
         </div>
-        {shells.length > 0 && settings[SETTINGS_KEYS.TOOLS_USE_RTK] === 'true' && currentShell !== 'gitbash' && (
+        {shells.length > 0 && useRtkSetting === 'true' && currentShell !== 'gitbash' && (
           <p className="text-xs text-accent-warning mt-1">
             RTK only rewrites Unix-style commands — with this shell it will rarely apply and can break some commands.
             Git Bash is recommended.
@@ -851,11 +851,11 @@ export function ToolsTab() {
             <span className="text-sm text-text-primary">Confirm on workspace &amp; git actions</span>
           </div>
           <Toggle
-            enabled={settings[SETTINGS_KEYS.CONFIRM_ON_WORKSPACE_ACTIONS] === 'true'}
+            enabled={confirmWorkspaceSetting === 'true'}
             onClick={() =>
-              setSetting(
+              void setSetting(
                 SETTINGS_KEYS.CONFIRM_ON_WORKSPACE_ACTIONS,
-                settings[SETTINGS_KEYS.CONFIRM_ON_WORKSPACE_ACTIONS] === 'true' ? 'false' : 'true',
+                confirmWorkspaceSetting === 'true' ? 'false' : 'true',
               )
             }
           />
@@ -882,11 +882,11 @@ export function ToolsTab() {
             <span className="text-sm text-text-primary">Show per-conversation MCP toggle in chat bar</span>
           </div>
           <Toggle
-            enabled={settings[SETTINGS_KEYS.FEATURES_PER_SESSION_MCP] === 'true'}
+            enabled={perSessionMcpSetting === 'true'}
             onClick={() =>
-              setSetting(
+              void setSetting(
                 SETTINGS_KEYS.FEATURES_PER_SESSION_MCP,
-                settings[SETTINGS_KEYS.FEATURES_PER_SESSION_MCP] === 'true' ? 'false' : 'true',
+                perSessionMcpSetting === 'true' ? 'false' : 'true',
               )
             }
           />

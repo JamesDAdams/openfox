@@ -308,10 +308,12 @@ export function PluginsTab() {
   useEffect(() => {
     let cancelled = false
     Promise.all([
+      // Authorized transient read: plugin registry/installed lists are one-shot modal loads, not shared state.
       authFetch('/api/plugins/registry').then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       }),
+      // Authorized transient read: plugin registry/installed lists are one-shot modal loads, not shared state.
       authFetch('/api/plugins/installed').then((r) => {
         if (!r.ok) return { installed: [] }
         return r.json()

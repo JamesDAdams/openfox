@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom'
 import { useSessionStore } from '../../stores/session'
 import { useDevServerStore, useDevServerEntry } from '../../stores/dev-server'
 import { useGitStatus } from '../../hooks/useGitStatus'
-import { useSettingsStore, SETTINGS_KEYS } from '../../stores/settings'
+import { SETTINGS_KEYS } from '../../lib/resources'
+import { useSetting } from '../../hooks/useSetting'
 import { ProgressBar } from '../shared/ProgressBar'
 import { MetadataSectionHeader } from '../shared/MetadataEntries'
 import { MetadataStatusIcon, statusOrder } from '../shared/MetadataStatusIcon'
@@ -202,7 +203,7 @@ export function SidebarSummaryHeader({ visible }: SidebarSummaryHeaderProps) {
   const contextPopoverRef = useRef<PopoverHandle>(null)
   const metadataPopoverRef = useRef<PopoverHandle>(null)
   const workspacePopoverRef = useRef<PopoverHandle>(null)
-  const showEditorLink = useSettingsStore((s) => s.settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR]) === 'true'
+  const showEditorLink = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR).value === 'true'
   if (!visible || !session) return null
 
   const workspaceName = pathBasename(session.workspace ?? '') || 'original'

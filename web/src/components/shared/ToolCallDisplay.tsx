@@ -1,6 +1,6 @@
 import { memo, useState, type ComponentType } from 'react'
 import { OptionalScrollArea } from './OptionalScrollArea'
-import { useDisplaySettings } from '../../stores/settings'
+import { useDisplaySettings } from '../../hooks/useDisplaySettings'
 import type { Diagnostic, EditContextRegion } from '@shared/types.js'
 import { ToolIcon } from './ToolIcon'
 import { DiffView, FilePreview, EditContextView, ReadFileView } from './DiffView'
@@ -16,7 +16,8 @@ import { PathConfirmationButtons } from './PathConfirmationButtons'
 import { formatToolArgsFull, formatToolArgsWithMetadata } from '../../lib/formatToolArgs'
 import { type PendingPathConfirmation } from '../../stores/session'
 import { useSessionScope, useScopedPaneState } from '../../stores/session/session-scope'
-import { useSettingsStore, SETTINGS_KEYS } from '../../stores/settings'
+import { SETTINGS_KEYS } from '../../lib/resources'
+import { useSetting } from '../../hooks/useSetting'
 import { buildEditorUrl } from '../../lib/editor-link'
 import { detectRemoteExecution } from '../../lib/remote-execution'
 import type { ToolStatus } from '../../lib/toolStatus'
@@ -135,7 +136,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const [expanded, setExpanded] = useState(shouldAutoExpand)
   const config = statusConfig[status]
   const remoteProtocol = detectRemoteExecution(tool, args)
-  const showEditorLink = useSettingsStore((s) => s.settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR]) === 'true'
+  const showEditorLink = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR).value === 'true'
 
   const editorLine =
     tool === 'edit_file'

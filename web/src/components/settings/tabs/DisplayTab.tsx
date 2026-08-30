@@ -1,7 +1,7 @@
 import { ScrollArea } from '../../shared/ScrollArea'
 import { useState, useEffect, useMemo } from 'react'
-import { SETTINGS_KEYS } from '../../../stores/settings'
-import { useSettingsStoreState } from '../useSettingsStore'
+import { SETTINGS_KEYS, setSetting } from '../../../lib/resources'
+import { useSetting } from '../../../hooks/useSetting'
 import { ThemeEditor } from '../ThemeEditor'
 import {
   detectAvailableFonts,
@@ -16,25 +16,35 @@ function ThemePicker() {
 }
 
 export function DisplayTab() {
-  const { settings, loading, getSetting, setSetting } = useSettingsStoreState()
-  const isLoading = loading[SETTINGS_KEYS.DISPLAY_SHOW_THINKING] ?? false
+  const showThinking = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_THINKING, 'true')
+  const showVerboseToolOutput = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_VERBOSE_TOOL_OUTPUT, 'true')
+  const showStats = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_STATS, 'true')
+  const showAgentDefinitions = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS, 'true')
+  const showWorkflowBars = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS, 'true')
+  const fullscreenSlashCommand = useSetting(SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND, 'false')
+  const nativeScrollbars = useSetting(SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS, 'false')
+  const nativeScrollbarsCodeBlocks = useSetting(SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS_CODE_BLOCKS, 'false')
+  const collapseLargeToolCalls = useSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_LARGE_TOOL_CALLS, 'false')
+  const deferCodeHighlightWhileStreaming = useSetting(
+    SETTINGS_KEYS.DISPLAY_DEFER_CODE_HIGHLIGHT_WHILE_STREAMING,
+    'false',
+  )
+  const feedVirtualization = useSetting(SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION, 'false')
+  const syntaxHighlighting = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING, 'true')
+  const maxVisibleItems = useSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, '300')
+  const isLoading = showThinking.loading
 
-  const maxItemsStr = settings[SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS] ?? '300'
-  const [maxItemsLocal, setMaxItemsLocal] = useState(maxItemsStr)
+  const [maxItemsLocal, setMaxItemsLocal] = useState(maxVisibleItems.value)
 
   useEffect(() => {
-    getSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS)
-  }, [getSetting])
-
-  useEffect(() => {
-    setMaxItemsLocal(maxItemsStr)
-  }, [maxItemsStr])
+    setMaxItemsLocal(maxVisibleItems.value)
+  }, [maxVisibleItems.value])
 
   const saveMaxItems = () => {
     const num = parseInt(maxItemsLocal, 10)
     const clamped = isNaN(num) || num < 0 ? 0 : Math.min(num, 9999)
     setMaxItemsLocal(String(clamped))
-    setSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, String(clamped))
+    void setSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, String(clamped))
   }
 
   const toggles = [
@@ -62,6 +72,12 @@ export function DisplayTab() {
       key: SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS,
       label: 'Show workflow bars',
       description: 'Display workflow start and end markers',
+    },
+    {
+      key: SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND,
+      label: 'Fullscreen slash commands view',
+      description: 'Choose whether the commands view uses default sizing or fills the available screen height.',
+      defaultValue: 'false',
     },
   ] as const
 
@@ -110,25 +126,32 @@ export function DisplayTab() {
 
   const allToggles = [...toggles, ...perfToggles]
 
-  const feedLocalValues = Object.fromEntries(toggles.map((t) => [t.key, settings[t.key] ?? 'true']))
-  const perfLocalValues = Object.fromEntries(perfToggles.map((t) => [t.key, settings[t.key] ?? t.defaultValue]))
-  const localValues = { ...feedLocalValues, ...perfLocalValues } as Record<(typeof allToggles)[number]['key'], string>
+  const localValues: Record<string, string> = {
+    [SETTINGS_KEYS.DISPLAY_SHOW_THINKING]: showThinking.value,
+    [SETTINGS_KEYS.DISPLAY_SHOW_VERBOSE_TOOL_OUTPUT]: showVerboseToolOutput.value,
+    [SETTINGS_KEYS.DISPLAY_SHOW_STATS]: showStats.value,
+    [SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS]: showAgentDefinitions.value,
+    [SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS]: showWorkflowBars.value,
+    [SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND]: fullscreenSlashCommand.value,
+    [SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS]: nativeScrollbars.value,
+    [SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS_CODE_BLOCKS]: nativeScrollbarsCodeBlocks.value,
+    [SETTINGS_KEYS.DISPLAY_COLLAPSE_LARGE_TOOL_CALLS]: collapseLargeToolCalls.value,
+    [SETTINGS_KEYS.DISPLAY_DEFER_CODE_HIGHLIGHT_WHILE_STREAMING]: deferCodeHighlightWhileStreaming.value,
+    [SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION]: feedVirtualization.value,
+    [SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING]: syntaxHighlighting.value,
+  }
   const [local, setLocal] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(allToggles.map((t) => [t.key, localValues[t.key] === 'true'])),
   )
 
   useEffect(() => {
-    allToggles.forEach((t) => getSetting(t.key))
-  }, [getSetting])
-
-  useEffect(() => {
     setLocal(Object.fromEntries(allToggles.map((t) => [t.key, localValues[t.key] === 'true'])))
   }, [JSON.stringify(localValues)])
 
-  const handleToggle = async (key: string) => {
+  const handleToggle = (key: string) => {
     const newValue = String(!local[key as keyof typeof local])
     setLocal((prev) => ({ ...prev, [key]: !prev[key as keyof typeof local] }))
-    await setSetting(key, newValue)
+    void setSetting(key, newValue)
   }
 
   if (isLoading) {
@@ -148,11 +171,6 @@ export function DisplayTab() {
       <div className="border-t border-border pt-4">
         <h3 className="text-sm font-medium text-text-primary mb-4">Feed Display</h3>
         <ToggleList toggles={toggles} local={local} onToggle={handleToggle} />
-      </div>
-
-      <div className="border-t border-border pt-4">
-        <h3 className="text-sm font-medium text-text-primary mb-4">Model Selector</h3>
-        <ModelSelectorEditor />
       </div>
 
       <div className="border-t border-border pt-4">
@@ -196,82 +214,6 @@ export function DisplayTab() {
 
 const FONT_PREVIEW_TEXT = '~/project \ue0b0 git status \u2713 \u2717 \u2192 0123 iIlL1 |\u2500\u2524'
 
-function ModelSelectorEditor() {
-  const { settings, getSetting, setSetting } = useSettingsStoreState()
-  const savedHeight = settings[SETTINGS_KEYS.DISPLAY_MODEL_SELECTOR_HEIGHT] ?? 'default'
-  const savedCollapse = settings[SETTINGS_KEYS.DISPLAY_COLLAPSE_PROVIDERS_BY_DEFAULT] === 'true'
-  const savedCollapseFavorites = settings[SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT] === 'true'
-
-  useEffect(() => {
-    getSetting(SETTINGS_KEYS.DISPLAY_MODEL_SELECTOR_HEIGHT)
-    getSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_PROVIDERS_BY_DEFAULT)
-    getSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT)
-  }, [getSetting])
-
-  const handleHeightChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSetting(SETTINGS_KEYS.DISPLAY_MODEL_SELECTOR_HEIGHT, e.target.value)
-  }
-
-  const handleCollapseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_PROVIDERS_BY_DEFAULT, String(e.target.checked))
-  }
-
-  const handleCollapseFavoritesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT, String(e.target.checked))
-  }
-
-  return (
-    <div className="space-y-4">
-      <label className="flex items-center justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="text-sm text-text-primary font-medium">Dropdown size</div>
-          <div className="text-xs text-text-muted mt-0.5">
-            Choose whether the model picker uses default sizing or fills the available screen height.
-          </div>
-        </div>
-        <select
-          value={savedHeight}
-          onChange={handleHeightChange}
-          className="px-2 py-1 text-sm text-text-primary bg-bg-tertiary border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary"
-        >
-          <option value="default">Default</option>
-          <option value="full_height">Full height</option>
-        </select>
-      </label>
-
-      <label className="flex items-start justify-between gap-3 cursor-pointer">
-        <div className="flex-1 min-w-0">
-          <div className="text-sm text-text-primary font-medium">Collapse favorites by default</div>
-          <div className="text-xs text-text-muted mt-0.5">
-            Start with favorites section collapsed when opening the model selector.
-          </div>
-        </div>
-        <input
-          type="checkbox"
-          checked={savedCollapseFavorites}
-          onChange={handleCollapseFavoritesChange}
-          className="mt-1 h-4 w-4 rounded border-border text-accent-primary focus:ring-accent-primary"
-        />
-      </label>
-
-      <label className="flex items-start justify-between gap-3 cursor-pointer">
-        <div className="flex-1 min-w-0">
-          <div className="text-sm text-text-primary font-medium">Collapse providers by default</div>
-          <div className="text-xs text-text-muted mt-0.5">
-            Start with provider lists collapsed when opening the model selector.
-          </div>
-        </div>
-        <input
-          type="checkbox"
-          checked={savedCollapse}
-          onChange={handleCollapseChange}
-          className="mt-1 h-4 w-4 rounded border-border text-accent-primary focus:ring-accent-primary"
-        />
-      </label>
-    </div>
-  )
-}
-
 function ToggleList({
   toggles,
   local,
@@ -309,16 +251,11 @@ function ToggleList({
 }
 
 function TerminalFontEditor() {
-  const { settings, getSetting, setSetting } = useSettingsStoreState()
-  const savedValue = settings[SETTINGS_KEYS.DISPLAY_TERMINAL_FONT] ?? DEFAULT_TERMINAL_FONT
+  const savedValue = useSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT, DEFAULT_TERMINAL_FONT).value
   const [localValue, setLocalValue] = useState(savedValue)
 
   const availableFonts = useMemo(() => detectAvailableFonts(), [])
   const resolvedDefault = useMemo(() => resolveDefaultFamily(), [])
-
-  useEffect(() => {
-    getSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT)
-  }, [getSetting])
 
   useEffect(() => {
     setLocalValue(savedValue)
@@ -333,11 +270,11 @@ function TerminalFontEditor() {
   const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const family = e.target.value
     if (!family) return
-    setSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT, toFontFamilyValue(family))
+    void setSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT, toFontFamilyValue(family))
   }
 
   const saveCustom = () => {
-    setSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT, localValue.trim() || DEFAULT_TERMINAL_FONT)
+    void setSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT, localValue.trim() || DEFAULT_TERMINAL_FONT)
   }
 
   return (
@@ -390,20 +327,15 @@ function TerminalFontEditor() {
 }
 
 function CustomCssEditor() {
-  const { settings, getSetting, setSetting } = useSettingsStoreState()
-  const savedCss = settings[SETTINGS_KEYS.DISPLAY_CUSTOM_CSS] ?? ''
+  const savedCss = useSetting(SETTINGS_KEYS.DISPLAY_CUSTOM_CSS).value
   const [localCss, setLocalCss] = useState(savedCss)
-
-  useEffect(() => {
-    getSetting(SETTINGS_KEYS.DISPLAY_CUSTOM_CSS)
-  }, [getSetting])
 
   useEffect(() => {
     setLocalCss(savedCss)
   }, [savedCss])
 
   const handleSave = () => {
-    setSetting(SETTINGS_KEYS.DISPLAY_CUSTOM_CSS, localCss)
+    void setSetting(SETTINGS_KEYS.DISPLAY_CUSTOM_CSS, localCss)
   }
 
   return (

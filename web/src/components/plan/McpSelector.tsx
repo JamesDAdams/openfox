@@ -2,15 +2,16 @@ import { ScrollArea } from '../shared/ScrollArea'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { ChevronDownIcon } from '../shared/icons'
 import { Toggle } from '../shared/Toggle'
-import { useMcpStore } from '../../stores/mcp'
 import { useSessionStore } from '../../stores/session'
+import { useResource } from '../../hooks/useResource'
+import { mcpServersResource } from '../../lib/resources'
 import { mcpStatusColor, mcpStatusDot, formatTokens } from '../../lib/mcp-utils'
 import { authFetch } from '../../lib/api'
 import { useClickOutside } from '../../hooks/useClickOutside'
 
 export function McpSelector() {
-  const servers = useMcpStore((s) => s.servers)
-  const fetchServers = useMcpStore((s) => s.fetchServers)
+  const { data: serversData, refresh: refreshServers } = useResource(mcpServersResource)
+  const servers = serversData ?? []
   const currentSession = useSessionStore((s) => s.currentSession)
   const sessionId = currentSession?.id
   const [isOpen, setIsOpen] = useState(false)
@@ -22,6 +23,7 @@ export function McpSelector() {
   const fetchSessionOverrides = useCallback(async () => {
     if (!sessionId) return
     try {
+      // Authorized transient read: session MCP overrides are refetched on the mcp-servers-changed event and on dropdown open, then merged into local state.
       const res = await authFetch(`/api/sessions/${sessionId}/mcp/overrides`)
       if (res.ok) {
         const data = await res.json()
@@ -33,9 +35,9 @@ export function McpSelector() {
   }, [sessionId])
 
   const refresh = useCallback(async () => {
-    await fetchServers()
+    await refreshServers()
     await fetchSessionOverrides()
-  }, [fetchServers, fetchSessionOverrides])
+  }, [refreshServers, fetchSessionOverrides])
 
   useEffect(() => {
     const handler = () => refresh()
@@ -84,7 +86,7 @@ export function McpSelector() {
         throw new Error((data as { error?: string }).error ?? 'Toggle failed')
       }
       setSessionDisabledServers(newSet)
-      await fetchServers()
+      await refreshServers()
     } catch (err) {
       setToggleError(err instanceof Error ? err.message : String(err))
     } finally {

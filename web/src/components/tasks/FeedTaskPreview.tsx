@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTasksStore } from '../../stores/tasks'
+import { useResource } from '../../hooks/useResource'
+import { boardResource } from '../../lib/resources'
 import { Button } from '../shared/Button'
 import { TasksIcon, ArrowRightIcon } from '../shared/icons'
 import { TasksModal } from './TasksModal'
@@ -20,20 +22,13 @@ interface FeedTaskPreviewProps {
  * its task with one click, and a Manage tasks button opens the full board.
  */
 export function FeedTaskPreview({ projectId, sessionId }: FeedTaskPreviewProps) {
-  const tasks = useTasksStore((state) => state.tasks)
-  const activeProjectId = useTasksStore((state) => state.activeProjectId)
-  const loadBoard = useTasksStore((state) => state.loadBoard)
+  const { data: board } = useResource(boardResource, projectId)
+  const tasks = board?.tasks ?? []
   const moveTask = useTasksStore((state) => state.moveTask)
   const lastError = useTasksStore((state) => state.lastError)
 
   const [tasksModalOpen, setTasksModalOpen] = useState(false)
   const [queuedNotice, setQueuedNotice] = useState<{ label: string } | null>(null)
-
-  useEffect(() => {
-    if (activeProjectId !== projectId) {
-      void loadBoard(projectId)
-    }
-  }, [activeProjectId, projectId, loadBoard])
 
   const nextTasks = useMemo(
     () =>

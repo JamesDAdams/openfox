@@ -312,11 +312,10 @@ describe('ModelPicker', () => {
     expect(modal?.getAttribute('data-provider-id')).toBe('provider-2')
   })
 
-  it('saves provider edits via PUT and refreshes the config store', async () => {
+  it('saves provider edits via PUT and refreshes the providers resource', async () => {
     const { authFetch } = await import('../../lib/api')
-    const { useConfigStore } = await import('../../stores/config')
-    const fetchConfigMock = vi.fn()
-    useConfigStore.setState({ fetchConfig: fetchConfigMock })
+    const { providersResource } = await import('../../lib/resources')
+    const refreshSpy = vi.spyOn(providersResource, 'refresh')
     ;(authFetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
 
     render(undefined)
@@ -336,6 +335,6 @@ describe('ModelPicker', () => {
     })
 
     expect(authFetch).toHaveBeenCalledWith('/api/providers/provider-1', expect.objectContaining({ method: 'PUT' }))
-    expect(fetchConfigMock).toHaveBeenCalled()
+    expect(refreshSpy).toHaveBeenCalled()
   })
 })

@@ -17,13 +17,16 @@ import { useNotificationHistoryStore } from '../../stores/notificationHistory'
 import { NotificationCenter } from '../notifications/NotificationCenter'
 import { NotificationToasts } from '../notifications/NotificationToasts'
 import { useSessionStore } from '../../stores/session'
-import { useProjectStore } from '../../stores/project'
+import { useCurrentProject } from '../../hooks/useCurrentProject'
+import { useProjects } from '../../hooks/useProjects'
+import { useResource } from '../../hooks/useResource'
+import { summariesResource } from '../../lib/resources'
 import { useConfigStore } from '../../stores/config'
 import { useTerminalStore } from '../../stores/terminal'
 import { useUpdateStore } from '../../stores/update'
 import { useKeybindings, useBinding } from '../../hooks/useKeybindings'
 import { formatKeybinding } from '../../lib/keybindings'
-import { authFetch } from '../../lib/api'
+import { authFetch, hasStoredToken } from '../../lib/api'
 import { GlobalSettingsModal } from '../settings/GlobalSettingsModal'
 import { TerminalDrawer } from '../terminal/TerminalDrawer'
 import { ProjectDropdown } from './ProjectDropdown'
@@ -51,11 +54,8 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   const [tasksModalOpen, setTasksModalOpen] = useState(false)
   const [quotaModalOpen, setQuotaModalOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const runningTaskCount = useTasksStore((state) => state.counts.running)
-  const loadCounts = useTasksStore((state) => state.loadCounts)
   const unreadNotifications = useNotificationHistoryStore((state) => state.unreadCount)
   const loadNotifications = useNotificationHistoryStore((state) => state.load)
-  const activeProjectId = useTasksStore((state) => state.activeProjectId)
   const lastAutoLaunch = useTasksStore((state) => state.lastAutoLaunch)
   const clearAutoLaunch = useTasksStore((state) => state.clearAutoLaunch)
 
@@ -70,8 +70,10 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   const openSessionCount = useSessionStore((state) => state.openSessionIds.length)
   const session = useSessionStore((state) => state.currentSession)
   const sessions = useSessionStore((state) => state.sessions)
-  const project = useProjectStore((state) => state.currentProject)
-  const projects = useProjectStore((state) => state.projects)
+  const project = useCurrentProject()
+  const { projects } = useProjects()
+  const { data: countsData } = useResource(summariesResource, project?.id ?? '')
+  const runningTaskCount = countsData?.counts.running ?? 0
   const startAutoRefresh = useConfigStore((state) => state.startAutoRefresh)
   const stopAutoRefresh = useConfigStore((state) => state.stopAutoRefresh)
   const setTerminalOpen = useTerminalStore((state) => state.setOpen)
@@ -103,7 +105,8 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
     return () => window.removeEventListener('open-session-dropdown', handler)
   }, [])
 
-  const keybindings = useKeybindings()
+  const connectionStatus = useSessionStore((state) => state.connectionStatus)
+  const keybindings = useKeybindings(connectionStatus === 'connected' || hasStoredToken())
   useBinding(
     keybindings.terminalToggle,
     () => {
@@ -111,12 +114,6 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
     },
     { capture: true },
   )
-
-  useEffect(() => {
-    if (project?.id && activeProjectId !== project.id) {
-      void loadCounts(project.id)
-    }
-  }, [project?.id, activeProjectId, loadCounts])
 
   useEffect(() => {
     void loadNotifications()

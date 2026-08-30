@@ -10,39 +10,22 @@ vi.mock('wouter', () => ({
   useLocation: () => ['/', vi.fn()],
 }))
 
-const mockSettings: Record<string, string> = {}
-const mockGetSetting = vi.fn().mockResolvedValue('')
-const mockSetSetting = vi.fn()
+const { mockSettings, mockSetSetting } = vi.hoisted(() => ({
+  mockSettings: {} as Record<string, string>,
+  mockSetSetting: vi.fn(),
+}))
 
-vi.mock('../../stores/settings', () => ({
-  SETTINGS_KEYS: {
-    DISPLAY_SHOW_OPEN_IN_EDITOR: 'display.showOpenInEditorLinks',
-    LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt',
-    CACHE_WARMING: 'cache.warming',
-    RETRY_PATTERNS: 'agent.retryPatterns',
-    PROXY_URL: 'network.proxyUrl',
-    DEFAULT_AGENT: 'agent.defaultAgent',
-  },
-  useSettingsStore: vi.fn((selector) => {
-    const state = {
-      settings: mockSettings,
-      getSetting: mockGetSetting,
-      setSetting: mockSetSetting,
-    }
-    return selector(state)
-  }),
+vi.mock('../../../hooks/useSetting', () => ({
+  useSetting: (key: string, fallback = '') => ({ value: mockSettings[key] ?? fallback, loading: false }),
+}))
+
+vi.mock('../../../lib/resources', async (importOriginal) => ({
+  ...(await importOriginal()),
+  setSetting: mockSetSetting,
 }))
 
 vi.mock('../../../hooks/useAgents', () => ({
   useAgents: () => ({ agents: [], refresh: vi.fn() }),
-}))
-
-vi.mock('../useSettingsStore', () => ({
-  useSettingsStoreState: () => ({
-    settings: mockSettings,
-    getSetting: mockGetSetting,
-    setSetting: mockSetSetting,
-  }),
 }))
 
 describe('AdvancedTab', () => {

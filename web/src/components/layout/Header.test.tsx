@@ -2,6 +2,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
+import { clearCache } from '../../lib/resourceCache'
 
 vi.mock('../../lib/ws', () => ({
   wsClient: {
@@ -17,6 +18,19 @@ vi.mock('wouter', () => ({
   Link: ({ children, href, className }: any) => `<a href="${href}" class="${className}">${children}</a>`,
   useLocation: vi.fn(() => ['/', vi.fn()]),
   useSearch: () => '',
+}))
+
+const projectState = vi.hoisted(() => ({
+  currentProject: null as { id: string; name: string; workdir: string } | null,
+  projects: [] as Array<{ id: string; name: string; workdir: string }>,
+}))
+
+vi.mock('../../hooks/useCurrentProject', () => ({
+  useCurrentProject: () => projectState.currentProject,
+}))
+
+vi.mock('../../hooks/useProjects', () => ({
+  useProjects: () => ({ projects: projectState.projects, refresh: vi.fn(), loading: false }),
 }))
 
 interface MockStore {
@@ -139,36 +153,10 @@ vi.mock('../../hooks/useAgents', () => ({
   useAgents: vi.fn(() => ({ agents: [], refresh: vi.fn() })),
 }))
 
-vi.mock('../../stores/settings', () => ({
-  SETTINGS_KEYS: { GLOBAL_INSTRUCTIONS: 'global_instructions' },
-  useSettingsStore: mockStore({
-    settings: {},
-    loading: {},
-    getSetting: vi.fn(async () => null),
-    getSettings: vi.fn(async () => {}),
-    setSetting: vi.fn(async () => {}),
-  }),
-}))
-
 vi.mock('../../stores/tasks', () => ({
   useTasksStore: mockStore({
-    tasks: [],
-    settings: { slotLimit: 1, queuePaused: false },
-    counts: { open: 0, todo: 0, inProgress: 0, running: 0, queued: 0, done: 0 },
-    gates: [],
-    loading: false,
-    activeProjectId: null,
     lastError: null,
     lastAutoLaunch: null,
-    summaries: {},
-    loadBoard: vi.fn(async () => {}),
-    loadCounts: vi.fn(async () => {}),
-    loadGates: vi.fn(async () => {}),
-    moveTask: vi.fn(async () => ({})),
-    reorderTask: vi.fn(async () => {}),
-    deleteTask: vi.fn(async () => {}),
-    duplicateTask: vi.fn(async () => {}),
-    setSettings: vi.fn(async () => {}),
     clearAutoLaunch: vi.fn(),
   }),
 }))
@@ -215,6 +203,7 @@ describe('Header', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     document.body.innerHTML = ''
+    clearCache()
   })
 
   it('renders the OpenFox logo link', async () => {
@@ -272,11 +261,8 @@ describe('Header', () => {
   })
 
   it('shows project name when project exists', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'My Project', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'My Project', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'My Project', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'My Project', workdir: '/tmp' }]
 
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
@@ -287,11 +273,8 @@ describe('Header', () => {
   })
 
   it('shows terminal toggle on project page', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
 
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
@@ -303,11 +286,8 @@ describe('Header', () => {
   })
 
   it('shows menu button when onMenuClick provided and on session page', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
 
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/s/s1', vi.fn()])
@@ -319,11 +299,8 @@ describe('Header', () => {
   })
 
   it('hides menu button when not on session page', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
 
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
@@ -335,11 +312,8 @@ describe('Header', () => {
   })
 
   it('truncates long session name in header dropdown trigger', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'Test Project', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'Test Project', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'Test Project', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'Test Project', workdir: '/tmp' }]
 
     const { useSessionStore } = await import('../../stores/session')
     const longTitle = 'a'.repeat(100)
@@ -362,23 +336,23 @@ describe('Header', () => {
   })
 
   it('shows only the running task count in the green badge', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
 
-    const { useTasksStore } = await import('../../stores/tasks')
-    useTasksStore.setState({
-      counts: {
-        open: 5,
-        todo: 3,
-        inProgress: 2,
-        running: 2,
-        queued: 0,
-        done: 0,
+    const { summariesResource } = await import('../../lib/resources')
+    summariesResource.write(
+      {
+        counts: {
+          open: 5,
+          todo: 3,
+          inProgress: 2,
+          running: 2,
+          queued: 0,
+          done: 0,
+        },
       },
-    })
+      'p1',
+    )
 
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
@@ -392,23 +366,23 @@ describe('Header', () => {
   })
 
   it('hides the task badge when no tasks are running', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
 
-    const { useTasksStore } = await import('../../stores/tasks')
-    useTasksStore.setState({
-      counts: {
-        open: 5,
-        todo: 3,
-        inProgress: 2,
-        running: 0,
-        queued: 2,
-        done: 0,
+    const { summariesResource } = await import('../../lib/resources')
+    summariesResource.write(
+      {
+        counts: {
+          open: 5,
+          todo: 3,
+          inProgress: 2,
+          running: 0,
+          queued: 2,
+          done: 0,
+        },
       },
-    })
+      'p1',
+    )
 
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
@@ -513,11 +487,8 @@ describe('Header mobile menu', () => {
   })
 
   it('lists all actions on a project session page', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/s/s1', vi.fn()])
 
@@ -554,11 +525,8 @@ describe('Header mobile menu', () => {
   })
 
   it('toggles the terminal from the menu', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
 
@@ -572,11 +540,8 @@ describe('Header mobile menu', () => {
   })
 
   it('highlights the terminal item when the terminal is open', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
     const { useTerminalStore } = await import('../../stores/terminal')
     useTerminalStore.setState({ isOpen: true })
     const { useLocation } = await import('wouter')
@@ -599,11 +564,8 @@ describe('Header mobile menu', () => {
   })
 
   it('opens tasks from the menu', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
 
@@ -668,13 +630,10 @@ describe('Header mobile menu', () => {
   })
 
   it('shows the running task count badge on the Tasks item', async () => {
-    const { useProjectStore } = await import('../../stores/project')
-    ;(useProjectStore as unknown as MockStore).setState({
-      currentProject: { id: 'p1', name: 'P', workdir: '/tmp' },
-      projects: [{ id: 'p1', name: 'P', workdir: '/tmp' }],
-    })
-    const { useTasksStore } = await import('../../stores/tasks')
-    useTasksStore.setState({ counts: { open: 0, todo: 0, inProgress: 0, running: 3, queued: 0, done: 0 } })
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
+    const { summariesResource } = await import('../../lib/resources')
+    summariesResource.write({ counts: { open: 0, todo: 0, inProgress: 0, running: 3, queued: 0, done: 0 } }, 'p1')
     const { useLocation } = await import('wouter')
     vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
 

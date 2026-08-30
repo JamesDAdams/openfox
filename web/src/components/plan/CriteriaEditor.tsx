@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { MetadataEntry } from '@shared/types.js'
 import { authFetch } from '../../lib/api'
 import { shouldAutofocus } from '../../lib/device'
@@ -6,9 +6,10 @@ import { PlusIcon, XCloseIcon, TrashIcon, InfoIcon } from '../shared/icons'
 import { Modal } from '../shared/Modal'
 import { MetadataStatusIcon, decodeHtmlEntities } from '../shared/MetadataStatusIcon'
 import { useAgents } from '../../hooks/useAgents'
-import { getAgentColor } from '../../stores/agents'
+import { getAgentColor } from '../../lib/agents-actions'
 import { useScopedPaneState } from '../../stores/session/session-scope'
-import { useWorkflowsStore } from '../../stores/workflows'
+import { useWorkflows } from '../../hooks/useWorkflows'
+import { useSessionWorkdir } from '../../hooks/useSessionWorkdir'
 
 const statusCycle: Record<string, string> = {
   pending: 'completed',
@@ -30,7 +31,7 @@ async function putCriteria(sessionId: string, entries: MetadataEntry[]) {
   })
 }
 
-function AgentBadge({ id, agents }: { id: string; agents: import('../../stores/agents').AgentInfo[] }) {
+function AgentBadge({ id, agents }: { id: string; agents: import('../../lib/agents-actions').AgentInfo[] }) {
   const color = getAgentColor(agents, id)
   const agent = agents.find((a) => a.id === id)
   return (
@@ -41,9 +42,7 @@ function AgentBadge({ id, agents }: { id: string; agents: import('../../stores/a
 }
 
 function WorkflowBadge({ id }: { id: string }) {
-  const defaults = useWorkflowsStore((s) => s.defaults)
-  const userItems = useWorkflowsStore((s) => s.userItems)
-  const workflows = useMemo(() => [...defaults, ...userItems], [defaults, userItems])
+  const { workflows } = useWorkflows(useSessionWorkdir())
   const workflow = workflows.find((w) => w.id === id)
   const color = workflow?.color ?? '#3b82f6'
   return (

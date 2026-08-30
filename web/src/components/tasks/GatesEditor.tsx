@@ -4,6 +4,8 @@ import { Button } from '../shared/Button'
 import { Input } from '../shared/Input'
 import { PlusIcon, TrashIcon } from '../shared/icons'
 import { useTasksStore } from '../../stores/tasks'
+import { useResource } from '../../hooks/useResource'
+import { boardResource } from '../../lib/resources'
 import type { TaskGateConfig } from '@shared/types.js'
 
 interface GatesEditorProps {
@@ -14,15 +16,11 @@ interface GatesEditorProps {
 const NEW_GATE_ID = () => `gate_${crypto.randomUUID().slice(0, 8)}`
 
 export function GatesEditor({ projectId, onClose }: GatesEditorProps) {
-  const gates = useTasksStore((state) => state.gates)
-  const loadGates = useTasksStore((state) => state.loadGates)
+  const { data: board } = useResource(boardResource, projectId)
+  const gates = board?.gates ?? []
   const setGateConfig = useTasksStore((state) => state.setGateConfig)
   const [localGates, setLocalGates] = useState<TaskGateConfig[]>([])
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    void loadGates(projectId)
-  }, [projectId, loadGates])
 
   useEffect(() => {
     setLocalGates(gates)

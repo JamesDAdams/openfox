@@ -1,4 +1,4 @@
-import type { SkillInfo } from '../../stores/skills'
+import type { SkillInfo } from '../../lib/skills-actions'
 import { Button } from '../shared/Button'
 import { Modal } from '../shared/SelfContainedModal'
 

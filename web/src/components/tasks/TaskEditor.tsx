@@ -12,13 +12,19 @@ import {
 import { AttachIcon } from '../shared/icons'
 import { useTasksStore } from '../../stores/tasks'
 import { useAgents } from '../../hooks/useAgents'
-import { useConfigStore } from '../../stores/config'
-import { useWorkflowsStore, useAllWorkflows } from '../../stores/workflows'
-import { useCommandsStore } from '../../stores/commands'
+import { useProviders } from '../../hooks/useProviders'
+import { useResource } from '../../hooks/useResource'
+import {
+  commandsResource,
+  projectResource,
+  workflowsResource,
+  skillsResource,
+  selectAllWorkflows,
+  selectActiveSkills,
+} from '../../lib/resources'
 import { useProjectStore } from '../../stores/project'
-import { useShallow } from 'zustand/react/shallow'
+import { useProjects } from '../../hooks/useProjects'
 import { dedupById } from '../../lib/modal-utils'
-import { authFetch } from '../../lib/api'
 import { insertSuggestionAtCursor, focusTextareaAt, resolveSlashParamIds } from '../../lib/composer-utils'
 import { processFile } from '../../lib/file-processing'
 import type { ProjectTask, Attachment } from '@shared/types.js'
@@ -49,23 +55,18 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
   const updateTask = useTasksStore((state) => state.updateTask)
   const lastError = useTasksStore((state) => state.lastError)
 
-  const providers = useConfigStore((state) => state.providers)
-  const projects = useProjectStore((state) => state.projects)
+  const { providers } = useProviders()
+  const { projects } = useProjects()
   const workdir = projects.find((p) => p.id === projectId)?.workdir
   // Agents scope to the project workdir so project-scoped agents are assignable.
   const { agents: allAgents } = useAgents(workdir)
   const agents = allAgents.filter((a) => !a.subagent)
-  const fetchWorkflows = useWorkflowsStore((state) => state.fetchWorkflows)
-  const fetchCommands = useCommandsStore((state) => state.fetchCommands)
+  const { data: commandsData } = useResource(commandsResource, workdir)
+  const { data: workflowsData } = useResource(workflowsResource, workdir)
+  const { data: skillsData } = useResource(skillsResource, workdir)
 
-  // Workflows and commands load lazily too (plan/session views). Own the fetch
-  // here so the slash menu is populated even on a cold start from the homepage;
-  // re-run when the project workdir resolves to pick up project-scoped items.
-  // Agents load via the resource cache (implicit loadership).
-  useEffect(() => {
-    void fetchWorkflows(workdir)
-    void fetchCommands(workdir)
-  }, [workdir, fetchWorkflows, fetchCommands])
+  // Agents, commands, and workflows all load via the resource cache
+  // (implicit loadership) — no imperative fetch to remember here.
 
   const draftKey = `${DRAFT_KEY}:${projectId}:${initialTask?.id ?? 'new'}`
 
@@ -91,11 +92,11 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
   useEffect(() => {
     if (workdir) return
     let cancelled = false
-    authFetch(`/api/projects/${projectId}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.project?.workdir) {
-          useProjectStore.setState({ currentProject: data.project })
+    projectResource
+      .refresh(projectId)
+      .then((project) => {
+        if (!cancelled && project?.workdir) {
+          useProjectStore.getState().setCurrentProjectId(project.id)
         }
       })
       .catch(() => {})
@@ -207,7 +208,7 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
       cursorPosRef.current = newCursorPos
       focusTextareaAt(textareaRef.current, newCursorPos)
       // Inline parameter hints, exactly as in chat.
-      setActiveSlashParams(resolveSlashParamIds(suggestion))
+      setActiveSlashParams(resolveSlashParamIds(suggestion, workdir))
     },
     [prompt],
   )
@@ -287,8 +288,11 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
     }
   }
 
-  const workflows = useAllWorkflows()
-  const commands = useCommandsStore(useShallow((s) => dedupById(dedupById(s.defaults, s.userItems), s.projectItems)))
+  const workflows = workflowsData ? selectAllWorkflows(workflowsData) : []
+  const commands = commandsData
+    ? dedupById(dedupById(commandsData.defaults, commandsData.userItems), commandsData.projectItems)
+    : []
+  const skills = selectActiveSkills(skillsData)
 
   const slashParamCount = (() => {
     if (activeSlashParams.length === 0) return 0
@@ -368,6 +372,7 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
               cursorPos={cursorPosRef.current}
               workflows={workflows}
               commands={commands}
+              skills={skills}
               anchorRef={composerWrapRef}
               onSelect={handleSelectSlash}
             />

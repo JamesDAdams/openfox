@@ -2,7 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { TasksModal } from './TasksModal'
-import { useTasksStore } from '../../stores/tasks'
+import { clearCache } from '../../lib/resourceCache'
+import { boardResource } from '../../lib/resources'
 import type { ProjectTask, ProjectTaskSettings, ProjectTaskCounts } from '@shared/types.js'
 import { authFetch } from '../../lib/api'
 
@@ -59,15 +60,16 @@ const board: { tasks: ProjectTask[]; settings: ProjectTaskSettings; counts: Proj
 describe('TasksModal', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
-    useTasksStore.setState({
-      tasks: board.tasks,
-      settings: board.settings,
-      counts: board.counts,
-      gates: [],
-      activeProjectId: 'proj-1',
-      lastError: null,
-      lastAutoLaunch: null,
-    })
+    clearCache()
+    boardResource.write(
+      {
+        tasks: board.tasks,
+        settings: board.settings,
+        counts: board.counts,
+        gates: [],
+      },
+      'proj-1',
+    )
     const authFetchMock = vi.mocked(authFetch)
     authFetchMock.mockImplementation(async (url: string) => {
       if (url.endsWith('/tasks/gates')) {
@@ -172,11 +174,15 @@ describe('TasksModal', () => {
         counts: { open: 1, todo: 1, inProgress: 0, running: 0, queued: 0, done: 1 },
       }),
     } as unknown as Response)
-    useTasksStore.setState({
-      tasks: customTasks,
-      settings: { slotLimit: 1, queuePaused: false },
-      counts: { open: 1, todo: 1, inProgress: 0, running: 0, queued: 0, done: 1 },
-    })
+    boardResource.write(
+      {
+        tasks: customTasks,
+        settings: { slotLimit: 1, queuePaused: false },
+        counts: { open: 1, todo: 1, inProgress: 0, running: 0, queued: 0, done: 1 },
+        gates: [],
+      },
+      'proj-1',
+    )
     render(<TasksModal isOpen onClose={() => {}} projectId="proj-1" />)
 
     // A todo card with no bound session shows no link; the done card links to

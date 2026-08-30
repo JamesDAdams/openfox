@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSessionStore } from '../../stores/session'
-import { useProjectStore } from '../../stores/project'
+import { useProjects } from '../../hooks/useProjects'
 import { PlanPanel } from '../plan/PlanPanel'
 import { TasksModal } from '../tasks/TasksModal'
 import { ProjectSettingsModal } from '../settings/ProjectSettingsModal'
@@ -49,7 +49,8 @@ export function SessionPane({ sessionId, focused, onFocus, onClose, className }:
   }, [])
   const pane = useSessionStore((state) => state.panes[sessionId])
   const projectId = pane?.session?.projectId
-  const project = useProjectStore((state) => (projectId ? state.projects.find((p) => p.id === projectId) : undefined))
+  const { projects } = useProjects()
+  const project = projects.find((p) => p.id === projectId)
   const title = pane?.session?.metadata?.title ?? sessionId.slice(0, 8)
   const isRunning = pane?.session?.isRunning ?? false
   const confirmationsCount = pane?.pendingPathConfirmations.length ?? 0

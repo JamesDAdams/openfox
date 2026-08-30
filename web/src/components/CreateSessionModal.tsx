@@ -1,7 +1,8 @@
 import { ScrollArea } from './shared/ScrollArea'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useLocation } from 'wouter'
 import { useProjectStore } from '../stores/project'
+import { useProjects } from '../hooks/useProjects'
 import { Modal } from './shared/Modal'
 import { Button } from './shared/Button'
 import { FolderIcon, TrashIcon } from './shared/icons'
@@ -23,18 +24,11 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
   const baseWorkdir = useWorkdir()
   const [showBrowser, setShowBrowser] = useState(false)
 
-  const projects = useProjectStore((state) => state.projects)
+  const { projects } = useProjects()
   const createProject = useProjectStore((state) => state.createProject)
-  const listProjects = useProjectStore((state) => state.listProjects)
   const deleteProject = useProjectStore((state) => state.deleteProject)
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null)
   const [permissionDeniedPath, setPermissionDeniedPath] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (isOpen) {
-      listProjects()
-    }
-  }, [isOpen, listProjects])
 
   const handleProjectClick = (projectId: string) => {
     navigate(`/p/${projectId}`)
@@ -72,7 +66,6 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
   async function handleProjectCreation(path: string): Promise<boolean> {
     const basename = pathBasename(path)
     const result = await createProject(basename, path)
-    listProjects()
     if (isPermissionDenied(result)) {
       setPermissionDeniedPath((result.error as { path?: string }).path || path)
       return false

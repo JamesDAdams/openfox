@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Toggle } from '../shared/Toggle'
 import { ChevronDownIcon } from '../shared/icons'
 import { formatTokens } from '../../lib/mcp-utils'
-import type { McpServerInfo } from '../../stores/mcp'
+import type { McpServerInfo } from '../../lib/resources'
 
 interface McpServerCardTool {
   name: string

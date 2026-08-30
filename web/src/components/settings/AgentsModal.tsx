@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
-import { useAgentsStore, type AgentFull } from '../../stores/agents'
-import { useConfigStore } from '../../stores/config'
+import { createAgent, updateAgent, deleteAgent, type AgentFull } from '../../lib/agents-actions'
 import { authFetch } from '../../lib/api'
 import { useResource } from '../../hooks/useResource'
-import { agentsResource } from '../../lib/resources'
+import { useProviders } from '../../hooks/useProviders'
+import { agentsResource, agentResource, agentDefaultResource, readProviders } from '../../lib/resources'
 import { CRUDListHeader, useConfirmDialog, DestinationSelector, ModalActions } from './CRUDModal'
 import { AgentGroup } from './agents/AgentListItem'
 import { AgentForm } from './agents/AgentForm'
@@ -33,11 +33,6 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
   const userItems = data?.userItems ?? []
   const projectItems = data?.projectItems ?? []
   const modelOverrides = data?.modelOverrides ?? {}
-  const fetchAgent = useAgentsStore((state) => state.fetchAgent)
-  const fetchDefaultContent = useAgentsStore((state) => state.fetchDefaultContent)
-  const createAgent = useAgentsStore((state) => state.createAgent)
-  const updateAgent = useAgentsStore((state) => state.updateAgent)
-  const deleteAgentAction = useAgentsStore((state) => state.deleteAgent)
 
   const [view, setView] = useState<'list' | 'edit'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -75,6 +70,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
     setFormError('')
     setLoadingModel(true)
     // Fetch model override
+    // Authorized transient read: per-agent model override is a one-shot form load.
     authFetch(`/api/agents/${agent.metadata.id}/model`)
       .then((r) => r.json())
       .then((data) => {
@@ -114,6 +110,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
 
   useEffect(() => {
     if (isOpen) {
+      // Authorized transient read: tools list is a one-shot modal load.
       authFetch('/api/tools')
         .then((r) => r.json())
         .then((d) => {
@@ -130,12 +127,12 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
       if (initialEditId) {
         const isDefault = defaults.some((d) => d.id === initialEditId)
         if (isDefault) {
-          fetchDefaultContent(initialEditId).then((content) => {
+          agentDefaultResource.refresh(initialEditId).then((content) => {
             if (!content) return
             applyDuplicateFromContent(content, initialEditId, true)
           })
         } else {
-          fetchAgent(initialEditId, projectDir).then((agent) => {
+          agentResource.refresh(initialEditId, projectDir).then((agent) => {
             if (!agent) return
             populateFormFromAgent(agent)
             setEditingId(initialEditId)
@@ -149,25 +146,25 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
         setIsReadOnly(false)
       }
     }
-  }, [isOpen, fetchAgent, fetchDefaultContent, initialEditId, projectDir])
+  }, [isOpen, initialEditId, projectDir])
 
   const handleView = async (agentId: string) => {
     const isDefault = defaults.some((d) => d.id === agentId)
     if (isDefault) {
-      const content = await fetchDefaultContent(agentId)
+      const content = await agentDefaultResource.refresh(agentId)
       if (!content) return
       applyViewFromContent(content, agentId)
     } else {
-      const agent = await fetchAgent(agentId, projectDir)
+      const agent = await agentResource.refresh(agentId, projectDir)
       if (!agent) return
       applyViewFromContent(agent, agentId)
     }
   }
 
   const handleDuplicate = async (agentId: string) => {
-    let content = await fetchDefaultContent(agentId)
+    let content = await agentDefaultResource.refresh(agentId)
     if (!content) {
-      content = await fetchAgent(agentId, projectDir)
+      content = await agentResource.refresh(agentId, projectDir)
     }
     if (!content) return
     applyDuplicateFromContent(content, agentId, true)
@@ -189,7 +186,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
   }
 
   const handleEdit = async (agentId: string) => {
-    const agent = await fetchAgent(agentId, projectDir)
+    const agent = await agentResource.refresh(agentId, projectDir)
     if (!agent) return
     populateFormFromAgent(agent)
     setEditingId(agentId)
@@ -202,7 +199,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
   }
 
   const handleDelete = async (agentId: string) => {
-    await deleteAgentAction(agentId, projectDir)
+    await deleteAgent(agentId, projectDir)
   }
 
   const handleSave = async () => {
@@ -318,7 +315,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
             formError={formError}
             isReadOnly={isReadOnly}
             availableTools={availableTools}
-            providers={useConfigStore.getState().providers}
+            providers={readProviders()?.providers ?? []}
             onNameChange={handleNameChange}
             onIdChange={setFormId}
             onDescriptionChange={setFormDescription}
@@ -466,7 +463,7 @@ function BuiltInModelModal({
   const { data } = useResource(agentsResource, projectDir)
   const agents = data ? [...data.defaults, ...data.userItems, ...data.projectItems] : []
   const agent = agentId ? agents.find((a) => a.id === agentId) : undefined
-  const providers = useConfigStore((s) => s.providers)
+  const providers = useProviders().providers
 
   useEffect(() => {
     if (!agentId) return

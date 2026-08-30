@@ -3,6 +3,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link } from 'wouter'
 import { useSessionStore } from '../stores/session'
 import { useProjectStore } from '../stores/project'
+import { useProjects } from '../hooks/useProjects'
+import { useResource } from '../hooks/useResource'
+import { summariesResource } from '../lib/resources'
 import { Button } from './shared/Button'
 import { CurrentlyRunning } from './split/CurrentlyRunning'
 import { OpenProjectModal } from './CreateSessionModal'
@@ -12,7 +15,6 @@ import { SearchIcon, XCloseIcon, FolderIcon, TrashIcon, TasksIcon, ColumnsIcon }
 import { Spinner } from './shared/Spinner'
 import { fuzzyMatch, highlightMatches } from '../lib/modal-utils'
 import { shouldAutofocus } from '../lib/device'
-import { useTasksStore } from '../stores/tasks'
 import { TasksModal } from './tasks/TasksModal'
 import type { SessionSummary, ProjectTaskCounts } from '@shared/types.js'
 
@@ -48,6 +50,12 @@ function TaskStateChips({ counts }: { counts?: ProjectTaskCounts }) {
   )
 }
 
+/** Per-project task counts (homepage chips) with implicit loadership. */
+function ProjectTaskChips({ projectId }: { projectId: string }) {
+  const { data } = useResource(summariesResource, projectId)
+  return <TaskStateChips counts={data?.counts} />
+}
+
 export function HomePage() {
   const [showOpenModal, setShowOpenModal] = useState(false)
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null)
@@ -60,34 +68,18 @@ export function HomePage() {
   // corpus (with prompts) is loaded on demand when the user searches.
   const sessions = useSessionStore((state) => state.searchSessions ?? state.sessions)
   const hasFullCorpus = useSessionStore((state) => state.searchSessions !== null)
-  const projects = useProjectStore((state) => state.projects)
-  const loading = useProjectStore((state) => state.loading)
-  const listProjects = useProjectStore((state) => state.listProjects)
+  const { projects, loading } = useProjects()
   const listHomeSessions = useSessionStore((state) => state.listHomeSessions)
   const ensureFullSessionList = useSessionStore((state) => state.ensureFullSessionList)
   const deleteProject = useProjectStore((state) => state.deleteProject)
 
   const connectionStatus = useSessionStore((state) => state.connectionStatus)
-  const summaries = useTasksStore((state) => state.summaries)
-  const loadSummaries = useTasksStore((state) => state.loadSummaries)
 
   useEffect(() => {
     if (connectionStatus === 'connected') {
-      listProjects()
       listHomeSessions()
     }
-  }, [connectionStatus, listProjects, listHomeSessions])
-
-  // Load per-project task summaries once per project set. The key is a stable
-  // string (not the `projects` array reference, which UIs must not depend on
-  // staying stable across renders) so the effect can never re-fire in a loop.
-  const projectTaskKey = projects
-    .map((p) => p.id)
-    .sort()
-    .join(',')
-  useEffect(() => {
-    if (projectTaskKey) void loadSummaries(projectTaskKey.split(','))
-  }, [projectTaskKey, loadSummaries])
+  }, [connectionStatus, listHomeSessions])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(searchQuery), 150)
@@ -330,7 +322,7 @@ export function HomePage() {
                       >
                         <TasksIcon className="w-4 h-4" />
                         <span>Tasks</span>
-                        <TaskStateChips counts={summaries[project.id]} />
+                        <ProjectTaskChips projectId={project.id} />
                       </Button>
                       <Link
                         href={`/p/${project.id}/new`}

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'wouter'
 import { useSessionStore } from '../../stores/session'
 import { authFetch } from '../../lib/api'
+import { workspacesResource } from '../../lib/resources'
 import { useModalState } from '../../hooks/useModalState'
 import { ModalShell } from '../shared/ModalShell'
 import { FolderIcon } from '../shared/icons'
@@ -56,10 +57,10 @@ export function WorkspaceModal({
     setConfirmDelete(null)
     setConflictingSessionIds(null)
     setForceDeleting(false)
-    authFetch(`/api/projects/${projectId}/workspaces`)
-      .then((r) => r.json())
-      .then((data: { workspaces: WorkspaceInfo[] }) => {
-        setWorkspaces(data.workspaces)
+    workspacesResource
+      .refresh(projectId)
+      .then((workspaces) => {
+        setWorkspaces(workspaces ?? [])
         setLoading(false)
       })
       .catch(() => {

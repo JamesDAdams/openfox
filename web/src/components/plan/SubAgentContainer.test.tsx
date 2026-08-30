@@ -18,7 +18,7 @@ vi.mock('../../stores/session', () => ({
   ) => selector(contextStateFixture),
 }))
 
-vi.mock('../../stores/settings', () => ({
+vi.mock('../../hooks/useDisplaySettings', () => ({
   useDisplaySettings: () => ({ showThinking: false, showVerboseToolOutput: false }),
 }))
 

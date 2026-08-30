@@ -4,11 +4,11 @@ import { authFetch } from '../../../lib/api'
 import { Button } from '../../shared/Button'
 import { Input } from '../../shared/Input'
 import { Toggle } from '../../shared/Toggle'
-import { SETTINGS_KEYS } from '../../../stores/settings'
-import { useSettingsStoreState } from '../useSettingsStore'
+import { SETTINGS_KEYS, setSetting } from '../../../lib/resources'
+import { useSetting } from '../../../hooks/useSetting'
 import { useTestButton } from '../../../hooks/useTestButton'
 import { RetryPatternsEditor, type RetryPatternsValue } from '../RetryPatternsEditor'
-import { useConfigStore } from '../../../stores/config'
+import { useConfig } from '../../../hooks/useConfig'
 import { useUpdateStore } from '../../../stores/update'
 import { AutoUpdateModal } from '../../AutoUpdateModal'
 import { ChangelogModal } from '../../ChangelogModal'
@@ -16,11 +16,13 @@ import { useAgents } from '../../../hooks/useAgents'
 
 export function AdvancedTab({ onClose }: { onClose: () => void }) {
   const [, navigate] = useLocation()
-  const { settings, getSetting, setSetting } = useSettingsStoreState()
-
-  const showOpenInEditor = settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR] === 'true'
-  const dynamicSystemPrompt = settings[SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT] === 'true'
-  const cacheWarming = settings[SETTINGS_KEYS.CACHE_WARMING] === 'true'
+  const showOpenInEditor = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR).value === 'true'
+  const dynamicSystemPrompt = useSetting(SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT).value === 'true'
+  const cacheWarming = useSetting(SETTINGS_KEYS.CACHE_WARMING).value === 'true'
+  const retryPatternsSetting = useSetting(SETTINGS_KEYS.RETRY_PATTERNS).value
+  const proxyUrlSetting = useSetting(SETTINGS_KEYS.PROXY_URL).value
+  const defaultAgentSetting = useSetting(SETTINGS_KEYS.DEFAULT_AGENT).value
+  const showChangelogSetting = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE, 'true').value
 
   const [localToggles, setLocalToggles] = useState({
     openInEditor: showOpenInEditor,
@@ -35,7 +37,7 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
   const [proxyTestText, proxyTestError, proxyTestSuccess, testProxy] = useTestButton()
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [showChangelogModal, setShowChangelogModal] = useState(false)
-  const version = useConfigStore((state) => state.version)
+  const version = useConfig().config?.version ?? null
   const updateStatus = useUpdateStore((state) => state.status)
   const latestVersion = useUpdateStore((state) => state.latest)
   const checkForUpdate = useUpdateStore((state) => state.check)
@@ -55,54 +57,36 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
   }, [showOpenInEditor, dynamicSystemPrompt, cacheWarming])
 
   useEffect(() => {
-    getSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR)
-    getSetting(SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT)
-    getSetting(SETTINGS_KEYS.CACHE_WARMING)
-    getSetting(SETTINGS_KEYS.RETRY_PATTERNS)
-    getSetting(SETTINGS_KEYS.PROXY_URL)
-  }, [getSetting])
-
-  useEffect(() => {
-    const raw = settings[SETTINGS_KEYS.RETRY_PATTERNS]
-    if (raw) {
+    if (retryPatternsSetting) {
       try {
-        setRetryPatterns(JSON.parse(raw))
+        setRetryPatterns(JSON.parse(retryPatternsSetting))
       } catch {
         // ignore parse errors
       }
     }
-  }, [settings])
+  }, [retryPatternsSetting])
 
   useEffect(() => {
-    const raw = settings[SETTINGS_KEYS.PROXY_URL]
-    if (raw !== undefined) {
-      setProxyUrl(raw)
+    if (proxyUrlSetting !== '') {
+      setProxyUrl(proxyUrlSetting)
     }
-  }, [settings])
+  }, [proxyUrlSetting])
 
   useEffect(() => {
-    getSetting(SETTINGS_KEYS.DEFAULT_AGENT)
-  }, [getSetting])
-
-  useEffect(() => {
-    const val = settings[SETTINGS_KEYS.DEFAULT_AGENT]
-    if (val !== undefined) {
-      setDefaultAgent(val)
+    if (defaultAgentSetting !== '') {
+      setDefaultAgent(defaultAgentSetting)
       setDefaultAgentLoaded(true)
     }
-  }, [settings])
+  }, [defaultAgentSetting])
 
-  const handleRetryPatternsChange = useCallback(
-    (value: RetryPatternsValue) => {
-      setRetryPatterns(value)
-      setSetting(SETTINGS_KEYS.RETRY_PATTERNS, JSON.stringify(value))
-    },
-    [setSetting],
-  )
+  const handleRetryPatternsChange = useCallback((value: RetryPatternsValue) => {
+    setRetryPatterns(value)
+    void setSetting(SETTINGS_KEYS.RETRY_PATTERNS, JSON.stringify(value))
+  }, [])
 
   const handleProxyUrlChange = (value: string) => {
     setProxyUrl(value)
-    setSetting(SETTINGS_KEYS.PROXY_URL, value)
+    void setSetting(SETTINGS_KEYS.PROXY_URL, value)
   }
 
   function handleTestProxy() {
@@ -115,19 +99,19 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
   const handleToggleOpenInEditor = () => {
     const newValue = !localToggles.openInEditor
     setLocalToggles((prev) => ({ ...prev, openInEditor: newValue }))
-    setSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR, String(newValue))
+    void setSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR, String(newValue))
   }
 
   const handleToggleDynamicSystemPrompt = () => {
     const newValue = !localToggles.dynamicPrompt
     setLocalToggles((prev) => ({ ...prev, dynamicPrompt: newValue }))
-    setSetting(SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT, String(newValue))
+    void setSetting(SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT, String(newValue))
   }
 
   const handleToggleCacheWarming = () => {
     const newValue = !localToggles.cacheWarming
     setLocalToggles((prev) => ({ ...prev, cacheWarming: newValue }))
-    setSetting(SETTINGS_KEYS.CACHE_WARMING, String(newValue))
+    void setSetting(SETTINGS_KEYS.CACHE_WARMING, String(newValue))
   }
 
   function handleLaunchOnboarding() {
@@ -183,11 +167,10 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
         <label className="flex items-center gap-2 cursor-pointer">
           <span className="text-xs text-text-muted">Show on update</span>
           <Toggle
-            enabled={(settings[SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE] ?? 'true') === 'true'}
+            enabled={showChangelogSetting === 'true'}
             onClick={() => {
-              const current = settings[SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE] ?? 'true'
-              const newValue = current === 'true' ? 'false' : 'true'
-              setSetting(SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE, newValue)
+              const newValue = showChangelogSetting === 'true' ? 'false' : 'true'
+              void setSetting(SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE, newValue)
             }}
           />
         </label>
@@ -205,7 +188,7 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
           onChange={(e) => {
             const val = e.target.value
             setDefaultAgent(val)
-            setSetting(SETTINGS_KEYS.DEFAULT_AGENT, val)
+            void setSetting(SETTINGS_KEYS.DEFAULT_AGENT, val)
           }}
           className="w-full px-3 py-2 text-sm bg-bg-primary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
         >

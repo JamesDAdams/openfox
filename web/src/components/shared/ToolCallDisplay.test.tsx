@@ -2,9 +2,12 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore } from '../../stores/session'
-import { SETTINGS_KEYS, useSettingsStore } from '../../stores/settings'
+import { SETTINGS_KEYS, settingResource } from '../../lib/resources'
+import { clearCache } from '../../lib/resourceCache'
 import { SessionScopeProvider } from '../../stores/session/session-scope'
 import { ToolCallDisplay } from './ToolCallDisplay'
+
+vi.mock('../../lib/api', () => ({ authFetch: vi.fn() }))
 
 vi.mock('./RunCommandView', () => ({
   RunCommandView: () => <div data-testid="run-command-view">command output content</div>,
@@ -46,7 +49,7 @@ const pendingConfirmation = {
 describe('ToolCallDisplay — remote execution', () => {
   beforeEach(() => {
     useSessionStore.setState({ pendingPathConfirmations: [] })
-    useSettingsStore.setState({ settings: {} })
+    clearCache()
   })
 
   afterEach(cleanup)
@@ -96,7 +99,7 @@ describe('ToolCallDisplay — remote execution', () => {
 describe('ToolCallDisplay — PathConfirmationButtons placement', () => {
   beforeEach(() => {
     useSessionStore.setState({ pendingPathConfirmations: [] })
-    useSettingsStore.setState({ settings: {} })
+    clearCache()
   })
 
   afterEach(cleanup)
@@ -260,7 +263,7 @@ describe('ToolCallDisplay — PathConfirmationButtons placement', () => {
 describe('ToolCallDisplay — project_tasks', () => {
   beforeEach(() => {
     useSessionStore.setState({ pendingPathConfirmations: [] })
-    useSettingsStore.setState({ settings: {} })
+    clearCache()
   })
 
   afterEach(cleanup)
@@ -299,7 +302,7 @@ describe('ToolCallDisplay — project_tasks', () => {
 describe('ToolCallDisplay — default expansion', () => {
   beforeEach(() => {
     useSessionStore.setState({ pendingPathConfirmations: [] })
-    useSettingsStore.setState({ settings: {} })
+    clearCache()
   })
 
   afterEach(cleanup)
@@ -314,9 +317,7 @@ describe('ToolCallDisplay — default expansion', () => {
   })
 
   it('collapses large finished results when collapseLargeToolCalls is enabled', () => {
-    useSettingsStore.setState({
-      settings: { [SETTINGS_KEYS.DISPLAY_COLLAPSE_LARGE_TOOL_CALLS]: 'true' },
-    })
+    settingResource.write('true', SETTINGS_KEYS.DISPLAY_COLLAPSE_LARGE_TOOL_CALLS)
     const bigResult = 'x'.repeat(10_000)
     const { container } = render(
       <ToolCallDisplay tool="custom_tool" args={{}} status="success" result={bigResult} variant="expandable" />,

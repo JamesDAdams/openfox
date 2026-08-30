@@ -7,14 +7,14 @@ function getProjectIdFromPath(path: string): string | undefined {
   const match = path.match(/^\/p\/([^/]+)/)
   return match?.[1]
 }
-import { useCommandsStore } from '../stores/commands'
-import { useWorkflowsStore } from '../stores/workflows'
 import { useAgents } from '../hooks/useAgents'
+import { useResource } from '../hooks/useResource'
+import { commandsResource, workflowsResource } from '../lib/resources'
 import { useSessionStore } from '../stores/session'
 import { useSessionScope, useScopedPaneState } from '../stores/session/session-scope'
 import { dedupById, fuzzyMatch, handleModalNavigation } from '../lib/modal-utils'
 import type { WorkflowScope } from '@shared/types.js'
-import { shouldAutofocus } from '../lib/device'
+import { useResetSearchOnOpen } from '../hooks/useResetSearchOnOpen'
 
 interface QuickActionModalProps {
   isOpen: boolean
@@ -49,14 +49,6 @@ export function QuickActionModal({
   isAutoScrollActive,
 }: QuickActionModalProps) {
   const [, navigate] = useLocation()
-  const fetchCommands = useCommandsStore((state) => state.fetchCommands)
-  const fetchWorkflows = useWorkflowsStore((state) => state.fetchWorkflows)
-  const commandDefaults = useCommandsStore((state) => state.defaults)
-  const commandUserItems = useCommandsStore((state) => state.userItems)
-  const commandProjectItems = useCommandsStore((state) => state.projectItems)
-  const workflowDefaults = useWorkflowsStore((state) => state.defaults)
-  const workflowUserItems = useWorkflowsStore((state) => state.userItems)
-  const workflowProjectItems = useWorkflowsStore((state) => state.projectItems)
   const sessionId = useSessionScope()
   const currentMode = useScopedPaneState(
     sessionId,
@@ -85,6 +77,14 @@ export function QuickActionModal({
     undefined,
   )
   const { agents } = useAgents(currentWorkdir)
+  const { data: commandData } = useResource(commandsResource, currentWorkdir)
+  const commandDefaults = commandData?.defaults ?? []
+  const commandUserItems = commandData?.userItems ?? []
+  const commandProjectItems = commandData?.projectItems ?? []
+  const { data: workflowData } = useResource(workflowsResource, currentWorkdir)
+  const workflowDefaults = workflowData?.defaults ?? []
+  const workflowUserItems = workflowData?.userItems ?? []
+  const workflowProjectItems = workflowData?.projectItems ?? []
   const closeCompleteAction = useRef<(() => void) | undefined>(undefined)
 
   const [search, setSearch] = useState('')
@@ -92,22 +92,11 @@ export function QuickActionModal({
   const searchRef = useRef<HTMLInputElement>(null)
   const wasOpenRef = useRef(false)
 
+  useResetSearchOnOpen(isOpen, searchRef, setSearch, setSelectedIndex, [currentWorkdir])
+
   useEffect(() => {
     if (isOpen) wasOpenRef.current = true
   }, [isOpen])
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchCommands(currentWorkdir)
-      fetchWorkflows(currentWorkdir)
-      setSearch('')
-      setSelectedIndex(0)
-      const timer = setTimeout(() => {
-        if (shouldAutofocus()) searchRef.current?.focus()
-      }, 50)
-      return () => clearTimeout(timer)
-    }
-  }, [isOpen, fetchCommands, fetchWorkflows, currentWorkdir])
 
   useEffect(() => {
     if (!isOpen && wasOpenRef.current) {

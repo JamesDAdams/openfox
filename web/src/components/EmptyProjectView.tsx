@@ -1,8 +1,8 @@
 import { Link } from 'wouter'
-import { useProjectStore } from '../stores/project'
+import { useCurrentProject } from '../hooks/useCurrentProject'
 
 export function EmptyProjectView() {
-  const currentProject = useProjectStore((state) => state.currentProject)
+  const currentProject = useCurrentProject()
 
   return (
     <div className="h-full flex flex-col items-center justify-center p-8 text-center">

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.133 - 2026-08-30
+
+### Features
+
+- **Edit providers straight from model selectors** — a pencil button on each provider group header opens the editor without digging through settings
+- **Sub-agents can load skills** — explorer, verifier, and code reviewer now use the load_skill tool
+
+### Enhancements
+
+- **Smoother workflow completion nudge** — when a step's transition condition is already satisfied, the agent gets a short "call step_done" reminder instead of the verbose prompt
+- **Faster settings and config loading** — shared caching dedupes and single-flights resource requests
+
+### Bug Fixes
+
+- **Stale blocked-workflow message cleared** — starting a plain chat turn no longer leaves a "retry to continue" step message behind
+- **Workflow template-variable suggestions load again** — the editor no longer hits a 404
+- **Duplicate and Customize creates a real copy** — no longer overwrites the original command
+- **No more 401s on the login page** — settings requests no longer fire before sign-in
+
 ## 2.0.132 - 2026-08-28
 
 ### Enhancements

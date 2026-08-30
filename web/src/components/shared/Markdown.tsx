@@ -3,7 +3,7 @@ import { OptionalScrollArea } from './OptionalScrollArea'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { highlightCode, useShikiTheme } from '../../lib/syntax-highlighter'
-import { useDisplaySettings } from '../../stores/settings'
+import { useDisplaySettings } from '../../hooks/useDisplaySettings'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { CheckIcon, CopyIcon } from './icons'
 

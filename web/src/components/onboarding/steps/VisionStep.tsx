@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { authFetch } from '../../../lib/api'
 import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard'
+import { useConfig } from '../../../hooks/useConfig'
+import { useResource } from '../../../hooks/useResource'
+import { providersResource } from '../../../lib/resources'
 import { CheckIcon, ClipboardIcon } from '../../shared/icons'
 import type { Provider } from '../../../stores/config'
 import {
@@ -33,30 +35,30 @@ export function VisionStep({ onNext }: VisionStepProps) {
   const [providers, setProviders] = useState<Provider[]>([])
   const [selectedRef, setSelectedRef] = useState<string>('')
   const { copied, copy } = useCopyToClipboard()
+  const { config } = useConfig()
+  const { data: providersData } = useResource(providersResource)
 
   useEffect(() => {
-    authFetch('/api/config')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.visionFallback) {
-          setEnabled(data.visionFallback.enabled)
-          if (data.visionFallback.providerModelRef) {
-            setSelectedRef(data.visionFallback.providerModelRef)
-          } else {
-            setUrl(data.visionFallback.url ?? 'http://localhost:11434')
-            setModel(data.visionFallback.model ?? 'qwen3.5:0.8b')
-            setApiKey(data.visionFallback.apiKey ?? '')
-            if (data.visionFallback.backend) {
-              setBackend(data.visionFallback.backend)
-            }
-          }
+    if (providersData) {
+      setProviders(providersData.providers)
+    }
+  }, [providersData])
+
+  useEffect(() => {
+    const fallback = config?.visionFallback
+    if (fallback) {
+      setEnabled(fallback.enabled)
+      if (fallback.providerModelRef) {
+        setSelectedRef(fallback.providerModelRef)
+      } else {
+        setUrl(fallback.url ?? 'http://localhost:11434')
+        setModel(fallback.model ?? 'qwen3.5:0.8b')
+        if (fallback.backend) {
+          setBackend(fallback.backend)
         }
-        if (data.providers) {
-          setProviders(data.providers)
-        }
-      })
-      .catch(() => {})
-  }, [])
+      }
+    }
+  }, [config?.visionFallback])
 
   const visionModelOptions = useVisionModelOptions(providers)
 

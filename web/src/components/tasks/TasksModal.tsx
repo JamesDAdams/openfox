@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
 import { Button } from '../shared/Button'
 import { Input } from '../shared/Input'
@@ -6,7 +6,9 @@ import { ConfirmModal } from '../shared/ConfirmModal'
 import { PauseIcon, PlayIcon, SearchIcon, PlusIcon } from '../shared/icons'
 import { useTasksStore } from '../../stores/tasks'
 import { useAgents } from '../../hooks/useAgents'
-import { useProjectStore } from '../../stores/project'
+import { useProjects } from '../../hooks/useProjects'
+import { useResource } from '../../hooks/useResource'
+import { boardResource, readBoard } from '../../lib/resources'
 import { ModalCrumbTitle } from '../shared/ModalCrumbTitle'
 import { TaskColumn } from './TaskColumn'
 import { TaskEditor } from './TaskEditor'
@@ -20,17 +22,17 @@ interface TasksModalProps {
 }
 
 export function TasksModal({ isOpen, onClose, projectId }: TasksModalProps) {
-  const tasks = useTasksStore((state) => state.tasks)
-  const settings = useTasksStore((state) => state.settings)
-  const loadBoard = useTasksStore((state) => state.loadBoard)
-  const loadGates = useTasksStore((state) => state.loadGates)
+  const { data: board } = useResource(boardResource, projectId)
+  const tasks = board?.tasks ?? []
+  const settings = board?.settings ?? { slotLimit: 1, queuePaused: false }
   const moveTask = useTasksStore((state) => state.moveTask)
   const reorderTask = useTasksStore((state) => state.reorderTask)
   const deleteTask = useTasksStore((state) => state.deleteTask)
   const duplicateTask = useTasksStore((state) => state.duplicateTask)
   const setSettings = useTasksStore((state) => state.setSettings)
   const lastError = useTasksStore((state) => state.lastError)
-  const project = useProjectStore((state) => state.projects.find((p) => p.id === projectId))
+  const { projects } = useProjects()
+  const project = projects.find((p) => p.id === projectId)
 
   const { agents } = useAgents()
 
@@ -40,15 +42,6 @@ export function TasksModal({ isOpen, onClose, projectId }: TasksModalProps) {
   const [deleteTarget, setDeleteTarget] = useState<ProjectTask | null>(null)
 
   const draggedRef = useRef<{ task: ProjectTask } | null>(null)
-
-  useEffect(() => {
-    if (isOpen) {
-      void loadBoard(projectId)
-      void loadGates(projectId)
-      // Agents load via the resource cache (implicit loadership), so the card
-      // chips render even when the board is opened from the homepage.
-    }
-  }, [isOpen, projectId, loadBoard, loadGates])
 
   const filteredTasks = useMemo(() => {
     if (!search.trim()) return tasks
@@ -169,13 +162,13 @@ export function TasksModal({ isOpen, onClose, projectId }: TasksModalProps) {
     // Read the freshest value: closures over the render-scoped `settings` can
     // be stale between rapid clicks, making +/− appear to skip or ignore
     // presses.
-    const current = useTasksStore.getState().settings.slotLimit
+    const current = readBoard(projectId)?.settings.slotLimit ?? 1
     const next = Math.max(1, Math.min(10, current + delta))
     if (next !== current) void setSettings(projectId, { slotLimit: next })
   }
 
   const togglePause = () => {
-    const paused = useTasksStore.getState().settings.queuePaused
+    const paused = readBoard(projectId)?.settings.queuePaused ?? false
     void setSettings(projectId, { queuePaused: !paused })
   }
 
