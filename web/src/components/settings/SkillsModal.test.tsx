@@ -117,7 +117,7 @@ describe('SkillsContent', () => {
     })
   })
 
-  it('renders skills in subdirectories under collapsed-by-default collapsible sections', () => {
+  it('renders skills in subdirectories under collapsed-by-default collapsible sections', async () => {
     const nestedSkill1: SkillInfo = {
       id: 'nested-1',
       name: 'Nested Skill 1',
@@ -146,17 +146,25 @@ describe('SkillsContent', () => {
       readOnly: false,
       warnings: [],
     }
-    useSkillsStore.setState({
-      defaults: [],
-      userItems: [{ ...skill, estimatedTokens: 50 }, nestedSkill1, nestedSkill2],
-      projectItems: [],
-      items: [{ ...skill, estimatedTokens: 50 }, nestedSkill1, nestedSkill2],
-    })
+    vi.mocked(authFetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        defaults: [],
+        userItems: [{ ...skill, estimatedTokens: 50 }, nestedSkill1, nestedSkill2],
+        projectItems: [],
+        items: [{ ...skill, estimatedTokens: 50 }, nestedSkill1, nestedSkill2],
+        selectedDirectory: null,
+        diagnostics: [],
+      }),
+    } as unknown as Response)
 
     render(<SkillsContent isOpen={false} />)
 
+    await waitFor(() => {
+      expect(screen.getByText('My Skill')).toBeTruthy()
+    })
+
     // Regular skill is rendered directly with its tokens
-    expect(screen.getByText('My Skill')).toBeTruthy()
     expect(screen.getByText(/~50\s+tokens/)).toBeTruthy()
 
     // Subdirectory card header is rendered with name, skill count and total tokens
@@ -173,5 +181,13 @@ describe('SkillsContent', () => {
     expect(screen.getByText(/~120\s+tokens/)).toBeTruthy()
     expect(screen.getByText('Nested Skill 2')).toBeTruthy()
     expect(screen.getByText(/~80\s+tokens/)).toBeTruthy()
+
+    // Folder-level toggle activates all skills in the folder
+    const folderToggle = screen.getByRole('switch', { name: 'Toggle all skills in dev-tools' })
+    expect(folderToggle.getAttribute('aria-checked')).toBe('false')
+
+    fireEvent.click(folderToggle)
+    expect(mockToggleSkill).toHaveBeenCalledWith('nested-1', '/original/project')
+    expect(mockToggleSkill).toHaveBeenCalledWith('nested-2', '/original/project')
   })
 })

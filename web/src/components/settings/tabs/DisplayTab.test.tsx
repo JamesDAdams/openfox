@@ -6,16 +6,9 @@ import { render, screen } from '@testing-library/react'
 import { DisplayTab } from './DisplayTab'
 
 const mockSettings: Record<string, string> = {}
-const mockGetSetting = vi.fn().mockResolvedValue('')
-const mockSetSetting = vi.fn()
 
-vi.mock('../useSettingsStore', () => ({
-  useSettingsStoreState: () => ({
-    settings: mockSettings,
-    loading: {},
-    getSetting: mockGetSetting,
-    setSetting: mockSetSetting,
-  }),
+vi.mock('../../../hooks/useSetting', () => ({
+  useSetting: (key: string, fallback = '') => ({ value: mockSettings[key] ?? fallback, loading: false }),
 }))
 
 describe('DisplayTab', () => {

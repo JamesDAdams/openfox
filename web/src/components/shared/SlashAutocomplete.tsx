@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom'
 import { useFloatingPanel } from '../../hooks/useFloatingPanel'
 import { getSlashAtCursor } from '../../lib/getSlashAtCursor'
 import { SCOPE_LABELS } from '../../lib/workflow-scope'
-import { SETTINGS_KEYS, useSettingsStore } from '../../stores/settings'
+import { SETTINGS_KEYS } from '../../lib/resources'
+import { useSetting } from '../../hooks/useSetting'
 import type { WorkflowInfo } from '../../lib/parse-slash-command'
 import type { CommandInfo } from '../../lib/parse-slash-command'
 import type { WorkflowScope } from '@shared/types.js'
@@ -145,8 +146,7 @@ const SlashAutocomplete = forwardRef<SlashAutocompleteHandle, SlashAutocompleteP
   useImperativeHandle(ref, () => ({ handleKeyDown }), [handleKeyDown])
 
   const { panelRef, layout } = useFloatingPanel(anchorRef, !!slash && suggestions.length > 0)
-  const isFullscreen =
-    useSettingsStore((s) => s.settings[SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND] ?? 'false') === 'true'
+  const isFullscreen = useSetting(SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND, 'false').value === 'true'
 
   if (!slash || suggestions.length === 0) return null
 

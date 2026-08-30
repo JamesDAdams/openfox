@@ -23,6 +23,7 @@ import { useCRUDForm } from './useCRUDForm'
 import { SkillLibraryPanel } from './SkillLibraryPanel'
 import { SkillListItem } from './SkillListItem'
 import { SkillDeleteModal } from './SkillDeleteModal'
+import { Toggle } from '../shared/Toggle'
 import { formatTokens } from '../../lib/mcp-utils'
 type SkillFormData = {
   name: string
@@ -340,6 +341,17 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
           const groupSkills = groups[g]!
           const isExpanded = expandedGroups.has(g)
           const totalGroupTokens = groupSkills.reduce((sum, s) => sum + (s.estimatedTokens ?? 0), 0)
+          const allEnabled = groupSkills.length > 0 && groupSkills.every((s) => s.enabled)
+
+          const handleToggleFolder = () => {
+            const targetState = !allEnabled
+            for (const s of groupSkills) {
+              if (s.enabled !== targetState) {
+                void toggleSkill(s.id, workdir)
+              }
+            }
+          }
+
           return (
             <div key={g} className="rounded border border-border bg-bg-tertiary overflow-hidden">
               <div
@@ -353,8 +365,11 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
                     <span className="text-xs text-text-muted">{formatTokens(totalGroupTokens)} tokens</span>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-text-muted">{isExpanded ? '▲' : '▼'}</span>
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Toggle enabled={allEnabled} onClick={handleToggleFolder} label={`Toggle all skills in ${g}`} />
+                  <span className="text-xs text-text-muted cursor-pointer" onClick={() => toggleGroup(g)}>
+                    {isExpanded ? '▲' : '▼'}
+                  </span>
                 </div>
               </div>
               {isExpanded && (

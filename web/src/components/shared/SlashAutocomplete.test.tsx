@@ -2,9 +2,15 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { SlashAutocomplete, type SkillSlashInfo } from './SlashAutocomplete'
-import { SETTINGS_KEYS, useSettingsStore } from '../../stores/settings'
+import { SETTINGS_KEYS } from '../../lib/resources'
 import type { WorkflowInfo } from '../../lib/parse-slash-command'
 import type { CommandInfo } from '../../lib/parse-slash-command'
+
+const mockSettings: Record<string, string> = {}
+
+vi.mock('../../hooks/useSetting', () => ({
+  useSetting: (key: string, fallback = '') => ({ value: mockSettings[key] ?? fallback, loading: false }),
+}))
 
 const workflows: WorkflowInfo[] = [
   {
@@ -47,7 +53,7 @@ function renderAutocomplete(
 describe('SlashAutocomplete', () => {
   afterEach(() => {
     cleanup()
-    useSettingsStore.setState({ settings: {} })
+    Object.keys(mockSettings).forEach((k) => delete mockSettings[k])
   })
 
   it('renders nothing when no slash at cursor', () => {
@@ -128,9 +134,7 @@ describe('SlashAutocomplete', () => {
   })
 
   it('renders fullscreen sizing 10px under header when DISPLAY_FULLSCREEN_SLASH_COMMAND is true', () => {
-    useSettingsStore.setState({
-      settings: { [SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND]: 'true' },
-    })
+    mockSettings[SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND] = 'true'
 
     const { container } = renderAutocomplete('/rev', 4)
     const listbox = container.querySelector('[role="listbox"]') as HTMLElement
