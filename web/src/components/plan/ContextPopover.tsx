@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSessionStore } from '../../stores/session'
 import { ProgressBar, LowTokenWarning } from '../shared/ProgressBar'
 import { formatTokens } from '../../lib/format-stats'
+import { exportConversation } from '../../lib/export-conversation'
 import { MoreIcon } from '../shared/icons'
 import { getTextColor } from './token-utils'
 import { DynamicContextPreviewModal } from './DynamicContextPreviewModal'
@@ -98,6 +99,16 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
               <span className="text-accent-warning">Rebase system prompt</span>
               {needsRebase && <RebaseIndicator />}
             </button>
+            <button
+              onClick={() => {
+                if (sessionId) exportConversation(sessionId, currentSession)
+                setMenuOpen(false)
+              }}
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary transition-colors"
+              title="Export all conversation history"
+            >
+              <span>Export all conversation</span>
+            </button>
           </div>
         </>
       )}
@@ -156,6 +167,15 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
         >
           <span className="text-accent-warning">Rebase system prompt</span>
           {needsRebase && <RebaseIndicator />}
+        </button>
+        <button
+          onClick={() => {
+            if (sessionId) exportConversation(sessionId, currentSession)
+          }}
+          className="w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary transition-colors rounded"
+          title="Export all conversation history"
+        >
+          <span>Export all conversation</span>
         </button>
       </div>
       {applyModal}
