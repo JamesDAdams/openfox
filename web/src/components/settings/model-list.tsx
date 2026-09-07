@@ -181,6 +181,7 @@ export function formatGranularPriceSubline(
 
 export function formatPricingSummary(pricing?: ModelPricing, currency: PriceCurrency = 'usd'): string | null {
   if (!pricing) return null
+  const effectiveCurrency = (pricing.currency as PriceCurrency | undefined) ?? currency
   const discountPercent = parseDiscountPercentage(pricing.discount)
   const hasInput = pricing.input !== undefined
   const hasOutput = pricing.output !== undefined
@@ -196,18 +197,18 @@ export function formatPricingSummary(pricing?: ModelPricing, currency: PriceCurr
     : undefined
 
   if (inputPrice !== undefined && outputPrice !== undefined) {
-    return `${formatPriceValue(inputPrice, currency, false)} / ${formatPriceValue(outputPrice, currency, false)}`
+    return `in ${formatPriceValue(inputPrice, effectiveCurrency, false)} / out ${formatPriceValue(outputPrice, effectiveCurrency, false)}`
   }
   if (inputPrice !== undefined) {
-    return `${formatPriceValue(inputPrice, currency, false)} in`
+    return `in ${formatPriceValue(inputPrice, effectiveCurrency, false)}`
   }
   if (outputPrice !== undefined) {
-    return `${formatPriceValue(outputPrice, currency, false)} out`
+    return `out ${formatPriceValue(outputPrice, effectiveCurrency, false)}`
   }
   if (pricing.cacheRead !== undefined) {
     const cachePrice =
       discountPercent !== null ? calculateDiscountedPrice(pricing.cacheRead, discountPercent) : pricing.cacheRead
-    return `${formatPriceValue(cachePrice, currency, false)} cache`
+    return `cache ${formatPriceValue(cachePrice, effectiveCurrency, false)}`
   }
   return null
 }

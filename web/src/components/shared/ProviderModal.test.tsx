@@ -997,7 +997,7 @@ describe('ProviderModal - small context window warning', () => {
     expect(badge?.textContent).toBe('60% off')
 
     // 60% off $0.08 = $0.032, 60% off $0.25 = $0.1
-    expect(document.body.textContent).toContain('$0.032 / $0.1')
+    expect(document.body.textContent).toContain('in $0.032 / out $0.1')
   })
 })
 
