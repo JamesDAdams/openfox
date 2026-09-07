@@ -21,12 +21,7 @@ export const DEFAULT_USD_THRESHOLDS: ModelPriceThresholds = {
   cacheWrite: { low: 0.5, medium: 2.0 },
 }
 
-export const DEFAULT_EUR_THRESHOLDS: ModelPriceThresholds = {
-  input: { low: 0.5, medium: 2.0 },
-  output: { low: 1.5, medium: 6.0 },
-  cacheRead: { low: 0.1, medium: 0.5 },
-  cacheWrite: { low: 0.5, medium: 2.0 },
-}
+export const DEFAULT_EUR_THRESHOLDS: ModelPriceThresholds = { ...DEFAULT_USD_THRESHOLDS }
 
 export const DEFAULT_TOKENS_THRESHOLDS: ModelPriceThresholds = {
   input: { low: 50, medium: 250 },
@@ -161,8 +156,7 @@ export function useDisplaySettings() {
     colorModelNameByOutputPrice:
       useSetting(SETTINGS_KEYS.DISPLAY_COLOR_MODEL_NAME_BY_OUTPUT_PRICE, 'false').value === 'true',
     showModelPriceInBar: useSetting(SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR, 'false').value === 'true',
-    showModelPriceInBarInput:
-      useSetting(SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR_INPUT, 'true').value === 'true',
+    showModelPriceInBarInput: useSetting(SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR_INPUT, 'true').value === 'true',
     showModelPriceInBarOutput:
       useSetting(SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR_OUTPUT, 'true').value === 'true',
     showModelPriceInBarCacheRead:
@@ -170,9 +164,7 @@ export function useDisplaySettings() {
     showModelPriceInBarCacheWrite:
       useSetting(SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR_CACHE_WRITE, 'true').value === 'true',
     modelPriceCurrency: (useSetting(SETTINGS_KEYS.DISPLAY_MODEL_PRICE_CURRENCY, 'usd').value ?? 'usd') as
-      | 'usd'
-      | 'eur'
-      | 'tokens',
+      'usd' | 'eur' | 'tokens',
     modelPriceThresholds: parsePriceThresholds(modelPriceThresholdsRaw),
     multiCurrencyPriceThresholds: parseMultiCurrencyPriceThresholds(modelPriceThresholdsRaw),
     maxVisibleItems: Number(useSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, '300').value),

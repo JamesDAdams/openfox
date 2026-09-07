@@ -19,7 +19,14 @@ export function calculateDiscountedPrice(price: number, discountPercent: number)
 }
 
 export function calculatePointCost(
-  point: { promptTokens?: number; prefillTokens?: number; generationTokens?: number; completionTokens?: number; providerId: string; model: string },
+  point: {
+    promptTokens?: number
+    prefillTokens?: number
+    generationTokens?: number
+    completionTokens?: number
+    providerId: string
+    model: string
+  },
   providers: Provider[],
 ): number | null {
   const provider = providers.find((p) => p.id === point.providerId)
@@ -65,11 +72,7 @@ export function calculateTotalSessionCost(
 
 export type PriceCurrency = 'usd' | 'eur' | 'tokens'
 
-export function formatPriceValue(
-  value: number,
-  currency: PriceCurrency = 'usd',
-  perMillion = true,
-): string {
+export function formatPriceValue(value: number, currency: PriceCurrency = 'usd', perMillion = true): string {
   const suffix = perMillion ? (currency === 'tokens' ? ' tk / 1M' : ' / 1M') : currency === 'tokens' ? ' tk' : ''
   switch (currency) {
     case 'usd':
@@ -81,10 +84,7 @@ export function formatPriceValue(
   }
 }
 
-export function formatCost(
-  cost: number | null | undefined,
-  currency: PriceCurrency = 'usd',
-): string | null {
+export function formatCost(cost: number | null | undefined, currency: PriceCurrency = 'usd'): string | null {
   if (cost === null || cost === undefined) return null
   let formattedNumber: string
   if (cost === 0) {

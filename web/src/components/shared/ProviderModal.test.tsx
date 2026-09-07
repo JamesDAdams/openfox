@@ -922,7 +922,9 @@ describe('ProviderModal - small context window warning', () => {
 
     const inputPricingInput = document.body.querySelector('[data-testid="pricing-input"]') as HTMLInputElement | null
     const outputPricingInput = document.body.querySelector('[data-testid="pricing-output"]') as HTMLInputElement | null
-    const discountPricingInput = document.body.querySelector('[data-testid="pricing-discount"]') as HTMLInputElement | null
+    const discountPricingInput = document.body.querySelector(
+      '[data-testid="pricing-discount"]',
+    ) as HTMLInputElement | null
     expect(inputPricingInput?.value).toBe('0.15')
     expect(outputPricingInput?.value).toBe('0.6')
 

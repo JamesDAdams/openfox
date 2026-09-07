@@ -561,10 +561,14 @@ function ModelConfigPanel({
         </div>
 
         <div className="border-t border-border pt-3 mt-3">
-          <p className="text-xs text-text-muted mb-2">API Price (/ 1M tokens)</p>
+          <p className="text-xs text-text-muted mb-2">
+            {t({ en: 'API Price (/ 1M tokens)', fr: 'Tarif API (/ 1M jetons)' })}
+          </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-text-secondary block mb-0.5">Input price</label>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Input price', fr: 'Prix d’entrée (Input)' })}
+              </label>
               <input
                 type="number"
                 step="any"
@@ -580,12 +584,14 @@ function ModelConfigPanel({
                     pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
                   })
                 }}
-                placeholder="e.g. 0.15"
+                placeholder={t({ en: 'e.g. 0.15', fr: 'ex. 0.15' })}
                 className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
               />
             </div>
             <div>
-              <label className="text-xs text-text-secondary block mb-0.5">Output price</label>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Output price', fr: 'Prix de sortie (Output)' })}
+              </label>
               <input
                 type="number"
                 step="any"
@@ -601,14 +607,16 @@ function ModelConfigPanel({
                     pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
                   })
                 }}
-                placeholder="e.g. 0.60"
+                placeholder={t({ en: 'e.g. 0.60', fr: 'ex. 0.60' })}
                 className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div>
-              <label className="text-xs text-text-secondary block mb-0.5">Cache read price</label>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Cache read price', fr: 'Prix de lecture cache' })}
+              </label>
               <input
                 type="number"
                 step="any"
@@ -624,12 +632,14 @@ function ModelConfigPanel({
                     pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
                   })
                 }}
-                placeholder="e.g. 0.075"
+                placeholder={t({ en: 'e.g. 0.075', fr: 'ex. 0.075' })}
                 className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
               />
             </div>
             <div>
-              <label className="text-xs text-text-secondary block mb-0.5">Cache write price</label>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Cache write price', fr: 'Prix d’écriture cache' })}
+              </label>
               <input
                 type="number"
                 step="any"
@@ -645,14 +655,14 @@ function ModelConfigPanel({
                     pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
                   })
                 }}
-                placeholder="e.g. 0.30"
+                placeholder={t({ en: 'e.g. 0.30', fr: 'ex. 0.30' })}
                 className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div>
-              <label className="text-xs text-text-secondary block mb-0.5">Discount</label>
+              <label className="text-xs text-text-secondary block mb-0.5">{t({ en: 'Discount', fr: 'Remise' })}</label>
               <input
                 type="text"
                 data-testid="pricing-discount"
@@ -682,12 +692,14 @@ function ModelConfigPanel({
                     })
                   }
                 }}
-                placeholder="e.g. 60 or 60% off"
+                placeholder={t({ en: 'e.g. 60 or 60% off', fr: 'ex. 60 ou 60% de remise' })}
                 className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
               />
             </div>
             <div>
-              <label className="text-xs text-text-secondary block mb-0.5">Currency / Unit</label>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Currency / Unit', fr: 'Devise / Unité' })}
+              </label>
               <select
                 data-testid="pricing-currency"
                 value={modelConfigs[model.id]?.pricing?.currency ?? 'usd'}
@@ -701,9 +713,9 @@ function ModelConfigPanel({
                 }}
                 className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary cursor-pointer"
               >
-                <option value="usd">Dollar ($)</option>
-                <option value="eur">Euro (€)</option>
-                <option value="tokens">Tokens / Credits (tk)</option>
+                <option value="usd">{t({ en: 'Dollar ($)', fr: 'Dollar ($)' })}</option>
+                <option value="eur">{t({ en: 'Euro (€)', fr: 'Euro (€)' })}</option>
+                <option value="tokens">{t({ en: 'Tokens / Credits (tk)', fr: 'Jetons / Crédits (tk)' })}</option>
               </select>
             </div>
           </div>
@@ -2341,9 +2353,7 @@ export function ProviderModal({
                               const pricing = modelConfigs[model.id]?.pricing ?? model.pricing
                               const summary = formatPricingSummary(pricing)
                               return summary ? (
-                                <span className="text-xs font-mono text-text-secondary flex-shrink-0">
-                                  {summary}
-                                </span>
+                                <span className="text-xs font-mono text-text-secondary flex-shrink-0">{summary}</span>
                               ) : null
                             })()}
                             <span className="text-xs text-text-muted flex flex-shrink-0 items-center gap-1">

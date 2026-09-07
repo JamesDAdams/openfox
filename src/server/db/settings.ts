@@ -66,6 +66,13 @@ export const SETTINGS_KEYS = {
   DISPLAY_MODEL_PRICE_THRESHOLDS: 'display.modelPriceThresholds',
 } as const
 
+const DEFAULT_FIAT_THRESHOLDS = {
+  input: { low: 0.5, medium: 2.0 },
+  output: { low: 1.5, medium: 6.0 },
+  cacheRead: { low: 0.1, medium: 0.5 },
+  cacheWrite: { low: 0.5, medium: 2.0 },
+}
+
 export const SETTINGS_DEFAULTS: Record<string, string> = {
   [SETTINGS_KEYS.LANGUAGE]: 'automatic',
   [SETTINGS_KEYS.DISPLAY_LOCALE]: 'automatic',
@@ -107,18 +114,8 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   [SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR_CACHE_WRITE]: 'true',
   [SETTINGS_KEYS.DISPLAY_MODEL_PRICE_CURRENCY]: 'usd',
   [SETTINGS_KEYS.DISPLAY_MODEL_PRICE_THRESHOLDS]: JSON.stringify({
-    usd: {
-      input: { low: 0.5, medium: 2.0 },
-      output: { low: 1.5, medium: 6.0 },
-      cacheRead: { low: 0.1, medium: 0.5 },
-      cacheWrite: { low: 0.5, medium: 2.0 },
-    },
-    eur: {
-      input: { low: 0.5, medium: 2.0 },
-      output: { low: 1.5, medium: 6.0 },
-      cacheRead: { low: 0.1, medium: 0.5 },
-      cacheWrite: { low: 0.5, medium: 2.0 },
-    },
+    usd: DEFAULT_FIAT_THRESHOLDS,
+    eur: DEFAULT_FIAT_THRESHOLDS,
     tokens: {
       input: { low: 50, medium: 250 },
       output: { low: 200, medium: 1000 },

@@ -59,10 +59,7 @@ export interface PricePart {
   formatted: string
 }
 
-export function getPriceTier(
-  price: number,
-  thresholds?: { low: number; medium: number },
-): 'low' | 'medium' | 'high' {
+export function getPriceTier(price: number, thresholds?: { low: number; medium: number }): 'low' | 'medium' | 'high' {
   if (!thresholds) return 'low'
   if (price <= thresholds.low) return 'low'
   if (price <= thresholds.medium) return 'medium'
@@ -81,10 +78,7 @@ export function getPriceTierColor(tier: 'low' | 'medium' | 'high', enabled = tru
   }
 }
 
-export function formatSublinePriceValue(
-  value: number,
-  currency: PriceCurrency = 'usd',
-): string {
+export function formatSublinePriceValue(value: number, currency: PriceCurrency = 'usd'): string {
   const suffix = currency === 'tokens' ? ' tk/M' : '/M'
   switch (currency) {
     case 'usd':
@@ -185,10 +179,7 @@ export function formatGranularPriceSubline(
   return parts.length > 0 ? parts.map((p) => p.formatted).join(' · ') : null
 }
 
-export function formatPricingSummary(
-  pricing?: ModelPricing,
-  currency: PriceCurrency = 'usd',
-): string | null {
+export function formatPricingSummary(pricing?: ModelPricing, currency: PriceCurrency = 'usd'): string | null {
   if (!pricing) return null
   const discountPercent = parseDiscountPercentage(pricing.discount)
   const hasInput = pricing.input !== undefined
@@ -221,10 +212,7 @@ export function formatPricingSummary(
   return null
 }
 
-export function formatPricingTooltip(
-  pricing?: ModelPricing,
-  currency: PriceCurrency = 'usd',
-): string | undefined {
+export function formatPricingTooltip(pricing?: ModelPricing, currency: PriceCurrency = 'usd'): string | undefined {
   if (!pricing) return undefined
   const discountPercent = parseDiscountPercentage(pricing.discount)
   const lines: string[] = []
@@ -243,7 +231,9 @@ export function formatPricingTooltip(
   if (pricing.output !== undefined) {
     if (discountPercent !== null) {
       const discounted = calculateDiscountedPrice(pricing.output, discountPercent)
-      lines.push(`Output: ${formatPriceValue(discounted, currency)} (was ${formatPriceValue(pricing.output, currency)})`)
+      lines.push(
+        `Output: ${formatPriceValue(discounted, currency)} (was ${formatPriceValue(pricing.output, currency)})`,
+      )
     } else {
       lines.push(`Output: ${formatPriceValue(pricing.output, currency)}`)
     }
@@ -251,7 +241,9 @@ export function formatPricingTooltip(
   if (pricing.cacheRead !== undefined) {
     if (discountPercent !== null) {
       const discounted = calculateDiscountedPrice(pricing.cacheRead, discountPercent)
-      lines.push(`Cache read: ${formatPriceValue(discounted, currency)} (was ${formatPriceValue(pricing.cacheRead, currency)})`)
+      lines.push(
+        `Cache read: ${formatPriceValue(discounted, currency)} (was ${formatPriceValue(pricing.cacheRead, currency)})`,
+      )
     } else {
       lines.push(`Cache read: ${formatPriceValue(pricing.cacheRead, currency)}`)
     }
@@ -259,7 +251,9 @@ export function formatPricingTooltip(
   if (pricing.cacheWrite !== undefined) {
     if (discountPercent !== null) {
       const discounted = calculateDiscountedPrice(pricing.cacheWrite, discountPercent)
-      lines.push(`Cache write: ${formatPriceValue(discounted, currency)} (was ${formatPriceValue(pricing.cacheWrite, currency)})`)
+      lines.push(
+        `Cache write: ${formatPriceValue(discounted, currency)} (was ${formatPriceValue(pricing.cacheWrite, currency)})`,
+      )
     } else {
       lines.push(`Cache write: ${formatPriceValue(pricing.cacheWrite, currency)}`)
     }
@@ -361,7 +355,8 @@ export function ModelEntryRow({
   const showEfforts = (reasoningEfforts?.length ?? 0) > 0 && !!onSelectEffort
   const displaySettings = useDisplaySettings()
   const modelCurrency = getEffectiveModelCurrency(modelConfig.pricing, displaySettings.modelPriceCurrency)
-  const currencyThresholds = displaySettings.multiCurrencyPriceThresholds?.[modelCurrency] ?? displaySettings.modelPriceThresholds
+  const currencyThresholds =
+    displaySettings.multiCurrencyPriceThresholds?.[modelCurrency] ?? displaySettings.modelPriceThresholds
   const priceParts = displaySettings.showModelPrices
     ? getGranularPriceParts(
         modelConfig.pricing,
@@ -405,20 +400,18 @@ export function ModelEntryRow({
     setShowPopover(false)
   }
 
-  const outputPriceDiscounted = modelConfig.pricing?.output !== undefined
-    ? parseDiscountPercentage(modelConfig.pricing.discount) !== null
-      ? calculateDiscountedPrice(
-          modelConfig.pricing.output,
-          parseDiscountPercentage(modelConfig.pricing.discount)!,
-        )
-      : modelConfig.pricing.output
-    : undefined
-  const outputPriceTier = outputPriceDiscounted !== undefined
-    ? getPriceTier(outputPriceDiscounted, currencyThresholds?.output)
-    : undefined
-  const modelNameColorClass = displaySettings.colorModelNameByOutputPrice && outputPriceTier
-    ? getPriceTierColor(outputPriceTier, displaySettings.enableModelPriceColors)
-    : ''
+  const outputPriceDiscounted =
+    modelConfig.pricing?.output !== undefined
+      ? parseDiscountPercentage(modelConfig.pricing.discount) !== null
+        ? calculateDiscountedPrice(modelConfig.pricing.output, parseDiscountPercentage(modelConfig.pricing.discount)!)
+        : modelConfig.pricing.output
+      : undefined
+  const outputPriceTier =
+    outputPriceDiscounted !== undefined ? getPriceTier(outputPriceDiscounted, currencyThresholds?.output) : undefined
+  const modelNameColorClass =
+    displaySettings.colorModelNameByOutputPrice && outputPriceTier
+      ? getPriceTierColor(outputPriceTier, displaySettings.enableModelPriceColors)
+      : ''
 
   return (
     <div
@@ -598,22 +591,30 @@ export function ModelEntryRow({
             </div>
             {modelConfig.pricing.input !== undefined && (
               <div className="text-text-secondary flex justify-between gap-3">
-                <span>Input:</span>
+                <span>{t({ en: 'Input:', fr: 'Entrée :' })}</span>
                 <span className="font-mono text-text-primary">
                   {parseDiscountPercentage(modelConfig.pricing.discount) !== null ? (
                     <>
-                      <span className="line-through text-text-muted mr-1.5">{formatPriceValue(modelConfig.pricing.input, modelCurrency, false)}</span>
+                      <span className="line-through text-text-muted mr-1.5">
+                        {formatPriceValue(modelConfig.pricing.input, modelCurrency, false)}
+                      </span>
                       <span
                         className={getPriceTierColor(
                           getPriceTier(
-                            calculateDiscountedPrice(modelConfig.pricing.input, parseDiscountPercentage(modelConfig.pricing.discount)!),
+                            calculateDiscountedPrice(
+                              modelConfig.pricing.input,
+                              parseDiscountPercentage(modelConfig.pricing.discount)!,
+                            ),
                             currencyThresholds?.input,
                           ),
                           displaySettings.enableModelPriceColors,
                         )}
                       >
                         {formatPriceValue(
-                          calculateDiscountedPrice(modelConfig.pricing.input, parseDiscountPercentage(modelConfig.pricing.discount)!),
+                          calculateDiscountedPrice(
+                            modelConfig.pricing.input,
+                            parseDiscountPercentage(modelConfig.pricing.discount)!,
+                          ),
                           modelCurrency,
                         )}
                       </span>
@@ -633,22 +634,30 @@ export function ModelEntryRow({
             )}
             {modelConfig.pricing.output !== undefined && (
               <div className="text-text-secondary flex justify-between gap-3">
-                <span>Output:</span>
+                <span>{t({ en: 'Output:', fr: 'Sortie :' })}</span>
                 <span className="font-mono text-text-primary">
                   {parseDiscountPercentage(modelConfig.pricing.discount) !== null ? (
                     <>
-                      <span className="line-through text-text-muted mr-1.5">{formatPriceValue(modelConfig.pricing.output, modelCurrency, false)}</span>
+                      <span className="line-through text-text-muted mr-1.5">
+                        {formatPriceValue(modelConfig.pricing.output, modelCurrency, false)}
+                      </span>
                       <span
                         className={getPriceTierColor(
                           getPriceTier(
-                            calculateDiscountedPrice(modelConfig.pricing.output, parseDiscountPercentage(modelConfig.pricing.discount)!),
+                            calculateDiscountedPrice(
+                              modelConfig.pricing.output,
+                              parseDiscountPercentage(modelConfig.pricing.discount)!,
+                            ),
                             currencyThresholds?.output,
                           ),
                           displaySettings.enableModelPriceColors,
                         )}
                       >
                         {formatPriceValue(
-                          calculateDiscountedPrice(modelConfig.pricing.output, parseDiscountPercentage(modelConfig.pricing.discount)!),
+                          calculateDiscountedPrice(
+                            modelConfig.pricing.output,
+                            parseDiscountPercentage(modelConfig.pricing.discount)!,
+                          ),
                           modelCurrency,
                         )}
                       </span>
@@ -668,22 +677,30 @@ export function ModelEntryRow({
             )}
             {modelConfig.pricing.cacheRead !== undefined && (
               <div className="text-text-secondary flex justify-between gap-3">
-                <span>Cache read:</span>
+                <span>{t({ en: 'Cache read:', fr: 'Lecture cache :' })}</span>
                 <span className="font-mono text-text-primary">
                   {parseDiscountPercentage(modelConfig.pricing.discount) !== null ? (
                     <>
-                      <span className="line-through text-text-muted mr-1.5">{formatPriceValue(modelConfig.pricing.cacheRead, modelCurrency, false)}</span>
+                      <span className="line-through text-text-muted mr-1.5">
+                        {formatPriceValue(modelConfig.pricing.cacheRead, modelCurrency, false)}
+                      </span>
                       <span
                         className={getPriceTierColor(
                           getPriceTier(
-                            calculateDiscountedPrice(modelConfig.pricing.cacheRead, parseDiscountPercentage(modelConfig.pricing.discount)!),
+                            calculateDiscountedPrice(
+                              modelConfig.pricing.cacheRead,
+                              parseDiscountPercentage(modelConfig.pricing.discount)!,
+                            ),
                             currencyThresholds?.cacheRead,
                           ),
                           displaySettings.enableModelPriceColors,
                         )}
                       >
                         {formatPriceValue(
-                          calculateDiscountedPrice(modelConfig.pricing.cacheRead, parseDiscountPercentage(modelConfig.pricing.discount)!),
+                          calculateDiscountedPrice(
+                            modelConfig.pricing.cacheRead,
+                            parseDiscountPercentage(modelConfig.pricing.discount)!,
+                          ),
                           modelCurrency,
                         )}
                       </span>
@@ -703,22 +720,30 @@ export function ModelEntryRow({
             )}
             {modelConfig.pricing.cacheWrite !== undefined && (
               <div className="text-text-secondary flex justify-between gap-3">
-                <span>Cache write:</span>
+                <span>{t({ en: 'Cache write:', fr: 'Écriture cache :' })}</span>
                 <span className="font-mono text-text-primary">
                   {parseDiscountPercentage(modelConfig.pricing.discount) !== null ? (
                     <>
-                      <span className="line-through text-text-muted mr-1.5">{formatPriceValue(modelConfig.pricing.cacheWrite, modelCurrency, false)}</span>
+                      <span className="line-through text-text-muted mr-1.5">
+                        {formatPriceValue(modelConfig.pricing.cacheWrite, modelCurrency, false)}
+                      </span>
                       <span
                         className={getPriceTierColor(
                           getPriceTier(
-                            calculateDiscountedPrice(modelConfig.pricing.cacheWrite, parseDiscountPercentage(modelConfig.pricing.discount)!),
+                            calculateDiscountedPrice(
+                              modelConfig.pricing.cacheWrite,
+                              parseDiscountPercentage(modelConfig.pricing.discount)!,
+                            ),
                             currencyThresholds?.cacheWrite,
                           ),
                           displaySettings.enableModelPriceColors,
                         )}
                       >
                         {formatPriceValue(
-                          calculateDiscountedPrice(modelConfig.pricing.cacheWrite, parseDiscountPercentage(modelConfig.pricing.discount)!),
+                          calculateDiscountedPrice(
+                            modelConfig.pricing.cacheWrite,
+                            parseDiscountPercentage(modelConfig.pricing.discount)!,
+                          ),
                           modelCurrency,
                         )}
                       </span>

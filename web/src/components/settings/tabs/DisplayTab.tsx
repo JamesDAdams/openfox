@@ -355,234 +355,232 @@ export function DisplayTab() {
   }
 
   const [local, setLocal] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(allToggles.map((toggle) => [toggle.key, (localValues[toggle.key] ?? toggle.defaultValue) === 'true'])),
+    Object.fromEntries(
+      allToggles.map((toggle) => [toggle.key, (localValues[toggle.key] ?? toggle.defaultValue) === 'true']),
+    ),
   )
 
   useEffect(() => {
-    setLocal(Object.fromEntries(allToggles.map((toggle) => [toggle.key, (localValues[toggle.key] ?? toggle.defaultValue) === 'true'])))
+    setLocal(
+      Object.fromEntries(
+        allToggles.map((toggle) => [toggle.key, (localValues[toggle.key] ?? toggle.defaultValue) === 'true']),
+      ),
+    )
   }, [JSON.stringify(localValues)])
 
   const handleToggle = (key: string) => {
     const newValue = String(!local[key as keyof typeof local])
-    setLocal((prev) => ({ ...prev, [key]: newValue === 'true' }))
+    setLocal((prev) => ({ ...prev, [key]: !prev[key as keyof typeof local] }))
     void setSetting(key, newValue)
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-48 text-text-muted">
-        {t({ en: 'Loading settings...', fr: 'Chargement des paramètres...' })}
-      </div>
-    )
+    return <div className="text-sm text-text-muted">{t({ en: 'Loading...', fr: 'Chargement…' })}</div>
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="space-y-6 max-w-2xl p-6">
-        <div>
-          <h3 className="text-sm font-medium text-text-primary mb-2">{t({ en: 'Theme', fr: 'Thème' })}</h3>
-          <ThemePicker />
-        </div>
+    <div className="space-y-6">
+      <ThemePicker />
 
-        <LanguageSetting t={t} storedLocale={storedLocale.value} applyLocale={applyLocale} />
+      <LanguageSetting t={t} storedLocale={storedLocale.value} applyLocale={applyLocale} />
 
-        <div className="border-t border-border pt-4">
-          <h3 className="text-sm font-medium text-text-primary mb-2">
-            {t({ en: 'Feed Items', fr: 'Éléments du fil' })}
-          </h3>
-          <ToggleList toggles={FEED_TOGGLES} local={local} onToggle={handleToggle} />
-        </div>
+      <div className="border-t border-border pt-4">
+        <h3 className="text-sm font-medium text-text-primary mb-2">
+          {t({ en: 'Custom CSS', fr: 'CSS personnalisé' })}
+        </h3>
+        <p className="text-xs text-text-muted mb-3">
+          {t({
+            en: 'Add global CSS overrides for any element.',
+            fr: 'Ajoutez des surcharges CSS globales pour n’importe quel élément.',
+          })}
+        </p>
+        <CustomCssEditor />
+      </div>
 
-        <div className="border-t border-border pt-4">
-          <h3 className="text-sm font-medium text-text-primary mb-2">
-            {t({ en: 'Performance', fr: 'Performances' })}
-          </h3>
-          <p className="text-xs text-text-muted mb-3">
-            {t({
-              en: 'Tune these settings to keep OpenFox snappy during long sessions or on low-end hardware.',
-              fr: 'Ajustez ces paramètres pour garder OpenFox fluide pendant les longues sessions ou sur du matériel moins puissant.',
-            })}
-          </p>
-          <div className="mb-4">
-            <label className="flex items-start justify-between gap-3 cursor-pointer">
-              <div className="flex-1 min-w-0">
-                <div className="text-sm text-text-primary font-medium">
-                  {t({ en: 'Maximum visible feed items', fr: 'Nombre maximal d’éléments visibles dans le fil' })}
-                </div>
-                <div className="text-xs text-text-muted mt-0.5">
-                  {t({
-                    en: 'Keep only the N most recent items mounted in the DOM. Older items are unloaded to save memory. Set to 0 to keep all items.',
-                    fr: 'Ne conserve que les N éléments les plus récents montés dans le DOM. Les éléments plus anciens sont déchargés pour économiser de la mémoire. Mettre 0 pour tout conserver.',
-                  })}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <input
-                  type="number"
-                  min="0"
-                  max="9999"
-                  step="50"
-                  value={maxItemsLocal}
-                  onChange={(e) => setMaxItemsLocal(e.target.value)}
-                  onBlur={saveMaxItems}
-                  onKeyDown={(e) => e.key === 'Enter' && saveMaxItems()}
-                  className="w-20 px-2 py-1 text-sm bg-bg-tertiary border border-border rounded text-text-primary text-right focus:outline-none focus:border-accent-primary"
-                />
-                <span className="text-xs text-text-muted">{t({ en: 'items', fr: 'éléments' })}</span>
-              </div>
-            </label>
-          </div>
-          <ToggleList toggles={PERF_TOGGLES} local={local} onToggle={handleToggle} />
-        </div>
+      <div className="border-t border-border pt-4">
+        <h3 className="text-sm font-medium text-text-primary mb-4">
+          {t({ en: 'Feed Display', fr: 'Affichage du fil' })}
+        </h3>
+        <ToggleList toggles={FEED_TOGGLES} local={local} onToggle={handleToggle} />
+      </div>
 
-        <div className="border-t border-border pt-4">
-          <ModelPickerPreferences />
-        </div>
+      <div className="border-t border-border pt-4">
+        <h3 className="text-sm font-medium text-text-primary mb-4">
+          {t({ en: 'Model Selector', fr: 'Sélecteur de modèles' })}
+        </h3>
+        <ModelSelectorEditor />
+      </div>
 
-        <div className="border-t border-border pt-4">
-          <h3 className="text-sm font-medium text-text-primary mb-4">
-            {t({ en: 'Model Pricing', fr: 'Tarification des modèles' })}
-          </h3>
-          <div className="space-y-4">
-            <ToggleList toggles={[PRICING_POPOVER_TOGGLE]} local={local} onToggle={handleToggle} />
-            <ToggleList toggles={[PRICING_MAIN_TOGGLE]} local={local} onToggle={handleToggle} />
-            {local[PRICING_MAIN_TOGGLE.key] && (
-              <div className="pl-4 space-y-3 border-l-2 border-border/50 ml-2">
-                <ToggleList toggles={PRICING_SUB_TOGGLES} local={local} onToggle={handleToggle} />
-              </div>
-            )}
-            <ToggleList toggles={[PRICING_IN_BAR_TOGGLE]} local={local} onToggle={handleToggle} />
-            {local[PRICING_IN_BAR_TOGGLE.key] && (
-              <div className="pl-4 space-y-3 border-l-2 border-border/50 ml-2">
-                <ToggleList toggles={PRICING_IN_BAR_SUB_TOGGLES} local={local} onToggle={handleToggle} />
-              </div>
-            )}
-            <ToggleList toggles={[PRICING_COLORS_TOGGLE]} local={local} onToggle={handleToggle} />
-            {local[PRICING_COLORS_TOGGLE.key] && (
-              <div className="pl-4 space-y-4 border-l-2 border-border/50 ml-2">
-                <ToggleList toggles={[PRICING_COLOR_NAME_BY_OUTPUT_TOGGLE]} local={local} onToggle={handleToggle} />
-                <PriceThresholdsEditor
-                  mode="fiat"
-                  title="Price Color Thresholds — Standard Currencies ($ / €)"
-                  unitLabel="$/€ / 1M"
-                />
-                <PriceThresholdsEditor
-                  mode="tokens"
-                  title="Price Color Thresholds — Tokens / Credits (tk)"
-                  unitLabel="tk / 1M"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="border-t border-border pt-4">
-          <h3 className="text-sm font-medium text-text-primary mb-2">{t({ en: 'Terminal', fr: 'Terminal' })}</h3>
-          <TerminalFontEditor />
+      <div className="border-t border-border pt-4">
+        <h3 className="text-sm font-medium text-text-primary mb-4">
+          {t({ en: 'Model Pricing', fr: 'Tarification des modèles' })}
+        </h3>
+        <div className="space-y-4">
+          <ToggleList toggles={[PRICING_POPOVER_TOGGLE]} local={local} onToggle={handleToggle} />
+          <ToggleList toggles={[PRICING_MAIN_TOGGLE]} local={local} onToggle={handleToggle} />
+          {local[PRICING_MAIN_TOGGLE.key] && (
+            <div className="pl-4 space-y-3 border-l-2 border-border/50 ml-2">
+              <ToggleList toggles={PRICING_SUB_TOGGLES} local={local} onToggle={handleToggle} />
+            </div>
+          )}
+          <ToggleList toggles={[PRICING_IN_BAR_TOGGLE]} local={local} onToggle={handleToggle} />
+          {local[PRICING_IN_BAR_TOGGLE.key] && (
+            <div className="pl-4 space-y-3 border-l-2 border-border/50 ml-2">
+              <ToggleList toggles={PRICING_IN_BAR_SUB_TOGGLES} local={local} onToggle={handleToggle} />
+            </div>
+          )}
+          <ToggleList toggles={[PRICING_COLORS_TOGGLE]} local={local} onToggle={handleToggle} />
+          {local[PRICING_COLORS_TOGGLE.key] && (
+            <div className="pl-4 space-y-4 border-l-2 border-border/50 ml-2">
+              <ToggleList toggles={[PRICING_COLOR_NAME_BY_OUTPUT_TOGGLE]} local={local} onToggle={handleToggle} />
+              <PriceThresholdsEditor
+                mode="fiat"
+                title={t({
+                  en: 'Price Color Thresholds — Standard Currencies ($ / €)',
+                  fr: 'Seuils de couleur de prix — Devises standard ($ / €)',
+                })}
+                unitLabel={t({ en: '$/€ / 1M', fr: '$/€ / 1M' })}
+              />
+              <PriceThresholdsEditor
+                mode="tokens"
+                title={t({
+                  en: 'Price Color Thresholds — Tokens / Credits (tk)',
+                  fr: 'Seuils de couleur de prix — Jetons / Crédits (tk)',
+                })}
+                unitLabel={t({ en: 'tk / 1M', fr: 'tk / 1M' })}
+              />
+            </div>
+          )}
         </div>
       </div>
-    </ScrollArea>
+
+      <div className="border-t border-border pt-4">
+        <h3 className="text-sm font-medium text-text-primary mb-4">{t({ en: 'Performance', fr: 'Performances' })}</h3>
+        <div className="space-y-4">
+          <ToggleList toggles={PERF_TOGGLES} local={local} onToggle={handleToggle} />
+
+          <label className="flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm text-text-primary font-medium">
+                {t({ en: 'Max visible items', fr: 'Éléments visibles maximum' })}
+              </div>
+              <div className="text-xs text-text-muted mt-0.5">
+                {t({
+                  en: 'Keep only the last N items in the feed. Set to 0 to show all.',
+                  fr: 'Conservez uniquement les N derniers éléments du fil. Mettez 0 pour tout afficher.',
+                })}
+              </div>
+            </div>
+            <input
+              type="number"
+              min={0}
+              max={9999}
+              value={maxItemsLocal}
+              onChange={(e) => {
+                const cleaned = e.target.value.replace(/[^0-9]/g, '')
+                setMaxItemsLocal(cleaned)
+              }}
+              onBlur={saveMaxItems}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveMaxItems()
+              }}
+              className="w-20 px-2 py-1 text-sm text-text-primary bg-bg-tertiary border border-border rounded text-right"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <h3 className="text-sm font-medium text-text-primary mb-2">{t({ en: 'Terminal', fr: 'Terminal' })}</h3>
+        <TerminalFontEditor />
+      </div>
+    </div>
   )
 }
 
-function ModelPickerPreferences() {
+const FONT_PREVIEW_TEXT = '~/project \ue0b0 git status \u2713 \u2717 \u2192 0123 iIlL1 |\u2500\u2524'
+
+function ModelSelectorEditor() {
   const t = useT()
   const savedHeight = useSetting(SETTINGS_KEYS.DISPLAY_MODEL_SELECTOR_HEIGHT, 'default')
   const savedCollapse = useSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_PROVIDERS_BY_DEFAULT, 'false')
   const savedCollapseFavorites = useSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT, 'false')
 
   const handleHeightChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    void setSetting(SETTINGS_KEYS.DISPLAY_MODEL_SELECTOR_HEIGHT, e.target.value)
+    setSetting(SETTINGS_KEYS.DISPLAY_MODEL_SELECTOR_HEIGHT, e.target.value)
   }
 
   const handleCollapseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    void setSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_PROVIDERS_BY_DEFAULT, String(e.target.checked))
+    setSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_PROVIDERS_BY_DEFAULT, String(e.target.checked))
   }
 
   const handleCollapseFavoritesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    void setSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT, String(e.target.checked))
+    setSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT, String(e.target.checked))
   }
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-medium text-text-primary mb-2">
-          {t({ en: 'Model Selector', fr: 'Sélecteur de modèles' })}
-        </h3>
-        <p className="text-xs text-text-muted mb-3">
-          {t({
-            en: 'Customize the appearance and default behavior of the model selector dropdown in the bottom bar.',
-            fr: 'Personnalisez l’apparence et le comportement par défaut du menu déroulant de sélection des modèles dans la barre inférieure.',
-          })}
-        </p>
-      </div>
-
-      <div className="space-y-3">
-        <label className="flex items-center justify-between gap-4">
-          <div>
-            <div className="text-sm text-text-primary">
-              {t({ en: 'Dropdown height', fr: 'Hauteur du menu déroulant' })}
-            </div>
-            <div className="text-xs text-text-muted">
-              {t({
-                en: 'Choose how much vertical space the model list occupies.',
-                fr: 'Choisissez l’espace vertical occupé par la liste des modèles.',
-              })}
-            </div>
+      <label className="flex items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm text-text-primary font-medium">
+            {t({ en: 'Dropdown size', fr: 'Taille de la liste' })}
           </div>
-          <select
-            value={savedHeight.value}
-            onChange={handleHeightChange}
-            aria-label={t({ en: 'Dropdown height', fr: 'Hauteur du menu déroulant' })}
-            className="text-xs bg-bg-tertiary border border-border rounded px-2 py-1 text-text-primary focus:outline-none focus:border-accent-primary"
-          >
-            <option value="default">{t({ en: 'Default (80% max)', fr: 'Par défaut (80% max)' })}</option>
-            <option value="full_height">{t({ en: 'Full screen height', fr: 'Plein écran' })}</option>
-          </select>
-        </label>
-
-        <label className="flex items-center justify-between gap-4 cursor-pointer">
-          <div>
-            <div className="text-sm text-text-primary">
-              {t({ en: 'Collapse providers by default', fr: 'Réduire les fournisseurs par défaut' })}
-            </div>
-            <div className="text-xs text-text-muted">
-              {t({
-                en: 'Start with all provider sections folded so only their headers are visible.',
-                fr: 'Démarrer avec toutes les sections de fournisseurs repliées.',
-              })}
-            </div>
+          <div className="text-xs text-text-muted mt-0.5">
+            {t({
+              en: 'Choose whether the model picker uses default sizing or fills the available screen height.',
+              fr: 'Choisissez si le sélecteur de modèles utilise la taille par défaut ou remplit la hauteur d’écran disponible.',
+            })}
           </div>
-          <input
-            type="checkbox"
-            checked={savedCollapse.value === 'true'}
-            onChange={handleCollapseChange}
-            aria-label={t({ en: 'Collapse providers by default', fr: 'Réduire les fournisseurs par défaut' })}
-            className="rounded border-border text-accent-primary focus:ring-accent-primary/50"
-          />
-        </label>
+        </div>
+        <select
+          value={savedHeight.value}
+          onChange={handleHeightChange}
+          className="px-2 py-1 text-sm text-text-primary bg-bg-tertiary border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary"
+        >
+          <option value="default">{t({ en: 'Default', fr: 'Par défaut' })}</option>
+          <option value="full_height">{t({ en: 'Full height', fr: 'Pleine hauteur' })}</option>
+        </select>
+      </label>
 
-        <label className="flex items-center justify-between gap-4 cursor-pointer">
-          <div>
-            <div className="text-sm text-text-primary">
-              {t({ en: 'Collapse favorites by default', fr: 'Réduire les favoris par défaut' })}
-            </div>
-            <div className="text-xs text-text-muted">
-              {t({
-                en: 'Start with the favorites section folded.',
-                fr: 'Démarrer avec la section des favoris repliée.',
-              })}
-            </div>
+      <label className="flex items-start justify-between gap-3 cursor-pointer">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm text-text-primary font-medium">
+            {t({ en: 'Collapse favorites by default', fr: 'Replier les favoris par défaut' })}
           </div>
-          <input
-            type="checkbox"
-            checked={savedCollapseFavorites.value === 'true'}
-            onChange={handleCollapseFavoritesChange}
-            aria-label={t({ en: 'Collapse favorites by default', fr: 'Réduire les favoris par défaut' })}
-            className="rounded border-border text-accent-primary focus:ring-accent-primary/50"
-          />
-        </label>
-      </div>
+          <div className="text-xs text-text-muted mt-0.5">
+            {t({
+              en: 'Start with the favorites section collapsed when opening the model selector.',
+              fr: 'Démarrez avec la section des favoris repliée à l’ouverture du sélecteur de modèles.',
+            })}
+          </div>
+        </div>
+        <input
+          type="checkbox"
+          checked={savedCollapseFavorites.value === 'true'}
+          onChange={handleCollapseFavoritesChange}
+          className="mt-1 h-4 w-4 rounded border-border text-accent-primary focus:ring-accent-primary"
+        />
+      </label>
+
+      <label className="flex items-start justify-between gap-3 cursor-pointer">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm text-text-primary font-medium">
+            {t({ en: 'Collapse providers by default', fr: 'Replier les fournisseurs par défaut' })}
+          </div>
+          <div className="text-xs text-text-muted mt-0.5">
+            {t({
+              en: 'Start with provider lists collapsed when opening the model selector.',
+              fr: 'Démarrez avec les listes de fournisseurs repliées à l’ouverture du sélecteur de modèles.',
+            })}
+          </div>
+        </div>
+        <input
+          type="checkbox"
+          checked={savedCollapse.value === 'true'}
+          onChange={handleCollapseChange}
+          className="mt-1 h-4 w-4 rounded border-border text-accent-primary focus:ring-accent-primary"
+        />
+      </label>
     </div>
   )
 }
@@ -633,6 +631,7 @@ function PriceThresholdsEditor({
   title: string
   unitLabel: string
 }) {
+  const t = useT()
   const thresholdsSetting = useSetting(SETTINGS_KEYS.DISPLAY_MODEL_PRICE_THRESHOLDS)
   const raw = thresholdsSetting.value
   const multiThresholds = useMemo(() => parseMultiCurrencyPriceThresholds(raw), [raw])
@@ -643,11 +642,7 @@ function PriceThresholdsEditor({
     setLocalThresholds(mode === 'fiat' ? multiThresholds.usd : multiThresholds.tokens)
   }, [multiThresholds, mode])
 
-  const handleUpdate = (
-    category: keyof ModelPriceThresholds,
-    level: 'low' | 'medium',
-    value: number,
-  ) => {
+  const handleUpdate = (category: keyof ModelPriceThresholds, level: 'low' | 'medium', value: number) => {
     const updatedCategory = {
       ...localThresholds[category],
       [level]: value,
@@ -660,21 +655,19 @@ function PriceThresholdsEditor({
 
     const updatedMulti: MultiCurrencyPriceThresholds = {
       ...multiThresholds,
-      ...(mode === 'fiat'
-        ? { usd: updatedSingle, eur: updatedSingle }
-        : { tokens: updatedSingle }),
+      ...(mode === 'fiat' ? { usd: updatedSingle, eur: updatedSingle } : { tokens: updatedSingle }),
     }
     void setSetting(SETTINGS_KEYS.DISPLAY_MODEL_PRICE_THRESHOLDS, JSON.stringify(updatedMulti))
   }
 
   const categories: Array<{
     key: keyof ModelPriceThresholds
-    label: string
+    label: Translation
   }> = [
-    { key: 'input', label: 'Input' },
-    { key: 'output', label: 'Output' },
-    { key: 'cacheRead', label: 'Cache Read' },
-    { key: 'cacheWrite', label: 'Cache Write' },
+    { key: 'input', label: { en: 'Input', fr: 'Entrée (Input)' } },
+    { key: 'output', label: { en: 'Output', fr: 'Sortie (Output)' } },
+    { key: 'cacheRead', label: { en: 'Cache Read', fr: 'Lecture cache' } },
+    { key: 'cacheWrite', label: { en: 'Cache Write', fr: 'Écriture cache' } },
   ]
 
   return (
@@ -684,12 +677,14 @@ function PriceThresholdsEditor({
         {categories.map(({ key, label }) => (
           <div key={key} className="p-2.5 bg-bg-secondary border border-border/70 rounded-md space-y-1.5">
             <div className="font-medium text-text-primary flex justify-between">
-              <span>{label}</span>
+              <span>{t(label)}</span>
               <span className="text-[10px] text-text-muted">{unitLabel}</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <span className="text-[10px] text-accent-success font-medium">Low (≤)</span>
+                <span className="text-[10px] text-accent-success font-medium">
+                  {t({ en: 'Low (≤)', fr: 'Bas (≤)' })}
+                </span>
                 <input
                   type="number"
                   step={mode === 'fiat' ? '0.01' : '1'}
@@ -699,7 +694,9 @@ function PriceThresholdsEditor({
                 />
               </div>
               <div>
-                <span className="text-[10px] text-accent-warning font-medium">Med (≤)</span>
+                <span className="text-[10px] text-accent-warning font-medium">
+                  {t({ en: 'Med (≤)', fr: 'Moyen (≤)' })}
+                </span>
                 <input
                   type="number"
                   step={mode === 'fiat' ? '0.01' : '1'}
@@ -763,105 +760,113 @@ function TerminalFontEditor() {
   const t = useT()
   const savedValue = useSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT, DEFAULT_TERMINAL_FONT).value
   const [localValue, setLocalValue] = useState(savedValue)
-  const [fonts, setFonts] = useState<string[]>([])
-  const [selectedFamily, setSelectedFamily] = useState<string>('')
+
+  const availableFonts = useMemo(() => detectAvailableFonts(), [])
+  const resolvedDefault = useMemo(() => resolveDefaultFamily(), [])
 
   useEffect(() => {
     setLocalValue(savedValue)
-    const primary = extractPrimaryFamily(savedValue)
-    setSelectedFamily(primary)
   }, [savedValue])
 
-  useEffect(() => {
-    const available = detectAvailableFonts()
-    setFonts(available)
-    const primary = extractPrimaryFamily(savedValue)
-    if (!primary || !available.includes(primary)) {
-      setSelectedFamily(resolveDefaultFamily(available))
-    }
-  }, [])
+  // The default is a fallback stack, so its first family may not be installed:
+  // show the one the browser actually resolves to instead of a phantom entry.
+  const isDefaultStack = savedValue === DEFAULT_TERMINAL_FONT
+  const primaryFamily = isDefaultStack ? resolvedDefault : extractPrimaryFamily(savedValue)
+  const isCustom = primaryFamily !== '' && !availableFonts.includes(primaryFamily)
 
-  const handleSelect = (family: string) => {
-    setSelectedFamily(family)
-    const formatted = toFontFamilyValue(family)
-    setLocalValue(formatted)
+  const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const family = e.target.value
+    if (!family) return
     void setSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT, toFontFamilyValue(family))
   }
 
-  const handleCustomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalValue(e.target.value)
-  }
-
-  const handleCustomBlur = () => {
+  const saveCustom = () => {
     void setSetting(SETTINGS_KEYS.DISPLAY_TERMINAL_FONT, localValue.trim() || DEFAULT_TERMINAL_FONT)
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
+      <p className="text-xs text-text-muted">
+        {t({
+          en: 'Only monospace fonts detected on this machine are listed. If your shell theme uses icons or powerline glyphs, pick a Nerd Font.',
+          fr: 'Seules les polices monospace détectées sur cette machine sont listées. Si votre thème de shell utilise des icônes ou des glyphes powerline, choisissez une Nerd Font.',
+        })}
+      </p>
+
+      <select
+        value={isCustom ? '' : primaryFamily}
+        onChange={handleSelect}
+        className="w-full px-2 py-1.5 text-sm text-text-primary bg-bg-tertiary border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary"
+      >
+        {isCustom && (
+          <option value="">
+            {t({ en: 'Custom: {{font}}', fr: 'Personnalisée : {{font}}' }, { font: primaryFamily })}
+          </option>
+        )}
+        {availableFonts.length === 0 && (
+          <option value="">{t({ en: 'No monospace font detected', fr: 'Aucune police monospace détectée' })}</option>
+        )}
+        {availableFonts.map((font) => (
+          <option key={font} value={font} style={{ fontFamily: `"${font}", monospace` }}>
+            {font}
+          </option>
+        ))}
+      </select>
+
+      <ScrollArea
+        horizontal
+        className="px-3 py-2 text-sm text-text-primary bg-bg-tertiary border border-border rounded whitespace-nowrap"
+        style={{ fontFamily: savedValue }}
+      >
+        {FONT_PREVIEW_TEXT}
+      </ScrollArea>
+
       <div>
-        <label className="block text-sm text-text-primary font-medium mb-1">
-          {t({ en: 'Terminal Font Family', fr: 'Police du terminal' })}
-        </label>
-        <p className="text-xs text-text-muted mb-3">
+        <div className="text-xs text-text-muted mb-1">
           {t({
-            en: 'Choose from monospace fonts detected on your system, or enter a custom CSS font-family.',
-            fr: 'Choisissez parmi les polices à chasse fixe détectées sur votre système ou saisissez une propriété font-family CSS personnalisée.',
+            en: 'Not listed? Enter a CSS font-family manually (e.g. "My Font", monospace)',
+            fr: 'Pas dans la liste ? Saisissez une famille de police CSS manuellement (ex. « My Font », monospace)',
           })}
-        </p>
-      </div>
-
-      {fonts.length > 0 && (
-        <div className="space-y-1.5">
-          <label className="block text-xs text-text-muted">
-            {t({ en: 'Installed Monospace Fonts', fr: 'Polices monospace installées' })}
-          </label>
-          <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto p-1 bg-bg-tertiary rounded border border-border">
-            {fonts.map((font) => (
-              <button
-                key={font}
-                type="button"
-                onClick={() => handleSelect(font)}
-                className={`text-left px-2 py-1.5 rounded text-xs truncate transition-colors ${
-                  selectedFamily === font
-                    ? 'bg-accent-primary text-text-inverse font-medium'
-                    : 'text-text-primary hover:bg-bg-secondary'
-                }`}
-                style={{ fontFamily: `"${font}", monospace` }}
-              >
-                {font}
-              </button>
-            ))}
-          </div>
         </div>
-      )}
-
-      <div className="space-y-1.5">
-        <label className="block text-xs text-text-muted">
-          {t({ en: 'Custom font-family (CSS)', fr: 'font-family personnalisée (CSS)' })}
-        </label>
         <input
           type="text"
           value={localValue}
-          onChange={handleCustomChange}
-          onBlur={handleCustomBlur}
-          placeholder={DEFAULT_TERMINAL_FONT}
-          className="w-full px-2.5 py-1.5 text-xs text-text-primary bg-bg-tertiary border border-border rounded font-mono focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary"
+          onChange={(e) => setLocalValue(e.target.value)}
+          onBlur={saveCustom}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') saveCustom()
+          }}
+          className="w-full px-2 py-1 text-xs font-mono text-text-primary bg-bg-tertiary border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary"
+          spellCheck={false}
         />
       </div>
+    </div>
+  )
+}
 
-      <div className="p-3 bg-bg-tertiary rounded border border-border">
-        <div className="text-xs text-text-muted mb-1.5">{t({ en: 'Preview', fr: 'Aperçu' })}</div>
-        <div
-          className="text-xs text-text-primary bg-bg-primary p-2.5 rounded border border-border/50"
-          style={{ fontFamily: localValue || DEFAULT_TERMINAL_FONT }}
-        >
-          <span>$ echo &quot;The quick brown fox jumps over 1337 lazy dogs.&quot;</span>
-          <br />
-          <span className="text-text-muted">
-            const x = 42; -&gt; != == &lt;= &gt;= [0..9] {'{'} foo: &apos;bar&apos; {'}'}
-          </span>
-        </div>
-      </div>
+function CustomCssEditor() {
+  const t = useT()
+  const savedCss = useSetting(SETTINGS_KEYS.DISPLAY_CUSTOM_CSS).value
+  const [localCss, setLocalCss] = useState(savedCss)
+
+  useEffect(() => {
+    setLocalCss(savedCss)
+  }, [savedCss])
+
+  const handleSave = () => {
+    void setSetting(SETTINGS_KEYS.DISPLAY_CUSTOM_CSS, localCss)
+  }
+
+  return (
+    <div className="space-y-2">
+      <textarea
+        value={localCss}
+        onChange={(e) => setLocalCss(e.target.value)}
+        onBlur={handleSave}
+        placeholder={t({ en: '/* Paste your custom CSS here */', fr: '/* Collez votre CSS personnalisé ici */' })}
+        className="w-full h-32 px-3 py-2 text-xs font-mono text-text-primary bg-bg-tertiary border border-border rounded resize-y focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary"
+        spellCheck={false}
+      />
     </div>
   )
 }

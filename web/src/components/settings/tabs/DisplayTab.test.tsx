@@ -71,11 +71,11 @@ describe('DisplayTab Model Selector', () => {
     render(<DisplayTab />)
 
     expect(screen.getByText('Model Selector')).toBeTruthy()
-    expect(screen.getByText('Dropdown height')).toBeTruthy()
+    expect(screen.getByText('Dropdown size')).toBeTruthy()
     expect(screen.getByText('Collapse providers by default')).toBeTruthy()
     expect(screen.getByText('Collapse favorites by default')).toBeTruthy()
 
-    const select = screen.getByDisplayValue('Default (80% max)') as HTMLSelectElement
+    const select = screen.getByDisplayValue('Default') as HTMLSelectElement
     expect(select.value).toBe('default')
 
     const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[]
@@ -87,7 +87,7 @@ describe('DisplayTab Model Selector', () => {
     const user = userEvent.setup()
     render(<DisplayTab />)
 
-    const select = screen.getByDisplayValue('Default (80% max)') as HTMLSelectElement
+    const select = screen.getByDisplayValue('Default') as HTMLSelectElement
     await user.selectOptions(select, 'full_height')
 
     expect(mockSetSetting).toHaveBeenCalledWith(SETTINGS_KEYS.DISPLAY_MODEL_SELECTOR_HEIGHT, 'full_height')
