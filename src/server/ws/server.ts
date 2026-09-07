@@ -29,6 +29,17 @@ import { buildMessagesFromStoredEvents, foldPendingConfirmations } from '../even
 import { getPendingQuestionsForSession } from '../tools/index.js'
 import { generateSessionNameForSession, needsNameGeneration } from '../session/name-generator.js'
 import { getSessionMessageCount } from '../utils/session-utils.js'
+import { serverT } from '../i18n.js'
+import type { Translation } from '../../shared/i18n/index.js'
+
+const MSG_INVALID_MESSAGE_FORMAT: Translation = { en: 'Invalid message format', fr: 'Format de message invalide' }
+const MSG_NO_ACTIVE_SESSION: Translation = { en: 'No active session', fr: 'Aucune session active' }
+const MSG_SESSION_NOT_FOUND: Translation = { en: 'Session not found', fr: 'Session introuvable' }
+const MSG_SESSION_IS_RUNNING: Translation = {
+  en: 'Session is already running',
+  fr: 'La session est déjà en cours d’exécution',
+}
+const MSG_UNKNOWN_ERROR: Translation = { en: 'Unknown error', fr: 'Erreur inconnue' }
 
 // Resolved once initial MCP connections settle — checkDynamic awaits this
 let resolveMcpReady: (() => void) | null = null
@@ -47,6 +58,7 @@ import {
   serializeServerMessage,
   createErrorMessage,
   createSessionRunningMessage,
+  createSessionPauseMessage,
   createChatMessageMessage,
   createChatErrorMessage,
   createContextStateMessage,
@@ -655,6 +667,11 @@ export function createWebSocketServer(
 
   // Session update events — broadcast session.state to session-specific clients
   sessionManager.subscribe((event) => {
+    if (event.type === 'pause_changed') {
+      // Lightweight pause-state sync (no full session.state rebuild)
+      broadcastForSession(event.sessionId, createSessionPauseMessage(event.pauseState))
+      return
+    }
     if (event.type === 'session_updated') {
       const updatedSession = event.session
       const eventStore = getEventStore()
@@ -785,7 +802,7 @@ export function createWebSocketServer(
         const seq = client.lastSentSeq + 1
         enqueueSend(
           client,
-          serializeServerMessage(createErrorMessage('INVALID_MESSAGE', 'Invalid message format')),
+          serializeServerMessage(createErrorMessage('INVALID_MESSAGE', serverT(MSG_INVALID_MESSAGE_FORMAT))),
           seq,
         )
         return
@@ -825,7 +842,11 @@ export function createWebSocketServer(
         enqueueSend(
           client,
           serializeServerMessage(
-            createErrorMessage('INTERNAL_ERROR', error instanceof Error ? error.message : 'Unknown error', message.id),
+            createErrorMessage(
+              'INTERNAL_ERROR',
+              error instanceof Error ? error.message : serverT(MSG_UNKNOWN_ERROR),
+              message.id,
+            ),
           ),
           seq,
         )
@@ -861,6 +882,7 @@ export function createWebSocketServer(
     wss,
     abortSession: (sessionId: string) => {
       abortedSessions.add(sessionId)
+      sessionManager.clearPauseState(sessionId)
       const controller = activeAgents.get(sessionId)
       if (controller) {
         activeAgents.delete(sessionId)
@@ -961,13 +983,19 @@ async function handleClientMessage(
     // =========================================================================
     case 'session.load': {
       if (!isSessionLoadPayload(message.payload)) {
-        send(createErrorMessage('INVALID_PAYLOAD', 'Invalid session.load payload', message.id))
+        send(
+          createErrorMessage(
+            'INVALID_PAYLOAD',
+            serverT({ en: 'Invalid session.load payload', fr: 'Payload de session.load invalide' }),
+            message.id,
+          ),
+        )
         return
       }
 
       const session = sessionManager.getSession(message.payload.sessionId)
       if (!session) {
-        send(createErrorMessage('NOT_FOUND', 'Session not found', message.id))
+        send(createErrorMessage('NOT_FOUND', serverT(MSG_SESSION_NOT_FOUND), message.id))
         return
       }
 
@@ -1039,7 +1067,7 @@ async function handleClientMessage(
       const payload = message.payload as { sessionId?: string } | undefined
       const sessionId = payload?.sessionId ?? client.activeSessionId
       if (!sessionId) {
-        send(createErrorMessage('NO_SESSION', 'No active session', message.id))
+        send(createErrorMessage('NO_SESSION', serverT(MSG_NO_ACTIVE_SESSION), message.id))
         return
       }
 
@@ -1047,7 +1075,16 @@ async function handleClientMessage(
 
       // Check if session is running
       if (session.isRunning) {
-        send(createErrorMessage('SESSION_RUNNING', 'Cannot compact while session is running', message.id))
+        send(
+          createErrorMessage(
+            'SESSION_RUNNING',
+            serverT({
+              en: 'Cannot compact while session is running',
+              fr: 'Impossible de compacter pendant que la session est en cours',
+            }),
+            message.id,
+          ),
+        )
         return
       }
 
@@ -1084,10 +1121,11 @@ async function handleClientMessage(
         .catch((error) => {
           if (error instanceof Error && error.message === 'Aborted') return
           logger.error('Compaction failed', { error, sessionId })
+          const reason = error instanceof Error ? error.message : serverT(MSG_UNKNOWN_ERROR)
           sendForSession(
             sessionId,
             createChatErrorMessage(
-              `Compaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              serverT({ en: 'Compaction failed: {{reason}}', fr: 'Échec de la compaction : {{reason}}' }, { reason }),
               true,
             ),
           )
@@ -1123,7 +1161,7 @@ async function handleClientMessage(
 
     case 'context.checkDynamic': {
       if (!client.activeSessionId) {
-        send(createErrorMessage('NO_SESSION', 'No active session', message.id))
+        send(createErrorMessage('NO_SESSION', serverT(MSG_NO_ACTIVE_SESSION), message.id))
         return
       }
 
@@ -1170,7 +1208,7 @@ async function handleClientMessage(
       const payload = message.payload as { sessionId?: string } | undefined
       const sessionId = payload?.sessionId ?? client.activeSessionId
       if (!sessionId) {
-        send(createErrorMessage('NO_SESSION', 'No active session', message.id))
+        send(createErrorMessage('NO_SESSION', serverT(MSG_NO_ACTIVE_SESSION), message.id))
         return
       }
 
@@ -1219,10 +1257,11 @@ async function handleClientMessage(
           error: error instanceof Error ? error.message : 'Unknown error',
           sessionId,
         })
+        const reason = error instanceof Error ? error.message : serverT(MSG_UNKNOWN_ERROR)
         send(
           createErrorMessage(
             'ERROR',
-            `Failed to preview: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            serverT({ en: 'Failed to preview: {{reason}}', fr: 'Échec de l’aperçu : {{reason}}' }, { reason }),
             message.id,
           ),
         )
@@ -1235,14 +1274,23 @@ async function handleClientMessage(
       const payload = message.payload as { sessionId?: string } | undefined
       const sessionId = payload?.sessionId ?? client.activeSessionId
       if (!sessionId) {
-        send(createErrorMessage('NO_SESSION', 'No active session', message.id))
+        send(createErrorMessage('NO_SESSION', serverT(MSG_NO_ACTIVE_SESSION), message.id))
         return
       }
 
       const session = sessionManager.requireSession(sessionId)
 
       if (session.isRunning) {
-        send(createErrorMessage('SESSION_RUNNING', 'Cannot apply dynamic context while session is running', message.id))
+        send(
+          createErrorMessage(
+            'SESSION_RUNNING',
+            serverT({
+              en: 'Cannot apply dynamic context while session is running',
+              fr: 'Impossible d’appliquer le contexte dynamique pendant que la session est en cours',
+            }),
+            message.id,
+          ),
+        )
         return
       }
 
@@ -1256,10 +1304,17 @@ async function handleClientMessage(
           send({ type: 'ack', payload: {}, id: message.id })
         } catch (error) {
           logger.error('Failed to apply dynamic context', { error, sessionId })
+          const reason = error instanceof Error ? error.message : serverT(MSG_UNKNOWN_ERROR)
           sendForSession(
             sessionId,
             createChatErrorMessage(
-              `Failed to apply dynamic context: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              serverT(
+                {
+                  en: 'Failed to apply dynamic context: {{reason}}',
+                  fr: 'Échec d’application du contexte dynamique : {{reason}}',
+                },
+                { reason },
+              ),
               true,
             ),
           )
@@ -1279,7 +1334,7 @@ async function handleClientMessage(
         { workflowId?: string; resumeFrom?: string; sessionId?: string } | undefined
       const sessionId = launchPayloadEarly?.sessionId ?? client.activeSessionId
       if (!sessionId) {
-        send(createErrorMessage('NO_SESSION', 'No active session', message.id))
+        send(createErrorMessage('NO_SESSION', serverT(MSG_NO_ACTIVE_SESSION), message.id))
         return
       }
 
@@ -1318,7 +1373,13 @@ async function handleClientMessage(
       if (!launchPayloadEarly?.resumeFrom) {
         const pendingCriteria = session.criteria.filter((c) => c.status.type !== 'passed')
         if (!launchPayloadEarly?.workflowId && pendingCriteria.length === 0) {
-          send(createErrorMessage('NO_WORK', 'No pending criteria to work on', message.id))
+          send(
+            createErrorMessage(
+              'NO_WORK',
+              serverT({ en: 'No pending criteria to work on', fr: 'Aucun critère en attente sur lequel travailler' }),
+              message.id,
+            ),
+          )
           return
         }
       }
@@ -1452,12 +1513,18 @@ async function handleClientMessage(
 
     case 'ask.answer': {
       if (!client.activeSessionId) {
-        send(createErrorMessage('NO_SESSION', 'No active session', message.id))
+        send(createErrorMessage('NO_SESSION', serverT(MSG_NO_ACTIVE_SESSION), message.id))
         return
       }
 
       if (!isAskAnswerPayload(message.payload)) {
-        send(createErrorMessage('INVALID_PAYLOAD', 'Invalid ask.answer payload', message.id))
+        send(
+          createErrorMessage(
+            'INVALID_PAYLOAD',
+            serverT({ en: 'Invalid ask.answer payload', fr: 'Payload ask.answer invalide' }),
+            message.id,
+          ),
+        )
         return
       }
 
@@ -1465,7 +1532,13 @@ async function handleClientMessage(
       const found = provideAnswer(callId, answer, skip)
 
       if (!found) {
-        send(createErrorMessage('NOT_FOUND', 'No pending question with that ID', message.id))
+        send(
+          createErrorMessage(
+            'NOT_FOUND',
+            serverT({ en: 'No pending question with that ID', fr: 'Aucune question en attente avec cet ID' }),
+            message.id,
+          ),
+        )
         return
       }
 
@@ -1488,13 +1561,13 @@ async function handleClientMessage(
       const payload = message.payload as { sessionId?: string } | undefined
       const exitSessionId = payload?.sessionId ?? client.activeSessionId
       if (!exitSessionId) {
-        send(createErrorMessage('NO_SESSION', 'No active session', message.id))
+        send(createErrorMessage('NO_SESSION', serverT(MSG_NO_ACTIVE_SESSION), message.id))
         return
       }
 
       const exitSession = sessionManager.getSession(exitSessionId)
       if (!exitSession) {
-        send(createErrorMessage('NOT_FOUND', 'Session not found', message.id))
+        send(createErrorMessage('NOT_FOUND', serverT(MSG_SESSION_NOT_FOUND), message.id))
         return
       }
 
@@ -1537,7 +1610,7 @@ async function handleClientMessage(
       const payload = message.payload as import('../../shared/protocol.js').ChatLLMRetryNowPayload | undefined
       const retrySessionId = payload?.sessionId ?? client.activeSessionId
       if (!retrySessionId) {
-        send(createErrorMessage('NO_SESSION', 'No active session', message.id))
+        send(createErrorMessage('NO_SESSION', serverT(MSG_NO_ACTIVE_SESSION), message.id))
         return
       }
       // Interrupt the in-flight backoff wait — the stream's next attempt starts immediately
@@ -1550,23 +1623,29 @@ async function handleClientMessage(
       const payload = message.payload as import('../../shared/protocol.js').ChatRetryPayload | undefined
       const retrySessionId = payload?.sessionId ?? client.activeSessionId
       if (!retrySessionId) {
-        send(createErrorMessage('NO_SESSION', 'No active session', message.id))
+        send(createErrorMessage('NO_SESSION', serverT(MSG_NO_ACTIVE_SESSION), message.id))
         return
       }
 
       const retrySession = sessionManager.getSession(retrySessionId)
       if (!retrySession) {
-        send(createErrorMessage('NOT_FOUND', 'Session not found', message.id))
+        send(createErrorMessage('NOT_FOUND', serverT(MSG_SESSION_NOT_FOUND), message.id))
         return
       }
       if (retrySession.isRunning) {
-        send(createErrorMessage('SESSION_RUNNING', 'Session is already running', message.id))
+        send(createErrorMessage('SESSION_RUNNING', serverT(MSG_SESSION_IS_RUNNING), message.id))
         return
       }
       // Only allow a retry when the last turn actually failed (definitive LLM
       // failure recorded within the retry window) — never an unsolicited turn.
       if (!hasRecentLLMFailure(retrySessionId, 30 * 60_000)) {
-        send(createErrorMessage('NO_FAILED_TURN', 'No failed turn to retry', message.id))
+        send(
+          createErrorMessage(
+            'NO_FAILED_TURN',
+            serverT({ en: 'No failed turn to retry', fr: 'Aucun tour échoué à relancer' }),
+            message.id,
+          ),
+        )
         return
       }
       // The workflow resume path owns retries for blocked/running workflow
@@ -1576,7 +1655,13 @@ async function handleClientMessage(
         latestExec &&
         (latestExec.status === 'blocked' || latestExec.status === 'running' || latestExec.status === 'waiting')
       ) {
-        send(createErrorMessage('WORKFLOW_ACTIVE', 'A workflow run is active', message.id))
+        send(
+          createErrorMessage(
+            'WORKFLOW_ACTIVE',
+            serverT({ en: 'A workflow run is active', fr: 'Un run de workflow est actif' }),
+            message.id,
+          ),
+        )
         return
       }
 
@@ -1601,7 +1686,16 @@ async function handleClientMessage(
     }
 
     default: {
-      send(createErrorMessage('UNKNOWN_MESSAGE', `Unknown message type: ${message.type}`, message.id))
+      send(
+        createErrorMessage(
+          'UNKNOWN_MESSAGE',
+          serverT(
+            { en: 'Unknown message type: {{type}}', fr: 'Type de message inconnu : {{type}}' },
+            { type: message.type },
+          ),
+          message.id,
+        ),
+      )
     }
   }
 }

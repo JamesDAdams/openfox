@@ -298,6 +298,35 @@ export class EventStore {
     return results
   }
 
+  /**
+   * Import events verbatim (used by session import).
+   * Preserves original seq and timestamp; rewrites the sessionId.
+   * Intended for a fresh session (no existing events for the target id).
+   */
+  importEvents(sessionId: string, events: StoredEvent[]): StoredEvent[] {
+    if (events.length === 0) return []
+
+    const insert = this.db.prepare(
+      `INSERT INTO events (session_id, seq, timestamp, event_type, payload)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+
+    const transaction = this.db.transaction(() => {
+      for (const event of events) {
+        insert.run(sessionId, event.seq, event.timestamp, event.type, JSON.stringify(event.data))
+      }
+    })
+    transaction()
+
+    this.invalidateSessionCache(sessionId)
+
+    const stored: StoredEvent[] = events.map((event) => ({ ...event, sessionId }))
+    for (const event of stored) {
+      this.notifySubscribers(sessionId, event)
+    }
+    return stored
+  }
+
   private getNextSeq(sessionId: string): number {
     const row = this.db.prepare(`SELECT MAX(seq) as max_seq FROM events WHERE session_id = ?`).get(sessionId) as
       { max_seq: number | null } | undefined

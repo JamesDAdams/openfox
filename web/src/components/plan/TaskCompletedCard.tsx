@@ -6,6 +6,7 @@ import { resolveEffectiveWorkflow } from '../../lib/workflow-scope'
 import { hexToRgba } from '../../lib/colors'
 import { TaskCheckIcon } from '../shared/icons'
 import { formatTime } from '../../lib/format-stats'
+import { useT } from '../../hooks/useT'
 
 interface TaskCompletedCardProps {
   data: TaskCompletedPayload
@@ -19,6 +20,7 @@ function formatTokens(n: number): string {
 
 export const TaskCompletedCard = memo(function TaskCompletedCard({ data }: TaskCompletedCardProps) {
   const { workflows } = useWorkflows(useSessionWorkdir())
+  const t = useT()
   const color =
     (data.workflowId ? resolveEffectiveWorkflow(workflows, data.workflowId)?.color : undefined) ??
     data.workflowColor ??
@@ -34,7 +36,7 @@ export const TaskCompletedCard = memo(function TaskCompletedCard({ data }: TaskC
       <div className="flex items-center gap-2 mb-2">
         <TaskCheckIcon color={color} />
         <span className="text-sm font-medium" style={{ color }}>
-          {data.workflowName ?? 'Task Completed'}
+          {data.workflowName ?? t({ en: 'Task Completed', fr: 'Tâche terminée' })}
         </span>
       </div>
 

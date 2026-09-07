@@ -8,7 +8,12 @@ import { parseLmStudioModels } from './providers/lmstudio.js'
 import { ensureVersionPrefix, stripVersionPrefix, buildModelsUrl } from './llm/url-utils.js'
 import { getCatalogEntry } from './providers/model-catalog.js'
 import { hasVisionEvidence } from './providers/vision.js'
-import { detectBackendFromUrl, getBackendCapabilities, type Backend } from './llm/backend.js'
+import {
+  detectBackendFromUrl,
+  detectProviderDefaultsFromUrl,
+  getBackendCapabilities,
+  type Backend,
+} from './llm/backend.js'
 import { resolveEffortForModel, resolveModeModelId } from '../shared/reasoning-effort.js'
 
 /**
@@ -124,7 +129,15 @@ function mergeModelsWithUserOverrides(
   const updatedModels = filteredBackendModels.map((backendModel) => {
     const existingUserModel = normalizedUserIdMap.get(normalizeModelId(backendModel.id))
     if (existingUserModel) {
-      return enrichWithProfileDefaults({ ...backendModel, ...existingUserModel, id: backendModel.id })
+      const mergedPricing = existingUserModel.pricing ?? backendModel.pricing
+      const mergedSupportsVision = existingUserModel.supportsVision ?? backendModel.supportsVision
+      return enrichWithProfileDefaults({
+        ...backendModel,
+        ...existingUserModel,
+        ...(mergedPricing !== undefined ? { pricing: mergedPricing } : {}),
+        ...(mergedSupportsVision !== undefined ? { supportsVision: mergedSupportsVision } : {}),
+        id: backendModel.id,
+      })
     }
     return enrichWithProfileDefaults(backendModel)
   })
@@ -449,6 +462,14 @@ export function createProviderManager(config: Config, options: ProviderManagerOp
     return effort ? { reasoningEffort: effort } : {}
   }
 
+  function resolveThinkingField(provider: Provider): string | undefined {
+    // Explicit provider config wins; otherwise fall back to the URL-derived
+    // default (rescues configs saved before the behavior existed, e.g. the
+    // DeepSeek reasoning_content contract).
+    if (provider.thinkingField) return provider.thinkingField
+    return detectProviderDefaultsFromUrl(provider.url)?.thinkingField
+  }
+
   function createConfigForProvider(provider: Provider, model: string, reasoningEffort?: string): Config {
     // An explicit effort (session pick, pin, or agent override) wins over the
     // model's configured default, clamped to the model's advertised preset
@@ -464,6 +485,7 @@ export function createProviderManager(config: Config, options: ProviderManagerOp
       configureModel?.apiModelId,
       model,
     )
+    const thinkingField = resolveThinkingField(provider)
     return {
       ...config,
       llm: {
@@ -472,7 +494,7 @@ export function createProviderManager(config: Config, options: ProviderManagerOp
         model: send.modelId,
         backend: resolveBackend(provider),
         ...(provider.apiKey && { apiKey: provider.apiKey }),
-        ...(provider.thinkingField && { thinkingField: provider.thinkingField }),
+        ...(thinkingField ? { thinkingField } : {}),
         ...(provider.sendReasoningInMessages !== undefined
           ? { sendReasoningInMessages: provider.sendReasoningInMessages }
           : {}),
@@ -765,6 +787,18 @@ export function createProviderManager(config: Config, options: ProviderManagerOp
       const provider = providers.find((p) => p.id === providerId)
       if (!provider) {
         return []
+      }
+
+      // If transport adapter is available, fetch fresh models to merge dynamic pricing & capabilities
+      if (resolveTransportAdapter(provider)) {
+        try {
+          const freshModels = await fetchProviderModels(provider)
+          if (freshModels.length > 0) {
+            return mergeModelsWithUserOverrides(freshModels, provider.models ?? [], false)
+          }
+        } catch {
+          // Fallback to stored models on fetch failure
+        }
       }
 
       // Return stored models with context info

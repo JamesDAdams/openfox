@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import type { Message, MessageSegment, ToolCall, PreparingToolCall } from '@shared/types.js'
 import { Markdown } from '../shared/Markdown'
 import { ThinkingBlock } from '../shared/ThinkingBlock'
+import { useT } from '../../hooks/useT'
 import { ToolCallDisplay } from '../shared/ToolCallDisplay'
 import { ToolCallPreparing } from '../shared/ToolCallPreparing'
 import { TodoListDisplay } from '../shared/TodoListDisplay'
@@ -10,14 +11,14 @@ import { CriteriaGroupDisplay, isCriterionTool } from '../shared/CriteriaGroupDi
 import { useSessionStore } from '../../stores/session'
 import { useAgents } from '../../hooks/useAgents'
 import { getAgentColor } from '../../lib/agents-actions'
-import { BranchIcon, CopyIcon, InfoIcon, WarningSmallIcon } from '../shared/icons'
+import { InfoIcon, WarningSmallIcon } from '../shared/icons'
 import { forkSession } from '../../lib/api.js'
 import { deriveToolCallStatus } from '../../lib/toolStatus'
 import { useLocation } from 'wouter'
 import { formatTime } from '../../lib/format-stats'
-import { formatDateTime } from '../../lib/format-date'
 import { copyToClipboard } from '../../lib/clipboard.js'
 import { useContextMenu } from '../../hooks/useContextMenu'
+import { useMessageContextMenu } from '../../hooks/useMessageContextMenu'
 
 interface AssistantMessageProps {
   message: Message
@@ -157,6 +158,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   showVerboseToolOutput = true,
   sessionId,
 }: AssistantMessageProps) {
+  const t = useT()
   const criteria = useSessionStore((state) => state.currentSession?.metadataEntries?.['criteria'])
   const { agents } = useAgents()
   const rawElements = messageToElements(message, showStats)
@@ -166,8 +168,6 @@ export const AssistantMessage = memo(function AssistantMessage({
   const [forkError, setForkError] = useState<string | null>(null)
   const [, navigate] = useLocation()
   const { onContextMenu, contextMenu } = useContextMenu()
-
-  if (elements.length === 0) return null
 
   const handleCopy = () => {
     void copyToClipboard(message.content)
@@ -182,9 +182,17 @@ export const AssistantMessage = memo(function AssistantMessage({
     if (result?.session) {
       navigate(`/p/${result.session.projectId}/s/${result.session.id}`)
     } else {
-      setForkError('Failed to fork session')
+      setForkError(t({ en: 'Failed to fork session', fr: 'Échec de la duplication de la session' }))
     }
   }
+
+  const contextMenuItems = useMessageContextMenu(
+    message,
+    () => handleCopy(),
+    () => void handleFork(),
+  )
+
+  if (elements.length === 0) return null
 
   return (
     <div className="feed-item" onContextMenu={(e) => onContextMenu(e, !!sessionId)}>
@@ -294,7 +302,9 @@ export const AssistantMessage = memo(function AssistantMessage({
                   {stats.toolTime > 0 && (
                     <>
                       <span className="text-text-muted">·</span>
-                      <span>{formatTime(stats.toolTime)} tools</span>
+                      <span>
+                        {t({ en: '{{time}} tools', fr: '{{time}} outils' }, { time: formatTime(stats.toolTime) })}
+                      </span>
                     </>
                   )}
                   <span className="text-text-muted">·</span>
@@ -305,7 +315,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                   <button
                     type="button"
                     className="text-text-muted hover:text-text-secondary transition-colors"
-                    title="View detailed stats"
+                    title={t({ en: 'View detailed stats', fr: 'Voir les statistiques détaillées' })}
                     onClick={() => {
                       const event = new CustomEvent('open-turn-stats', { detail: { stats } })
                       window.dispatchEvent(event)
@@ -323,34 +333,24 @@ export const AssistantMessage = memo(function AssistantMessage({
         {message.partial && (
           <div className="flex items-center gap-1.5 text-[10px] text-accent-warning mt-1">
             <WarningSmallIcon />
-            <span>Aborted</span>
+            <span>{t({ en: 'Aborted', fr: 'Interrompu' })}</span>
           </div>
         )}
 
         {message.completeReason === 'truncated' && (
           <div className="flex items-center gap-1.5 text-[10px] text-text-truncated mt-1">
             <WarningSmallIcon />
-            <span>Response was truncated — the model ran out of output tokens.</span>
+            <span>
+              {t({
+                en: 'Response was truncated — the model ran out of output tokens.',
+                fr: 'Réponse tronquée — le modèle a épuisé ses jetons de sortie.',
+              })}
+            </span>
           </div>
         )}
       </div>
 
-      {contextMenu([
-        {
-          label: formatDateTime(message.timestamp),
-          info: true,
-        },
-        {
-          label: 'Copy',
-          icon: <CopyIcon className="w-4 h-4" />,
-          onClick: () => handleCopy(),
-        },
-        {
-          label: 'Fork session from here',
-          icon: <BranchIcon className="w-4 h-4" />,
-          onClick: () => void handleFork(),
-        },
-      ])}
+      {contextMenu(contextMenuItems)}
     </div>
   )
 })

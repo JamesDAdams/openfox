@@ -5,6 +5,7 @@ import type {
   GitDiffFile,
   SessionListPayload,
   SessionRunningPayload,
+  SessionPausePayload,
   ChatAskUserPayload,
   ChatDeltaPayload,
   ChatThinkingPayload,
@@ -59,6 +60,12 @@ function addUnreadSessionId(unreadSessionIds: string[], sessionId: string): stri
 
 function removeUnreadSessionId(unreadSessionIds: string[], sessionId: string): string[] {
   return unreadSessionIds.filter((id) => id !== sessionId)
+}
+
+function clearsLiveTurnStats(payload: ChatDonePayload): boolean {
+  // Sub-agent completions and waiting_for_user are mid-turn pauses: the live
+  // stats stay accurate and resume streaming once the turn continues.
+  return payload.agentType !== 'sub-agent' && payload.reason !== 'waiting_for_user'
 }
 
 function markBackgroundSessionUnread(
@@ -361,6 +368,16 @@ export function handleServerMessage(
       if (payload.isRunning) {
         set((state) => updatePane(state, eventSessionId, (p) => ({ ...p, restoredInput: null, liveTurnStats: null })))
       }
+      break
+    }
+
+    case 'session.pause': {
+      const payload = message.payload as SessionPausePayload
+      const eventSessionId = message.sessionId
+      if (!eventSessionId || !isLivePane(get(), eventSessionId)) {
+        break
+      }
+      set((state) => updatePaneSession(state, eventSessionId, (s) => ({ ...s, pauseState: payload.pauseState })))
       break
     }
 
@@ -698,9 +715,10 @@ export function handleServerMessage(
               : m,
           ),
           visionFallbackByMessage: {},
-          // Sub-agent completions arrive mid-turn — don't wipe the parent turn's
-          // live stats; they are replaced by the next top-level chat.stats.
-          ...(payload.agentType !== 'sub-agent' ? { liveTurnStats: null } : {}),
+          // Sub-agent completions and waiting_for_user arrive mid-turn — don't
+          // wipe the parent turn's live stats; they are replaced by the next
+          // top-level chat.stats / resumed streaming.
+          ...(clearsLiveTurnStats(payload) ? { liveTurnStats: null } : {}),
           ...(payload.reason !== 'error' ? { llmRetry: null } : {}),
         })),
       )

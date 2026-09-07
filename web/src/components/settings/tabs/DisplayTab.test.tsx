@@ -5,45 +5,69 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DisplayTab } from './DisplayTab'
+import { setLocale } from '@shared/i18n/index.js'
 import { SETTINGS_KEYS } from '../../../lib/resources'
 
-const mockSettings: Record<string, string> = {}
-const mockSetSetting = vi.fn().mockImplementation((key: string, value: string) => {
-  mockSettings[key] = value
-  return Promise.resolve()
-})
+vi.mock('wouter', () => ({
+  useLocation: () => ['/', vi.fn()],
+}))
+
+const { mockSettings, mockSetSetting } = vi.hoisted(() => ({
+  mockSettings: {} as Record<string, string>,
+  mockSetSetting: vi.fn(),
+}))
 
 vi.mock('../../../hooks/useSetting', () => ({
   useSetting: (key: string, fallback = '') => ({ value: mockSettings[key] ?? fallback, loading: false }),
 }))
 
-vi.mock('../../../lib/resources', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../lib/resources')>()
-  return {
-    ...actual,
-    setSetting: (...args: [string, string]) => mockSetSetting(...args),
-  }
-})
-
-vi.mock('../ThemeEditor', () => ({
-  ThemeEditor: () => <div data-testid="theme-editor">ThemeEditor</div>,
+vi.mock('../../../lib/resources', async (importOriginal) => ({
+  ...(await importOriginal()),
+  setSetting: mockSetSetting,
 }))
 
-describe('DisplayTab', () => {
+vi.mock('../../../lib/fonts', async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectAvailableFonts: () => ['JetBrains Mono'],
+  resolveDefaultFamily: () => 'JetBrains Mono',
+}))
+
+describe('DisplayTab Language setting', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     Object.keys(mockSettings).forEach((k) => delete mockSettings[k])
+    setLocale('en')
   })
 
-  it('renders fullscreen slash commands toggle with proper description', () => {
+  it('renders the Language section', () => {
     render(<DisplayTab />)
-    expect(screen.getByText('Fullscreen slash commands view')).toBeTruthy()
-    expect(
-      screen.getByText('Choose whether the commands view uses default sizing or fills the available screen height.'),
-    ).toBeTruthy()
+    expect(screen.getByText('Language')).toBeTruthy()
+    expect(screen.getByLabelText('Language')).toBeTruthy()
   })
 
-  it('renders the Model Selector section with height select and collapse checkbox', () => {
+  it('shows the three language options', () => {
+    render(<DisplayTab />)
+    const select = screen.getByLabelText('Language') as HTMLSelectElement
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['automatic', 'en', 'fr'])
+  })
+
+  it('persists the chosen locale and applies it', async () => {
+    const user = userEvent.setup()
+    render(<DisplayTab />)
+    const select = screen.getByLabelText('Language') as HTMLSelectElement
+    await user.selectOptions(select, 'fr')
+    expect(mockSetSetting).toHaveBeenCalledWith('display.locale', 'fr')
+  })
+})
+
+describe('DisplayTab Model Selector', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.keys(mockSettings).forEach((k) => delete mockSettings[k])
+    setLocale('en')
+  })
+
+  it('renders the Model Selector section with height select and collapse checkboxes', () => {
     render(<DisplayTab />)
 
     expect(screen.getByText('Model Selector')).toBeTruthy()
@@ -93,5 +117,47 @@ describe('DisplayTab', () => {
     await user.click(collapseFavorites)
 
     expect(mockSetSetting).toHaveBeenCalledWith(SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT, 'true')
+  })
+})
+
+describe('DisplayTab - Model Pricing section', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.keys(mockSettings).forEach((k) => delete mockSettings[k])
+    setLocale('en')
+  })
+
+  it('renders the Model Pricing section with top-level toggles', () => {
+    mockSettings[SETTINGS_KEYS.DISPLAY_ENABLE_MODEL_PRICE_COLORS] = 'false'
+    mockSettings[SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICES] = 'false'
+    mockSettings[SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR] = 'false'
+
+    render(<DisplayTab />)
+
+    expect(screen.getByText('Model Pricing')).toBeTruthy()
+    expect(screen.getByText('Show pricing hover popover')).toBeTruthy()
+    expect(screen.getByText('Show prices under model names')).toBeTruthy()
+    expect(screen.getByText('Price color tiers (Low / Medium / High)')).toBeTruthy()
+    expect(screen.queryByText('Color model name by output price')).toBeNull()
+    expect(screen.queryByText('Input price')).toBeNull()
+  })
+
+  it('reveals children toggles when parent toggles are active', () => {
+    mockSettings[SETTINGS_KEYS.DISPLAY_ENABLE_MODEL_PRICE_COLORS] = 'true'
+    mockSettings[SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICES] = 'true'
+    mockSettings[SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_INPUT] = 'true'
+    mockSettings[SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_OUTPUT] = 'true'
+    mockSettings[SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_CACHE_READ] = 'true'
+    mockSettings[SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_CACHE_WRITE] = 'true'
+
+    render(<DisplayTab />)
+
+    expect(screen.getByText('Color model name by output price')).toBeTruthy()
+    expect(screen.getByText('Input price')).toBeTruthy()
+    expect(screen.getByText('Output price')).toBeTruthy()
+    expect(screen.getByText('Cache read price')).toBeTruthy()
+    expect(screen.getByText('Cache write price')).toBeTruthy()
+    expect(screen.getByText('Price Color Thresholds — Standard Currencies ($ / €)')).toBeTruthy()
+    expect(screen.getByText('Price Color Thresholds — Tokens / Credits (tk)')).toBeTruthy()
   })
 })

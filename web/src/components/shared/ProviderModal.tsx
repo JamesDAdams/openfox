@@ -3,10 +3,14 @@ import { Modal } from './Modal'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { authFetch } from '../../lib/api'
 import type { Backend } from '../../stores/config'
-import type { ModelConfig as SharedModelConfig } from '@shared/types.js'
+import type { ModelConfig as SharedModelConfig, ModelPricing } from '@shared/types.js'
 import { ChevronDownIcon, EyeIcon, ReloadIcon, SettingsIcon } from './icons'
+import { formatDiscountBadge, formatPricingSummary } from '../settings/model-list'
+import { useDisplaySettings } from '../../hooks/useDisplaySettings'
 import { QueryParamsInput } from './QueryParamsInput'
 import { formatTokens } from '../../lib/format-stats'
+import { getLocale } from '@shared/i18n/index.js'
+import { useT } from '../../hooks/useT'
 import { shouldAutofocus } from '../../lib/device'
 import { REASONING_EFFORT_VALUES } from '../../lib/model-value'
 import { isSmallContext } from '../../lib/context-warning'
@@ -87,6 +91,7 @@ interface ModelConfig {
   defaultTopK?: number
   defaultMaxTokens?: number
   compactionThreshold?: number
+  pricing?: ModelPricing
 }
 
 export interface ProviderFormData {
@@ -158,6 +163,7 @@ function ModelConfigPanel({
   onTestParams: (id: string, mode: 'thinking' | 'non-thinking') => void
   onShowRaw: (data: string) => void
 }) {
+  const t = useT()
   function toggleOmitParam(modelId: string, paramKey: string) {
     const current = modelConfigs[modelId]?.omitParams ?? []
     const isOmitted = current.includes(paramKey)
@@ -199,19 +205,25 @@ function ModelConfigPanel({
           disabled={autoConfigState.progress[model.id] === 'probing'}
           className="px-4 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-50 transition-colors"
         >
-          {autoConfigState.progress[model.id] === 'probing' ? 'Probing...' : 'Auto-config'}
+          {autoConfigState.progress[model.id] === 'probing'
+            ? t({ en: 'Probing…', fr: 'Analyse…' })
+            : t({ en: 'Auto-config', fr: 'Auto-configuration' })}
         </button>
         {autoConfigState.progress[model.id] === 'done' && (
-          <span className="text-sm text-accent-success font-medium">Configured ✓</span>
+          <span className="text-sm text-accent-success font-medium">
+            {t({ en: 'Configured ✓', fr: 'Configuré ✓' })}
+          </span>
         )}
         {autoConfigState.progress[model.id] === 'error' && (
-          <span className="text-sm text-red-500 font-medium">Failed ✗</span>
+          <span className="text-sm text-red-500 font-medium">{t({ en: 'Failed ✗', fr: 'Échec ✗' })}</span>
         )}
       </div>
 
       <div className="flex gap-3 items-end">
         <div>
-          <label className="text-xs text-text-secondary block mb-1">Context window (tokens)</label>
+          <label className="text-xs text-text-secondary block mb-1">
+            {t({ en: 'Context window (tokens)', fr: 'Fenêtre de contexte (tokens)' })}
+          </label>
           <input
             type="number"
             value={modelConfigs[model.id]?.contextWindow ?? model.contextWindow}
@@ -224,7 +236,10 @@ function ModelConfigPanel({
           />
           {isSmallContext(modelConfigs[model.id]?.contextWindow ?? model.contextWindow) && (
             <p data-small-context className="text-[11px] text-accent-warning mt-1 w-40 leading-snug">
-              Small context — agent prompts may be truncated by the provider.
+              {t({
+                en: 'Small context — agent prompts may be truncated by the provider.',
+                fr: 'Contexte réduit — les invites de l’agent peuvent être tronquées par le fournisseur.',
+              })}
             </p>
           )}
         </div>
@@ -235,7 +250,7 @@ function ModelConfigPanel({
             onChange={(e) => onUpdateConfig(model.id, { supportsVision: e.target.checked })}
             className="accent-accent-primary"
           />{' '}
-          Supports vision
+          {t({ en: 'Supports vision', fr: 'Prend en charge la vision' })}
         </label>
       </div>
 
@@ -246,12 +261,16 @@ function ModelConfigPanel({
             disabled={testResults[model.id + '-thinking']?.loading}
             className="px-3 py-1.5 bg-bg-tertiary border border-border rounded text-xs font-medium hover:bg-bg-secondary disabled:opacity-50 transition-colors"
           >
-            {testResults[model.id + '-thinking']?.loading ? 'Testing...' : 'Test thinking'}
+            {testResults[model.id + '-thinking']?.loading
+              ? t({ en: 'Testing…', fr: 'Test en cours…' })
+              : t({ en: 'Test thinking', fr: 'Tester la réflexion' })}
           </button>
-          {testResults[model.id + '-thinking']?.result && <span className="text-xs text-accent-success">OK</span>}
+          {testResults[model.id + '-thinking']?.result && (
+            <span className="text-xs text-accent-success">{t({ en: 'OK', fr: 'OK' })}</span>
+          )}
           {testResults[model.id + '-thinking']?.error && (
             <span className="text-xs text-red-500" title={testResults[model.id + '-thinking']?.error}>
-              Fail
+              {t({ en: 'Fail', fr: 'Échec' })}
             </span>
           )}
           {testResults[model.id + '-thinking']?.result && (
@@ -259,7 +278,7 @@ function ModelConfigPanel({
               onClick={() => onShowRaw(testResults[model.id + '-thinking']!.result!)}
               className="text-xs text-accent-primary hover:underline"
             >
-              raw
+              {t({ en: 'raw', fr: 'brut' })}
             </button>
           )}
         </div>
@@ -269,12 +288,16 @@ function ModelConfigPanel({
             disabled={testResults[model.id + '-non-thinking']?.loading}
             className="px-3 py-1.5 bg-bg-tertiary border border-border rounded text-xs font-medium hover:bg-bg-secondary disabled:opacity-50 transition-colors"
           >
-            {testResults[model.id + '-non-thinking']?.loading ? 'Testing...' : 'Test non-thinking'}
+            {testResults[model.id + '-non-thinking']?.loading
+              ? t({ en: 'Testing…', fr: 'Test en cours…' })
+              : t({ en: 'Test non-thinking', fr: 'Tester sans réflexion' })}
           </button>
-          {testResults[model.id + '-non-thinking']?.result && <span className="text-xs text-accent-success">OK</span>}
+          {testResults[model.id + '-non-thinking']?.result && (
+            <span className="text-xs text-accent-success">{t({ en: 'OK', fr: 'OK' })}</span>
+          )}
           {testResults[model.id + '-non-thinking']?.error && (
             <span className="text-xs text-red-500" title={testResults[model.id + '-non-thinking']?.error}>
-              Fail
+              {t({ en: 'Fail', fr: 'Échec' })}
             </span>
           )}
           {testResults[model.id + '-non-thinking']?.result && (
@@ -282,7 +305,7 @@ function ModelConfigPanel({
               onClick={() => onShowRaw(testResults[model.id + '-non-thinking']!.result!)}
               className="text-xs text-accent-primary hover:underline"
             >
-              raw
+              {t({ en: 'raw', fr: 'brut' })}
             </button>
           )}
         </div>
@@ -291,7 +314,10 @@ function ModelConfigPanel({
       <details className="group">
         <summary className="text-xs text-text-muted cursor-pointer hover:text-text-secondary list-none flex items-center gap-1 select-none">
           <ChevronDownIcon className="w-3 h-3 transition-transform group-open:rotate-180" />
-          Advanced: thinking &amp; non-thinking params
+          {t({
+            en: 'Advanced: thinking & non-thinking params',
+            fr: 'Avancé : paramètres de réflexion et sans réflexion',
+          })}
         </summary>
         <div className="mt-3 space-y-2">
           <label className="flex items-center gap-2 cursor-pointer">
@@ -301,15 +327,17 @@ function ModelConfigPanel({
               onChange={(e) => onUpdateConfig(model.id, { thinkingEnabled: e.target.checked })}
               className="w-4 h-4 rounded border-border bg-bg-tertiary accent-accent-primary"
             />
-            <span className="text-xs font-medium text-text-primary">Thinking</span>
+            <span className="text-xs font-medium text-text-primary">{t({ en: 'Thinking', fr: 'Réflexion' })}</span>
           </label>
           {modelConfigs[model.id]?.thinkingEnabled && (
             <div className="ml-6 space-y-2 pl-3 border-l-2 border-accent-primary/30">
               <div>
-                <label className="text-xs text-text-secondary block mb-1">Reasoning effort</label>
+                <label className="text-xs text-text-secondary block mb-1">
+                  {t({ en: 'Reasoning effort', fr: 'Niveau de raisonnement' })}
+                </label>
                 {model.reasoningEfforts?.length ? (
                   <select
-                    aria-label="Reasoning effort"
+                    aria-label={t({ en: 'Reasoning effort', fr: 'Niveau de raisonnement' })}
                     value={modelConfigs[model.id]?.thinkingLevel ?? defaultReasoningEffort(model.reasoningEfforts)}
                     onChange={(e) => onUpdateConfig(model.id, { thinkingLevel: e.target.value })}
                     className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
@@ -323,7 +351,7 @@ function ModelConfigPanel({
                 ) : (
                   <input
                     type="text"
-                    aria-label="Reasoning effort"
+                    aria-label={t({ en: 'Reasoning effort', fr: 'Niveau de raisonnement' })}
                     value={modelConfigs[model.id]?.thinkingLevel ?? ''}
                     onChange={(e) => onUpdateConfig(model.id, { thinkingLevel: e.target.value })}
                     className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
@@ -340,7 +368,10 @@ function ModelConfigPanel({
           <div className="space-y-2">
             <div>
               <label className="text-xs text-text-secondary block mb-1">
-                Effort presets (shown as chips in the model selector)
+                {t({
+                  en: 'Effort presets (shown as chips in the model selector)',
+                  fr: 'Préréglages d’effort (affichés sous forme de pastilles dans le sélecteur de modèle)',
+                })}
               </label>
               <div className="flex flex-wrap items-center gap-1">
                 {presetEfforts(model.id).map((effort, index) => (
@@ -351,7 +382,10 @@ function ModelConfigPanel({
                     {effort}
                     <button
                       type="button"
-                      aria-label={`Move preset ${effort} up`}
+                      aria-label={t({
+                        en: `Move preset ${effort} up`,
+                        fr: `Déplacer le préréglage ${effort} vers le haut`,
+                      })}
                       onClick={() => movePresetEffort(model.id, effort, -1)}
                       disabled={index === 0}
                       className="text-text-muted hover:text-text-primary leading-none disabled:opacity-30"
@@ -360,7 +394,10 @@ function ModelConfigPanel({
                     </button>
                     <button
                       type="button"
-                      aria-label={`Move preset ${effort} down`}
+                      aria-label={t({
+                        en: `Move preset ${effort} down`,
+                        fr: `Déplacer le préréglage ${effort} vers le bas`,
+                      })}
                       onClick={() => movePresetEffort(model.id, effort, 1)}
                       disabled={index === presetEfforts(model.id).length - 1}
                       className="text-text-muted hover:text-text-primary leading-none disabled:opacity-30"
@@ -369,7 +406,7 @@ function ModelConfigPanel({
                     </button>
                     <button
                       type="button"
-                      aria-label={`Remove preset ${effort}`}
+                      aria-label={t({ en: `Remove preset ${effort}`, fr: `Supprimer le préréglage ${effort}` })}
                       onClick={() => togglePresetEffort(model.id, effort)}
                       className="text-text-muted hover:text-accent-error leading-none"
                     >
@@ -378,14 +415,14 @@ function ModelConfigPanel({
                   </span>
                 ))}
                 <select
-                  aria-label="Add effort preset"
+                  aria-label={t({ en: 'Add effort preset', fr: 'Ajouter un préréglage' })}
                   value=""
                   onChange={(e) => {
                     if (e.target.value) togglePresetEffort(model.id, e.target.value)
                   }}
                   className="text-[10px] px-1.5 py-0.5 rounded border border-border bg-bg-tertiary text-text-muted"
                 >
-                  <option value="">Add preset…</option>
+                  <option value="">{t({ en: 'Add preset…', fr: 'Ajouter un préréglage…' })}</option>
                   {REASONING_EFFORT_VALUES.filter((v) => !presetEfforts(model.id).includes(v)).map((v) => (
                     <option key={v} value={v}>
                       {v}
@@ -399,20 +436,26 @@ function ModelConfigPanel({
                   onClick={() => onUpdateConfig(model.id, { reasoningEfforts: undefined })}
                   className="mt-1 text-[10px] text-text-muted hover:text-text-primary hover:underline"
                 >
-                  Reset to defaults
+                  {t({ en: 'Reset to defaults', fr: 'Réinitialiser les valeurs par défaut' })}
                 </button>
               )}
             </div>
             <div>
               <label className="text-xs text-text-secondary block mb-1">
-                Reasoning effort override (raw value, sent verbatim)
+                {t({
+                  en: 'Reasoning effort override (raw value, sent verbatim)',
+                  fr: 'Remplacement du niveau de raisonnement (valeur brute, envoyée telle quelle)',
+                })}
               </label>
               <input
                 type="text"
-                aria-label="Reasoning effort override"
+                aria-label={t({ en: 'Reasoning effort override', fr: 'Remplacement du niveau de raisonnement' })}
                 value={modelConfigs[model.id]?.reasoningEffortOverride ?? model.reasoningEffortOverride ?? ''}
                 onChange={(e) => onUpdateConfig(model.id, { reasoningEffortOverride: e.target.value || undefined })}
-                placeholder="e.g. deep — bypasses the preset list"
+                placeholder={t({
+                  en: 'e.g. deep — bypasses the preset list',
+                  fr: 'ex. deep — contourne la liste des préréglages',
+                })}
                 className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
               />
             </div>
@@ -425,7 +468,9 @@ function ModelConfigPanel({
               onChange={(e) => onUpdateConfig(model.id, { nonThinkingEnabled: e.target.checked })}
               className="w-4 h-4 rounded border-border bg-bg-tertiary accent-accent-primary"
             />
-            <span className="text-xs font-medium text-text-primary">Non-thinking</span>
+            <span className="text-xs font-medium text-text-primary">
+              {t({ en: 'Non-thinking', fr: 'Sans réflexion' })}
+            </span>
           </label>
           {modelConfigs[model.id]?.nonThinkingEnabled && (
             <div className="ml-6 space-y-2 pl-3 border-l-2 border-accent-warning/30">
@@ -444,18 +489,20 @@ function ModelConfigPanel({
                 onChange={() => toggleOmitParam(model.id, 'reasoning_effort')}
                 className="accent-accent-primary"
               />
-              Re-enable reasoning_effort
+              {t({ en: 'Re-enable reasoning_effort', fr: 'Réactiver reasoning_effort' })}
             </label>
           )}
         </div>
 
         <div className="border-t border-border pt-3 mt-3">
-          <p className="text-xs text-text-muted mb-2">Sampling parameters</p>
+          <p className="text-xs text-text-muted mb-2">
+            {t({ en: 'Sampling parameters', fr: 'Paramètres d’échantillonnage' })}
+          </p>
           <div className="grid grid-cols-2 gap-2">
             <SamplingParamField
               modelId={model.id}
               paramKey="temperature"
-              label="Temperature"
+              label={t({ en: 'Temperature', fr: 'Température' })}
               step={0.1}
               value={modelConfigs[model.id]?.temperature}
               defaultValue={modelConfigs[model.id]?.defaultTemperature}
@@ -468,7 +515,7 @@ function ModelConfigPanel({
             <SamplingParamField
               modelId={model.id}
               paramKey="top_p"
-              label="Top P"
+              label={t({ en: 'Top P', fr: 'Top P' })}
               step={0.05}
               value={modelConfigs[model.id]?.topP}
               defaultValue={modelConfigs[model.id]?.defaultTopP}
@@ -483,7 +530,7 @@ function ModelConfigPanel({
             <SamplingParamField
               modelId={model.id}
               paramKey="top_k"
-              label="Top K"
+              label={t({ en: 'Top K', fr: 'Top K' })}
               value={modelConfigs[model.id]?.topK}
               defaultValue={modelConfigs[model.id]?.defaultTopK}
               omitParams={modelConfigs[model.id]?.omitParams}
@@ -495,7 +542,7 @@ function ModelConfigPanel({
             <SamplingParamField
               modelId={model.id}
               paramKey="max_tokens"
-              label="Max tokens"
+              label={t({ en: 'Max tokens', fr: 'Tokens max' })}
               value={modelConfigs[model.id]?.maxTokens}
               defaultValue={modelConfigs[model.id]?.defaultMaxTokens}
               omitParams={modelConfigs[model.id]?.omitParams}
@@ -512,6 +559,167 @@ function ModelConfigPanel({
             maxTokens={modelConfigs[model.id]?.contextWindow ?? model.contextWindow}
             onChange={(threshold) => onUpdateConfig(model.id, { compactionThreshold: threshold })}
           />
+        </div>
+
+        <div className="border-t border-border pt-3 mt-3">
+          <p className="text-xs text-text-muted mb-2">
+            {t({ en: 'API Price (/ 1M tokens)', fr: 'Tarif API (/ 1M jetons)' })}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Input price', fr: 'Prix d’entrée (Input)' })}
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                data-testid="pricing-input"
+                value={modelConfigs[model.id]?.pricing?.input ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? parseFloat(e.target.value) : undefined
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, input: val }
+                  if (val === undefined) delete nextPricing.input
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                placeholder={t({ en: 'e.g. 0.15', fr: 'ex. 0.15' })}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Output price', fr: 'Prix de sortie (Output)' })}
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                data-testid="pricing-output"
+                value={modelConfigs[model.id]?.pricing?.output ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? parseFloat(e.target.value) : undefined
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, output: val }
+                  if (val === undefined) delete nextPricing.output
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                placeholder={t({ en: 'e.g. 0.60', fr: 'ex. 0.60' })}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Cache read price', fr: 'Prix de lecture cache' })}
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                data-testid="pricing-cache-read"
+                value={modelConfigs[model.id]?.pricing?.cacheRead ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? parseFloat(e.target.value) : undefined
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, cacheRead: val }
+                  if (val === undefined) delete nextPricing.cacheRead
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                placeholder={t({ en: 'e.g. 0.075', fr: 'ex. 0.075' })}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Cache write price', fr: 'Prix d’écriture cache' })}
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                data-testid="pricing-cache-write"
+                value={modelConfigs[model.id]?.pricing?.cacheWrite ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? parseFloat(e.target.value) : undefined
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, cacheWrite: val }
+                  if (val === undefined) delete nextPricing.cacheWrite
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                placeholder={t({ en: 'e.g. 0.30', fr: 'ex. 0.30' })}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">{t({ en: 'Discount', fr: 'Remise' })}</label>
+              <input
+                type="text"
+                data-testid="pricing-discount"
+                value={modelConfigs[model.id]?.pricing?.discount ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  const trimmed = raw.trim()
+                  const num = Number(trimmed)
+                  const val = raw === '' ? undefined : !isNaN(num) && trimmed !== '' ? num : raw
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, discount: val }
+                  if (val === undefined) delete nextPricing.discount
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                onBlur={(e) => {
+                  const raw = e.target.value.trim()
+                  if (raw !== e.target.value) {
+                    const num = Number(raw)
+                    const val = raw === '' ? undefined : !isNaN(num) && raw !== '' ? num : raw
+                    const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                    const nextPricing = { ...currentPricing, discount: val }
+                    if (val === undefined) delete nextPricing.discount
+                    onUpdateConfig(model.id, {
+                      pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                    })
+                  }
+                }}
+                placeholder={t({ en: 'e.g. 60 or 60% off', fr: 'ex. 60 ou 60% de remise' })}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Currency / Unit', fr: 'Devise / Unité' })}
+              </label>
+              <select
+                data-testid="pricing-currency"
+                value={modelConfigs[model.id]?.pricing?.currency ?? 'usd'}
+                onChange={(e) => {
+                  const val = e.target.value as 'usd' | 'eur' | 'tokens'
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, currency: val }
+                  onUpdateConfig(model.id, {
+                    pricing: nextPricing,
+                  })
+                }}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary cursor-pointer"
+              >
+                <option value="usd">{t({ en: 'Dollar ($)', fr: 'Dollar ($)' })}</option>
+                <option value="eur">{t({ en: 'Euro (€)', fr: 'Euro (€)' })}</option>
+                <option value="tokens">{t({ en: 'Tokens / Credits (tk)', fr: 'Jetons / Crédits (tk)' })}</option>
+              </select>
+            </div>
+          </div>
         </div>
       </details>
     </div>
@@ -543,6 +751,7 @@ function SamplingParamField({
   valueField: keyof ModelConfig
   step?: number
 }) {
+  const t = useT()
   const isOmitted = omitParams?.includes(paramKey) ?? false
   return (
     <div>
@@ -556,7 +765,7 @@ function SamplingParamField({
             onChange={() => onToggleOmit(modelId, paramKey)}
             className="accent-accent-primary"
           />
-          Send
+          {t({ en: 'Send', fr: 'Envoyer' })}
         </label>
       </div>
       <input
@@ -566,11 +775,17 @@ function SamplingParamField({
         value={isOmitted ? '' : (value ?? '')}
         disabled={isOmitted}
         onChange={(e) => onUpdateConfig(modelId, { [valueField]: parseValue(e.target.value) } as Partial<ModelConfig>)}
-        placeholder={isOmitted ? 'Not sent' : (defaultValue?.toString() ?? 'Using default')}
+        placeholder={
+          isOmitted
+            ? t({ en: 'Not sent', fr: 'Non envoyé' })
+            : (defaultValue?.toString() ?? t({ en: 'Using default', fr: 'Valeur par défaut' }))
+        }
         className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary disabled:opacity-40"
       />
       {!isOmitted && defaultValue !== undefined && (
-        <p className="text-xs text-text-muted mt-0.5">default: {defaultValue}</p>
+        <p className="text-xs text-text-muted mt-0.5">
+          {t({ en: 'default: {{value}}', fr: 'défaut : {{value}}' }, { value: defaultValue })}
+        </p>
       )}
     </div>
   )
@@ -585,6 +800,7 @@ function AutoCompactionField({
   maxTokens: number
   onChange: (threshold: number | undefined) => void
 }) {
+  const t = useT()
   const MIN_TOKENS = 15_000
   const DEFAULT_THRESHOLD = 0.85
 
@@ -603,10 +819,12 @@ function AutoCompactionField({
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-1">
-        <label className="text-xs text-text-secondary">Auto-compaction threshold</label>
+        <label className="text-xs text-text-secondary">
+          {t({ en: 'Auto-compaction threshold', fr: 'Seuil d’auto-compaction' })}
+        </label>
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-text-primary">
-            {percent}% · {formatTokens(thresholdTokens)}
+            {`${percent}% · ${formatTokens(thresholdTokens)}`}
           </span>
           <button
             type="button"
@@ -617,12 +835,12 @@ function AutoCompactionField({
             disabled={value === undefined}
             className="text-xs text-accent-primary hover:underline disabled:text-text-muted disabled:no-underline"
           >
-            Default
+            {t({ en: 'Default', fr: 'Défaut' })}
           </button>
         </div>
       </div>
       <input
-        aria-label="Auto-compaction threshold"
+        aria-label={t({ en: 'Auto-compaction threshold', fr: 'Seuil d’auto-compaction' })}
         type="range"
         min={minPercent}
         max={maxPercent}
@@ -636,7 +854,13 @@ function AutoCompactionField({
         className="w-full"
       />
       <p className="text-[10px] text-text-muted mt-0.5">
-        Minimum {formatTokens(MIN_TOKENS)} tokens · maximum {maxPercent}% · default 85%
+        {t(
+          {
+            en: 'Minimum {{min}} tokens · maximum {{max}}% · default 85%',
+            fr: 'Minimum {{min}} tokens · maximum {{max}}% · défaut 85%',
+          },
+          { min: formatTokens(MIN_TOKENS), max: maxPercent },
+        )}
       </p>
     </div>
   )
@@ -650,6 +874,8 @@ export function ProviderModal({
   editProvider,
   editModelId,
 }: ProviderModalProps) {
+  const t = useT()
+  const displaySettings = useDisplaySettings()
   const [formStep, setFormStep] = useState(initialStep)
   const [formName, setFormName] = useState('')
   const [formUrl, setFormUrl] = useState('')
@@ -743,6 +969,8 @@ export function ProviderModal({
       ...current,
       [model.id]: {
         contextWindow: model.contextWindow,
+        supportsVision: model.supportsVision,
+        pricing: model.pricing,
         ...current[model.id],
       },
     }))
@@ -824,7 +1052,7 @@ export function ProviderModal({
   function addManualModel() {
     const trimmed = manualModelId.trim()
     if (!trimmed) {
-      setManualModelError('Enter a model name')
+      setManualModelError(t({ en: 'Enter a model name', fr: 'Saisissez un nom de modèle' }))
       return
     }
 
@@ -837,7 +1065,9 @@ export function ProviderModal({
     if (existing) {
       // Already present: just select it instead of duplicating.
       selectModel(existing)
-      setManualModelError(`"${existing.id}" is already in the list`)
+      setManualModelError(
+        t({ en: `"${existing.id}" is already in the list`, fr: `« ${existing.id} » figure déjà dans la liste` }),
+      )
       setManualModelId('')
       if (!formAuthAdapter && autoConfigState.progress[existing.id] !== 'probing') {
         runAutoConfig(existing.id)
@@ -911,6 +1141,7 @@ export function ProviderModal({
             topK: m.topK,
             maxTokens: m.maxTokens,
             compactionThreshold: m.compactionThreshold,
+            pricing: m.pricing ? { ...m.pricing } : undefined,
           }
           if (m.selected) selected.add(m.id)
         }
@@ -948,7 +1179,7 @@ export function ProviderModal({
     ) {
       fetchModels(formUrl)
     }
-  }, [formStep, providerAuthState])
+  }, [formStep, providerAuthState, formTransportAdapter])
 
   useEffect(() => {
     if (!isOpen || !formAuthAdapter || !editProvider?.id) return
@@ -995,7 +1226,7 @@ export function ProviderModal({
         models: [],
       }),
     })
-    if (!response.ok) throw new Error('Unable to create provider')
+    if (!response.ok) throw new Error(t({ en: 'Unable to create provider', fr: 'Impossible de créer le fournisseur' }))
     const data = (await response.json()) as { provider: { id: string } }
     setDraftProviderId(data.provider.id)
     return data.provider.id
@@ -1024,7 +1255,10 @@ export function ProviderModal({
     try {
       const providerId = await ensureDraftProvider()
       const response = await authFetch(`/api/provider-auth/${providerId}/login`, { method: 'POST' })
-      if (!response.ok) throw new Error('Unable to start provider sign-in')
+      if (!response.ok)
+        throw new Error(
+          t({ en: 'Unable to start provider sign-in', fr: 'Impossible de démarrer la connexion du fournisseur' }),
+        )
       const challenge = (await response.json()) as {
         mode?: 'device' | 'browser' | 'external'
         verificationUrl: string
@@ -1109,6 +1343,7 @@ export function ProviderModal({
                 defaultTopP: (m as { defaultTopP?: number }).defaultTopP,
                 defaultTopK: (m as { defaultTopK?: number }).defaultTopK,
                 defaultMaxTokens: (m as { defaultMaxTokens?: number }).defaultMaxTokens,
+                pricing: m.pricing ? { ...m.pricing } : undefined,
               }
             }
             return next
@@ -1160,6 +1395,7 @@ export function ProviderModal({
           thinkingConfig: Record<string, unknown> | null
           nonThinkingConfig: Record<string, unknown> | null
           sendReasoningInMessages?: boolean
+          thinkingField?: string
           rejectedParams?: string[]
           reasoningEfforts?: string[]
           defaultReasoningEffort?: string
@@ -1187,6 +1423,9 @@ export function ProviderModal({
         }
         if (m.sendReasoningInMessages === false) {
           setSendReasoningInMessages(false)
+        }
+        if (m.thinkingField) {
+          setThinkingField(m.thinkingField)
         }
         if (m.rejectedParams && m.rejectedParams.length > 0) {
           config.omitParams = m.rejectedParams
@@ -1323,6 +1562,7 @@ export function ProviderModal({
         defaultTopP: modelConfigs[m.id]?.defaultTopP,
         defaultTopK: modelConfigs[m.id]?.defaultTopK,
         compactionThreshold: modelConfigs[m.id]?.compactionThreshold,
+        pricing: modelConfigs[m.id]?.pricing ?? m.pricing,
       })),
     })
     draftProviderSaved.current = true
@@ -1342,7 +1582,7 @@ export function ProviderModal({
             }}
             className="text-sm text-text-muted hover:text-text-secondary transition-colors"
           >
-            ← Back
+            ← {t({ en: 'Back', fr: 'Retour' })}
           </button>
         )}
       </div>
@@ -1351,7 +1591,7 @@ export function ProviderModal({
           onClick={handleClose}
           className="px-4 py-2 text-sm text-text-muted hover:text-text-secondary transition-colors"
         >
-          Cancel
+          {t({ en: 'Cancel', fr: 'Annuler' })}
         </button>
         {formStep === 1 ? (
           <button
@@ -1360,7 +1600,7 @@ export function ProviderModal({
             data-testid="provider-modal-next"
             className="px-5 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-50 transition-colors"
           >
-            Next — Test &amp; Configure
+            {t({ en: 'Next — Test & Configure', fr: 'Suivant — Tester et configurer' })}
           </button>
         ) : (
           <button
@@ -1369,7 +1609,9 @@ export function ProviderModal({
             data-testid="provider-modal-save"
             className="px-5 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-50 transition-colors"
           >
-            {autoConfigState.loading ? 'Configuring...' : 'Save Provider'}
+            {autoConfigState.loading
+              ? t({ en: 'Configuring…', fr: 'Configuration…' })
+              : t({ en: 'Save Provider', fr: 'Enregistrer le fournisseur' })}
           </button>
         )}
       </div>
@@ -1381,7 +1623,11 @@ export function ProviderModal({
       <Modal
         isOpen={isOpen}
         onClose={handleClose}
-        title={editProvider ? 'Edit Provider' : 'Add Provider'}
+        title={
+          editProvider
+            ? t({ en: 'Edit Provider', fr: 'Modifier le fournisseur' })
+            : t({ en: 'Add Provider', fr: 'Ajouter un fournisseur' })
+        }
         size="lg"
         footer={footer}
         closeOnBackdropClick={false}
@@ -1403,7 +1649,9 @@ export function ProviderModal({
         {formStep === 1 && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm text-text-secondary mb-2">Inference engine</label>
+              <label className="block text-sm text-text-secondary mb-2">
+                {t({ en: 'Inference engine', fr: 'Moteur d’inférence' })}
+              </label>
               <div className="grid grid-cols-5 gap-2">
                 {providerPresets.map((preset) => (
                   <button
@@ -1446,7 +1694,7 @@ export function ProviderModal({
                       : 'border-border hover:border-text-muted text-text-secondary'
                   }`}
                 >
-                  Other
+                  {t({ en: 'Other', fr: 'Autre' })}
                 </button>
                 {COMMON_PORTS.map((port) => {
                   const backendMap: Record<number, string> = {
@@ -1490,7 +1738,9 @@ export function ProviderModal({
 
             {!formAuthAdapter && (
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Provider URL</label>
+                <label className="block text-sm text-text-secondary mb-1">
+                  {t({ en: 'Provider URL', fr: 'URL du fournisseur' })}
+                </label>
                 <input
                   ref={urlInputRef}
                   type="text"
@@ -1509,13 +1759,15 @@ export function ProviderModal({
             )}
 
             <div>
-              <label className="block text-sm text-text-secondary mb-1">Provider name</label>
+              <label className="block text-sm text-text-secondary mb-1">
+                {t({ en: 'Provider name', fr: 'Nom du fournisseur' })}
+              </label>
               <input
                 type="text"
                 autoComplete="off"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="My LLM Server"
+                placeholder={t({ en: 'My LLM Server', fr: 'Mon serveur LLM' })}
                 className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
               />
             </div>
@@ -1523,7 +1775,8 @@ export function ProviderModal({
             {!formAuthAdapter && (
               <div>
                 <label className="block text-sm text-text-secondary mb-1">
-                  API key <span className="text-text-muted">(optional)</span>
+                  {t({ en: 'API key', fr: 'Clé API' })}{' '}
+                  <span className="text-text-muted">{t({ en: '(optional)', fr: '(facultatif)' })}</span>
                 </label>
                 <input
                   type="text"
@@ -1544,7 +1797,9 @@ export function ProviderModal({
                   onChange={(e) => setFormIsLocal(e.target.checked)}
                   className="w-4 h-4 rounded border-border bg-bg-primary accent-accent-primary"
                 />
-                <span className="text-sm text-text-secondary">This is a local provider</span>
+                <span className="text-sm text-text-secondary">
+                  {t({ en: 'This is a local provider', fr: 'Fournisseur local' })}
+                </span>
               </label>
             )}
           </div>
@@ -1554,12 +1809,14 @@ export function ProviderModal({
         {formStep === 2 && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-text-primary">Test &amp; Configure Models</h4>
+              <h4 className="text-sm font-medium text-text-primary">
+                {t({ en: 'Test & Configure Models', fr: 'Tester et configurer les modèles' })}
+              </h4>
               <button
                 type="button"
                 onClick={() => setShowDefaults(true)}
                 className="p-1.5 text-text-muted hover:text-text-primary rounded transition-colors"
-                title="Provider-level defaults"
+                title={t({ en: 'Provider-level defaults', fr: 'Valeurs par défaut du fournisseur' })}
               >
                 <SettingsIcon className="w-4 h-4" />
               </button>
@@ -1568,13 +1825,20 @@ export function ProviderModal({
               <div className="rounded-lg border border-border bg-bg-primary p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h4 className="text-sm font-medium text-text-primary">Connect provider</h4>
+                    <h4 className="text-sm font-medium text-text-primary">
+                      {t({ en: 'Connect provider', fr: 'Connecter le fournisseur' })}
+                    </h4>
                     <p className="mt-1 text-xs text-text-muted">
-                      Connect this provider before choosing available models.
+                      {t({
+                        en: 'Connect this provider before choosing available models.',
+                        fr: 'Connectez ce fournisseur avant de choisir les modèles disponibles.',
+                      })}
                     </p>
                   </div>
                   {providerAuthState === 'connected' ? (
-                    <span className="text-sm font-medium text-accent-success">Connected ✓</span>
+                    <span className="text-sm font-medium text-accent-success">
+                      {t({ en: 'Connected ✓', fr: 'Connecté ✓' })}
+                    </span>
                   ) : (
                     <button
                       type="button"
@@ -1583,10 +1847,10 @@ export function ProviderModal({
                       className="rounded-lg bg-accent-primary px-4 py-2 text-sm font-medium text-text-primary disabled:opacity-50"
                     >
                       {providerAuthBusy || providerAuthState === 'pending'
-                        ? 'Connecting...'
+                        ? t({ en: 'Connecting…', fr: 'Connexion…' })
                         : providerAuthState === 'error'
-                          ? 'Retry'
-                          : 'Connect'}
+                          ? t({ en: 'Retry', fr: 'Réessayer' })
+                          : t({ en: 'Connect', fr: 'Connecter' })}
                     </button>
                   )}
                 </div>
@@ -1594,13 +1858,18 @@ export function ProviderModal({
                   <div className="mt-4 border-t border-border pt-4">
                     {deviceChallenge.mode !== 'browser' ? (
                       <>
-                        <p className="text-xs text-text-muted">Use this code to complete authorization:</p>
+                        <p className="text-xs text-text-muted">
+                          {t({
+                            en: 'Use this code to complete authorization:',
+                            fr: 'Utilisez ce code pour finaliser l’autorisation :',
+                          })}
+                        </p>
                         <button
                           type="button"
                           onClick={() => void copyDeviceCode()}
                           className="mt-3 w-full rounded-lg border border-accent-primary/40 px-4 py-4 font-mono text-2xl font-semibold tracking-[0.2em] text-accent-primary"
                         >
-                          {deviceChallenge.userCode ?? 'Continue'}
+                          {deviceChallenge.userCode ?? t({ en: 'Continue', fr: 'Continuer' })}
                         </button>
                         <div className="mt-3 flex gap-2">
                           <button
@@ -1608,14 +1877,18 @@ export function ProviderModal({
                             onClick={() => void copyDeviceCode()}
                             className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-text-primary"
                           >
-                            {codeCopied ? 'Copied' : 'Copy code'}
+                            {codeCopied
+                              ? t({ en: 'Copied', fr: 'Copié' })
+                              : t({ en: 'Copy code', fr: 'Copier le code' })}
                           </button>
                           <button
                             type="button"
                             onClick={openDeviceAuthorization}
                             className="flex-1 rounded-lg bg-accent-primary px-3 py-2 text-sm font-medium text-text-primary"
                           >
-                            {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
+                            {devicePageOpened
+                              ? t({ en: 'Reopen authorization', fr: 'Rouvrir l’autorisation' })
+                              : t({ en: 'Open authorization', fr: 'Ouvrir l’autorisation' })}
                           </button>
                         </div>
                       </>
@@ -1627,7 +1900,9 @@ export function ProviderModal({
                           onClick={openDeviceAuthorization}
                           className="w-full rounded-lg bg-accent-primary px-3 py-2 text-sm font-medium text-text-primary"
                         >
-                          {devicePageOpened ? 'Reopen authorization' : 'Open authorization'}
+                          {devicePageOpened
+                            ? t({ en: 'Reopen authorization', fr: 'Rouvrir l’autorisation' })
+                            : t({ en: 'Open authorization', fr: 'Ouvrir l’autorisation' })}
                         </button>
                       </>
                     )}
@@ -1638,16 +1913,18 @@ export function ProviderModal({
             {fetchingModels && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <span className="w-4 h-4 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
-                Fetching models...
+                {t({ en: 'Fetching models…', fr: 'Récupération des modèles…' })}
               </div>
             )}
             {fetchError && (
               <div className="p-3 rounded-lg text-sm bg-red-500/10 text-red-500 border border-red-500/20">
                 <p>{fetchError}</p>
-                <p className="text-xs text-text-muted mt-1">URL: {formUrl}</p>
+                <p className="text-xs text-text-muted mt-1">
+                  {t({ en: 'URL: {{url}}', fr: 'URL : {{url}}' }, { url: formUrl })}
+                </p>
                 <div className="flex gap-2 mt-2">
                   <button onClick={() => fetchModels(formUrl)} className="text-xs text-accent-primary hover:underline">
-                    Retry
+                    {t({ en: 'Retry', fr: 'Réessayer' })}
                   </button>
                   <button
                     onClick={() => {
@@ -1656,14 +1933,14 @@ export function ProviderModal({
                     }}
                     className="text-xs text-accent-primary hover:underline"
                   >
-                    Edit URL
+                    {t({ en: 'Edit URL', fr: 'Modifier l’URL' })}
                   </button>
                   {!formAuthAdapter && (
                     <button
                       onClick={() => manualModelInputRef.current?.focus()}
                       className="text-xs text-accent-primary hover:underline"
                     >
-                      Add model manually
+                      {t({ en: 'Add model manually', fr: 'Ajouter un modèle manuellement' })}
                     </button>
                   )}
                 </div>
@@ -1674,11 +1951,19 @@ export function ProviderModal({
                 don't expose a /models endpoint (e.g. Cline) can be configured. */}
             {formBackend && (!formAuthAdapter || providerAuthState === 'connected') && (
               <div>
-                <h4 className="text-sm font-medium text-text-primary mb-1">Add model manually</h4>
+                <h4 className="text-sm font-medium text-text-primary mb-1">
+                  {t({ en: 'Add model manually', fr: 'Ajouter un modèle manuellement' })}
+                </h4>
                 <p className="text-xs text-text-muted mb-2">
                   {fetchError
-                    ? "Can't discover models automatically? Enter the model name to use:"
-                    : 'Enter a model name manually if it does not appear in the list above:'}
+                    ? t({
+                        en: "Can't discover models automatically? Enter the model name to use:",
+                        fr: 'Impossible de détecter les modèles automatiquement ? Saisissez le nom du modèle à utiliser :',
+                      })
+                    : t({
+                        en: 'Enter a model name manually if it does not appear in the list above:',
+                        fr: 'Saisissez manuellement un nom de modèle s’il n’apparaît pas dans la liste ci-dessus :',
+                      })}
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -1705,7 +1990,7 @@ export function ProviderModal({
                     data-testid="provider-modal-manual-model-add"
                     className="px-3 py-1.5 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 transition-colors"
                   >
-                    Add
+                    {t({ en: 'Add', fr: 'Ajouter' })}
                   </button>
                 </div>
                 {manualModelError && <p className="text-xs text-red-500 mt-1">{manualModelError}</p>}
@@ -1718,10 +2003,16 @@ export function ProviderModal({
                 {selectedModelIds.size > 0 && (
                   <div className="mb-4">
                     <h4 className="text-sm font-medium text-text-primary mb-1">
-                      Selected Models ({selectedModelIds.size})
+                      {t(
+                        { en: 'Selected Models ({{count}})', fr: 'Modèles sélectionnés ({{count}})' },
+                        { count: selectedModelIds.size },
+                      )}
                     </h4>
                     <p className="text-xs text-text-muted mb-2">
-                      Only selected models will appear in the model selector.
+                      {t({
+                        en: 'Only selected models will appear in the model selector.',
+                        fr: 'Seuls les modèles sélectionnés apparaîtront dans le sélecteur de modèle.',
+                      })}
                     </p>
                     <div className="space-y-2">
                       {models
@@ -1738,11 +2029,22 @@ export function ProviderModal({
                                 </span>
                                 <span className="text-xs text-text-muted bg-bg-tertiary px-2 py-0.5 rounded flex items-center gap-1">
                                   {(modelConfigs[model.id]?.supportsVision ?? model.supportsVision) && (
-                                    <span data-vision title="Vision model" aria-label="Vision model">
+                                    <span
+                                      data-vision
+                                      title={t({ en: 'Vision model', fr: 'Modèle vision' })}
+                                      aria-label={t({ en: 'Vision model', fr: 'Modèle vision' })}
+                                    >
                                       <EyeIcon className="w-3.5 h-3.5" />
                                     </span>
                                   )}
-                                  {(modelConfigs[model.id]?.contextWindow ?? model.contextWindow).toLocaleString()} ctx
+                                  {t(
+                                    { en: '{{n}} ctx', fr: '{{n}} ctx' },
+                                    {
+                                      n: (modelConfigs[model.id]?.contextWindow ?? model.contextWindow).toLocaleString(
+                                        getLocale(),
+                                      ),
+                                    },
+                                  )}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
@@ -1762,9 +2064,13 @@ export function ProviderModal({
                                 {autoConfigState.progress[model.id] === 'probing' ? (
                                   <span className="w-3 h-3 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
                                 ) : autoConfigState.progress[model.id] === 'done' ? (
-                                  <span className="text-xs text-accent-success font-medium">Configured ✓</span>
+                                  <span className="text-xs text-accent-success font-medium">
+                                    {t({ en: 'Configured ✓', fr: 'Configuré ✓' })}
+                                  </span>
                                 ) : autoConfigState.progress[model.id] === 'error' ? (
-                                  <span className="text-xs text-red-500 font-medium">Failed ✗</span>
+                                  <span className="text-xs text-red-500 font-medium">
+                                    {t({ en: 'Failed ✗', fr: 'Échec ✗' })}
+                                  </span>
                                 ) : !formAuthAdapter ? (
                                   <button
                                     onClick={(e) => {
@@ -1773,7 +2079,7 @@ export function ProviderModal({
                                     }}
                                     className="text-xs text-accent-primary hover:underline"
                                   >
-                                    Auto-config
+                                    {t({ en: 'Auto-config', fr: 'Auto-configuration' })}
                                   </button>
                                 ) : null}
                                 {models.length > 1 && (
@@ -1787,7 +2093,7 @@ export function ProviderModal({
                                     }}
                                     className="text-xs text-red-500 hover:text-red-400 px-2 py-1 rounded hover:bg-red-500/10"
                                   >
-                                    Remove
+                                    {t({ en: 'Remove', fr: 'Supprimer' })}
                                   </button>
                                 )}
                                 <ChevronDownIcon
@@ -1817,10 +2123,15 @@ export function ProviderModal({
                 {/* Available Models — search + checkbox list (hidden when single model, already selected) */}
                 {models.length > 1 && (
                   <div>
-                    <h4 className="text-sm font-medium text-text-primary mb-1">Available Models</h4>
+                    <h4 className="text-sm font-medium text-text-primary mb-1">
+                      {t({ en: 'Available Models', fr: 'Modèles disponibles' })}
+                    </h4>
                     {selectedModelIds.size === 0 && (
                       <p className="text-xs text-text-muted mb-2">
-                        This provider has many models available. Select the ones you want to use below.
+                        {t({
+                          en: 'This provider has many models available. Select the ones you want to use below.',
+                          fr: 'Ce fournisseur propose de nombreux modèles. Sélectionnez ceux que vous souhaitez utiliser ci-dessous.',
+                        })}
                       </p>
                     )}
 
@@ -1829,7 +2140,7 @@ export function ProviderModal({
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search models..."
+                        placeholder={t({ en: 'Search models…', fr: 'Rechercher des modèles…' })}
                         className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
                       />
                       {searchQuery && (
@@ -1845,8 +2156,19 @@ export function ProviderModal({
                     {mergedModeModels.length > 0 && (
                       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
                         <span className="text-text-secondary">
-                          {mergedModeModels.length} model
-                          {mergedModeModels.length > 1 ? 's are' : ' is'} merged into mode chips:
+                          {t(
+                            {
+                              en: {
+                                one: '{{count}} model is merged into mode chips:',
+                                other: '{{count}} models are merged into mode chips:',
+                              },
+                              fr: {
+                                one: '{{count}} modèle est fusionné dans des pastilles de mode :',
+                                other: '{{count}} modèles sont fusionnés dans des pastilles de mode :',
+                              },
+                            },
+                            { count: mergedModeModels.length },
+                          )}
                         </span>
                         <div className="flex flex-wrap gap-2">
                           {mergedModeModels.map((model) => (
@@ -1856,8 +2178,13 @@ export function ProviderModal({
                               onClick={() => unmergeModeFamily(model)}
                               className="px-2.5 py-1 rounded border border-border text-text-secondary hover:border-accent-primary/40 hover:text-accent-primary hover:bg-accent-primary/10 transition-colors"
                             >
-                              Unmerge {model.name ?? model.id.split('/').pop()} (
-                              {model.modes!.map((mode) => mode.level).join(', ')})
+                              {t(
+                                { en: 'Unmerge {{name}} ({{levels}})', fr: 'Dissocier {{name}} ({{levels}})' },
+                                {
+                                  name: model.name ?? model.id.split('/').pop() ?? '',
+                                  levels: model.modes!.map((mode) => mode.level).join(', '),
+                                },
+                              )}
                             </button>
                           ))}
                         </div>
@@ -1867,8 +2194,20 @@ export function ProviderModal({
                     {mergeableGroups.length > 0 && (
                       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
                         <span className="text-text-secondary">
-                          {mergeableGroups.length} model group{mergeableGroups.length > 1 ? 's' : ''} share the same
-                          base name with different modes:
+                          {t(
+                            {
+                              en: {
+                                one: '{{count}} model group shares the same base name with different modes:',
+                                other: '{{count}} model groups share the same base name with different modes:',
+                              },
+                              fr: {
+                                one: '{{count}} groupe de modèles partage le même nom de base avec des modes différents :',
+                                other:
+                                  '{{count}} groupes de modèles partagent le même nom de base avec des modes différents :',
+                              },
+                            },
+                            { count: mergeableGroups.length },
+                          )}
                         </span>
                         <div className="flex flex-wrap gap-2">
                           {mergeableGroups.map((group) => (
@@ -1885,11 +2224,16 @@ export function ProviderModal({
                               }
                               className="px-2.5 py-1 rounded border border-accent-primary/40 text-accent-primary hover:bg-accent-primary/10 transition-colors"
                             >
-                              Merge {group.baseId.split('/').pop()}:{' '}
-                              {group.members
-                                .map((m) => splitModeSuffix(m.id)?.level)
-                                .filter(Boolean)
-                                .join(', ')}
+                              {t(
+                                { en: 'Merge {{name}}: {{levels}}', fr: 'Fusionner {{name}} : {{levels}}' },
+                                {
+                                  name: group.baseId.split('/').pop() ?? '',
+                                  levels: group.members
+                                    .map((m) => splitModeSuffix(m.id)?.level)
+                                    .filter(Boolean)
+                                    .join(', '),
+                                },
+                              )}
                             </button>
                           ))}
                         </div>
@@ -1898,7 +2242,13 @@ export function ProviderModal({
 
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-xs text-text-muted">
-                        Showing {filterModels(searchQuery).length} of {models.length} models
+                        {t(
+                          {
+                            en: 'Showing {{shown}} of {{total}} models',
+                            fr: 'Affichage de {{shown}} sur {{total}} modèles',
+                          },
+                          { shown: filterModels(searchQuery).length, total: models.length },
+                        )}
                       </p>
                       <div className="flex items-center gap-3">
                         <button
@@ -1906,10 +2256,13 @@ export function ProviderModal({
                           onClick={() => formUrl && fetchModels(formUrl)}
                           disabled={fetchingModels || !formUrl}
                           className="text-xs text-accent-primary hover:underline flex items-center gap-1 disabled:opacity-50"
-                          title="Sync available models from provider"
+                          title={t({
+                            en: 'Sync available models from provider',
+                            fr: 'Synchroniser les modèles disponibles depuis le fournisseur',
+                          })}
                         >
                           <ReloadIcon className={`w-3 h-3 ${fetchingModels ? 'animate-spin' : ''}`} />
-                          Sync
+                          {t({ en: 'Sync', fr: 'Synchroniser' })}
                         </button>
                         <button
                           onClick={() => {
@@ -1940,7 +2293,7 @@ export function ProviderModal({
                           }}
                           className="text-xs text-accent-primary hover:underline"
                         >
-                          Select all
+                          {t({ en: 'Select all', fr: 'Tout sélectionner' })}
                         </button>
                         <button
                           onClick={() => {
@@ -1951,7 +2304,7 @@ export function ProviderModal({
                           }}
                           className="text-xs text-text-muted hover:text-text-secondary"
                         >
-                          Deselect all
+                          {t({ en: 'Deselect all', fr: 'Tout désélectionner' })}
                         </button>
                       </div>
                     </div>
@@ -1991,21 +2344,51 @@ export function ProviderModal({
                               onChange={() => {}}
                               className="w-4 h-4 rounded border-border accent-accent-primary pointer-events-none"
                             />
-                            <span className="text-sm text-text-primary flex-1 truncate">
-                              {model.name ?? model.id.split('/').pop()}
-                              {model.modes && model.modes.length > 0 && (
-                                <span className="text-text-muted font-normal ml-1">
-                                  ({model.modes.map((m) => m.level).join(', ')})
+                            <div className="flex-1 min-w-0 flex items-center gap-1.5 truncate">
+                              <span className="text-sm text-text-primary truncate">
+                                {model.name ?? model.id.split('/').pop()}
+                                {model.modes && model.modes.length > 0 && (
+                                  <span className="text-text-muted font-normal ml-1">
+                                    ({model.modes.map((m) => m.level).join(', ')})
+                                  </span>
+                                )}
+                              </span>
+                              {(modelConfigs[model.id]?.pricing?.discount ?? model.pricing?.discount) !== undefined && (
+                                <span
+                                  data-pricing-discount-badge
+                                  className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium leading-none rounded bg-accent-primary/15 text-accent-primary border border-accent-primary/30 shrink-0"
+                                >
+                                  {formatDiscountBadge(
+                                    (modelConfigs[model.id]?.pricing?.discount ?? model.pricing?.discount)!,
+                                  )}
                                 </span>
                               )}
-                            </span>
+                            </div>
+                            {(() => {
+                              const pricing = modelConfigs[model.id]?.pricing ?? model.pricing
+                              const summary = formatPricingSummary(pricing, displaySettings.modelPriceCurrency)
+                              return summary ? (
+                                <span className="text-xs font-mono text-text-secondary flex-shrink-0">{summary}</span>
+                              ) : null
+                            })()}
                             <span className="text-xs text-text-muted flex flex-shrink-0 items-center gap-1">
                               {(modelConfigs[model.id]?.supportsVision ?? model.supportsVision) && (
-                                <span data-vision title="Vision model" aria-label="Vision model">
+                                <span
+                                  data-vision
+                                  title={t({ en: 'Vision model', fr: 'Modèle vision' })}
+                                  aria-label={t({ en: 'Vision model', fr: 'Modèle vision' })}
+                                >
                                   <EyeIcon className="w-3.5 h-3.5" />
                                 </span>
                               )}
-                              {(modelConfigs[model.id]?.contextWindow ?? model.contextWindow).toLocaleString()} ctx
+                              {t(
+                                { en: '{{n}} ctx', fr: '{{n}} ctx' },
+                                {
+                                  n: (modelConfigs[model.id]?.contextWindow ?? model.contextWindow).toLocaleString(
+                                    getLocale(),
+                                  ),
+                                },
+                              )}
                             </span>
                             {autoConfigState.progress[model.id] === 'probing' && (
                               <span className="w-3 h-3 border-2 border-accent-primary border-t-transparent rounded-full animate-spin flex-shrink-0" />
@@ -2021,7 +2404,10 @@ export function ProviderModal({
                       })}
                       {filterModels(searchQuery).length === 0 && (
                         <div className="px-4 py-6 text-center text-sm text-text-muted">
-                          No models match &ldquo;{searchQuery}&rdquo;
+                          {t(
+                            { en: 'No models match “{{query}}”', fr: 'Aucun modèle ne correspond à « {{query}} »' },
+                            { query: searchQuery },
+                          )}
                         </div>
                       )}
                     </ScrollArea>
@@ -2038,7 +2424,7 @@ export function ProviderModal({
         <Modal
           isOpen
           onClose={() => setShowDefaults(false)}
-          title="Provider-Level Defaults"
+          title={t({ en: 'Provider-Level Defaults', fr: 'Valeurs par défaut du fournisseur' })}
           size="md"
           footer={
             <div className="flex justify-end">
@@ -2046,30 +2432,36 @@ export function ProviderModal({
                 onClick={() => setShowDefaults(false)}
                 className="px-5 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 transition-colors"
               >
-                Done
+                {t({ en: 'Done', fr: 'Terminé' })}
               </button>
             </div>
           }
         >
           <div className="space-y-4">
             <p className="text-xs text-text-muted">
-              Thinking and reasoning effort are configured per model, in each model&rsquo;s Advanced section.
+              {t({
+                en: 'Thinking and reasoning effort are configured per model, in each model’s Advanced section.',
+                fr: 'La réflexion et le niveau de raisonnement sont configurés par modèle, dans la section Avancé de chaque modèle.',
+              })}
             </p>
             <div>
               <label className="text-xs text-text-secondary block mb-1">
-                Thinking response field <span className="text-text-muted">(override)</span>
+                {t({ en: 'Thinking response field', fr: 'Champ de réponse de réflexion' })}{' '}
+                <span className="text-text-muted">{t({ en: '(override)', fr: '(remplacement)' })}</span>
               </label>
               <input
                 type="text"
-                aria-label="Thinking response field"
+                aria-label={t({ en: 'Thinking response field', fr: 'Champ de réponse de réflexion' })}
                 value={thinkingField}
                 onChange={(e) => setThinkingField(e.target.value)}
-                placeholder="Leave blank for auto-detect"
+                placeholder={t({ en: 'Leave blank for auto-detect', fr: 'Laissez vide pour la détection automatique' })}
                 className="w-full px-3 py-2 bg-bg-primary border border-border rounded text-sm text-text-primary font-mono"
               />
               <p className="text-xs text-text-muted mt-1">
-                Field name the backend uses for reasoning/thinking content (e.g. reasoning, reasoning_content,
-                thinking).
+                {t({
+                  en: 'Field name the backend uses for reasoning/thinking content (e.g. reasoning, reasoning_content, thinking).',
+                  fr: 'Nom du champ que le backend utilise pour le contenu de raisonnement/réflexion (ex. reasoning, reasoning_content, thinking).',
+                })}
               </p>
             </div>
             <label className="flex items-center gap-2 cursor-pointer">
@@ -2079,9 +2471,14 @@ export function ProviderModal({
                 onChange={(e) => setSendReasoningInMessages(e.target.checked)}
                 className="rounded border-border bg-bg-primary text-accent-primary focus:ring-accent-primary"
               />
-              <span className="text-sm text-text-secondary">Send reasoning in messages</span>
+              <span className="text-sm text-text-secondary">
+                {t({ en: 'Send reasoning in messages', fr: 'Envoyer le raisonnement dans les messages' })}
+              </span>
               <span className="text-xs text-text-muted ml-auto">
-                When disabled, strips reasoning/thinking content from assistant messages sent to this provider
+                {t({
+                  en: 'When disabled, strips reasoning/thinking content from assistant messages sent to this provider',
+                  fr: 'Lorsqu’il est désactivé, supprime le contenu de raisonnement/réflexion des messages d’assistant envoyés à ce fournisseur',
+                })}
               </span>
             </label>
           </div>
@@ -2090,7 +2487,12 @@ export function ProviderModal({
 
       {/* Raw response modal */}
       {rawModalData && (
-        <Modal isOpen onClose={() => setRawModalData(null)} title="Raw Response" size="lg">
+        <Modal
+          isOpen
+          onClose={() => setRawModalData(null)}
+          title={t({ en: 'Raw Response', fr: 'Réponse brute' })}
+          size="lg"
+        >
           <ScrollArea horizontal>
             <pre className="text-xs text-text-secondary font-mono whitespace-pre-wrap break-all">{rawModalData}</pre>
           </ScrollArea>

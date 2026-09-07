@@ -52,6 +52,7 @@ import {
   setTaskSettings as dbSetTaskSettings,
 } from '../db/tasks.js'
 import type { TaskGateConfig, TaskActor } from '../../shared/types.js'
+import { serverT } from '../i18n.js'
 
 export type TaskDestination = 'todo' | 'in_progress' | 'done'
 
@@ -234,14 +235,16 @@ export function createTasksService(deps: TasksServiceDeps): TasksService {
   function assertOwned(projectId: string, taskId: string): ProjectTask {
     const task = dbGetTask(taskId)
     if (!task || task.projectId !== projectId) {
-      throw new Error(`Task not found: ${taskId}`)
+      throw new Error(serverT({ en: 'Task not found: {{id}}', fr: 'Tâche introuvable : {{id}}' }, { id: taskId }))
     }
     return task
   }
 
   function assertNotStale(task: ProjectTask, expectedVersion?: number): void {
     if (expectedVersion !== undefined && task.version !== expectedVersion) {
-      const err = new Error('Task changed, refresh and retry') as TaskConflictError
+      const err = new Error(
+        serverT({ en: 'Task changed, refresh and retry', fr: 'Tâche modifiée, actualisez et réessayez' }),
+      ) as TaskConflictError
       err.code = 'CONFLICT'
       err.task = task
       throw err
@@ -252,7 +255,12 @@ export function createTasksService(deps: TasksServiceDeps): TasksService {
     const hasContent = input.prompt.trim().length > 0
     const hasAttachments = (input.attachments?.length ?? 0) > 0
     if (!hasContent && !hasAttachments) {
-      throw new Error('Task requires at least a prompt or an attachment')
+      throw new Error(
+        serverT({
+          en: 'Task requires at least a prompt or an attachment',
+          fr: 'La tâche requiert au moins un prompt ou une pièce jointe',
+        }),
+      )
     }
     const task = dbCreateTask(projectId, {
       prompt: input.prompt,
@@ -290,7 +298,8 @@ export function createTasksService(deps: TasksServiceDeps): TasksService {
   function duplicate(projectId: string, taskId: string, actor: TaskActorInfo) {
     const source = assertOwned(projectId, taskId)
     const copy = dbCloneTask(taskId)
-    if (!copy) throw new Error(`Task not found: ${taskId}`)
+    if (!copy)
+      throw new Error(serverT({ en: 'Task not found: {{id}}', fr: 'Tâche introuvable : {{id}}' }, { id: taskId }))
     dbAddAuditEntry(
       copy.id,
       actor.actor,
@@ -342,7 +351,12 @@ export function createTasksService(deps: TasksServiceDeps): TasksService {
 
         if (opts.actor === 'agent') {
           if (!opts.sessionId) {
-            throw new Error('Agent moves must bind to the current session (sessionId is required)')
+            throw new Error(
+              serverT({
+                en: 'Agent moves must bind to the current session (sessionId is required)',
+                fr: 'Les déplacements d’agent doivent être liés à la session courante (sessionId requis)',
+              }),
+            )
           }
           // Current-session rule: the agent is working in its own session NOW.
           dbSetTaskRunState(taskId, 'running')
@@ -426,7 +440,7 @@ export function createTasksService(deps: TasksServiceDeps): TasksService {
       const gates = dbGetGateConfig(projectId)
       const gate = gates.find((g) => g.id === gateId)
       if (!gate) {
-        throw new Error(`Unknown gate: ${gateId}`)
+        throw new Error(serverT({ en: 'Unknown gate: {{id}}', fr: 'Porte inconnue : {{id}}' }, { id: gateId }))
       }
       dbSetGateValue(taskId, gateId, value, actor.actor, actor.actorName, sessionId)
       dbAddAuditEntry(taskId, actor.actor, 'gate_value', `Set gate "${gate.name}" = "${value}"`, actor.actorName)
@@ -460,7 +474,15 @@ export function createTasksService(deps: TasksServiceDeps): TasksService {
   function reorder(projectId: string, taskId: string, status: TaskDestination, toIndex: number) {
     const task = assertOwned(projectId, taskId)
     if (task.status !== status) {
-      throw new Error(`Cannot reorder task: status mismatch (${task.status} != ${status})`)
+      throw new Error(
+        serverT(
+          {
+            en: 'Cannot reorder task: status mismatch ({{current}} != {{target}})',
+            fr: 'Impossible de réordonner la tâche : statut incohérent ({{current}} != {{target}})',
+          },
+          { current: task.status, target: status },
+        ),
+      )
     }
     dbReorderTask(taskId, status, toIndex)
     const fresh = dbGetTask(taskId)!
@@ -502,7 +524,13 @@ export function createTasksService(deps: TasksServiceDeps): TasksService {
     missing: { gateId: string; name: string; description: string }[],
   ) {
     const err = new Error(
-      `Cannot move to ${destination}: missing required gate fields: ${missing.map((m) => m.name).join(', ')}`,
+      serverT(
+        {
+          en: 'Cannot move to {{destination}}: missing required gate fields: {{missing}}',
+          fr: 'Impossible de déplacer vers {{destination}} : champs de porte requis manquants : {{missing}}',
+        },
+        { destination, missing: missing.map((m) => m.name).join(', ') },
+      ),
     ) as TaskGateError
     err.code = 'GATE_BLOCKED'
     err.missing = missing

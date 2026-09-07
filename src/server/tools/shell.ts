@@ -4,6 +4,7 @@ import { access } from 'node:fs/promises'
 import stripAnsi from 'strip-ansi'
 import { OUTPUT_LIMITS } from './types.js'
 import { createTool, requestUserConfirmation } from './tool-helpers.js'
+import { serverT } from '../i18n.js'
 import { checkAborted, spawnShellProcess } from '../utils/shell.js'
 import { decodeUtf8, createUtf8StreamDecoder } from '../utils/utf8.js'
 import {
@@ -117,18 +118,33 @@ export const runCommandTool = createTool<RunCommandArgs>(
 
     if (hasBackgroundAmpersand(args.command)) {
       return helpers.error(
-        'Use background_process tool (action: "start") for background/long-running commands instead of \'&\'. See the tool description for details.',
+        serverT({
+          en: 'Use background_process tool (action: "start") for background/long-running commands instead of \'&\'. See the tool description for details.',
+          fr: 'Utilisez l’outil background_process (action : « start ») pour les commandes d’arrière-plan ou de longue durée au lieu de « & ». Consultez la description de l’outil pour plus de détails.',
+        }),
       )
     }
 
     // Detect Git mutations (checkout, switch, branch creation, etc.)
     const mutationMatch = detectGitMutation(args.command)
     if (mutationMatch) {
-      const desc = `Command "${args.command}" modifies Git state (${mutationMatch}). Allow this Git operation?`
+      const desc = serverT(
+        {
+          en: 'Command "{{cmd}}" modifies Git state ({{mutation}}). Allow this Git operation?',
+          fr: 'La commande « {{cmd}} » modifie l’état Git ({{mutation}}). Autoriser cette opération Git ?',
+        },
+        { cmd: args.command, mutation: mutationMatch },
+      )
       const approved = await requestUserConfirmation(context, 'command', desc)
       if (!approved) {
         return helpers.error(
-          `User denied: "${mutationMatch}" modifies Git state. Use the workspace tool to switch workspaces or branches.`,
+          serverT(
+            {
+              en: 'User denied: "{{mutation}}" modifies Git state. Use the workspace tool to switch workspaces or branches.',
+              fr: 'Refusé par l’utilisateur : « {{mutation}} » modifie l’état Git. Utilisez l’outil workspace pour changer de workspace ou de branche.',
+            },
+            { mutation: mutationMatch },
+          ),
         )
       }
     }
@@ -208,7 +224,14 @@ export const runCommandTool = createTool<RunCommandArgs>(
 
     return helpers.success(output, truncated, {
       success: result.exitCode === 0,
-      ...(result.exitCode !== 0 && !wasInterrupted ? { error: `Command exited with code ${result.exitCode}` } : {}),
+      ...(result.exitCode !== 0 && !wasInterrupted
+        ? {
+            error: serverT(
+              { en: 'Command exited with code {{code}}', fr: 'La commande s’est terminée avec le code {{code}}' },
+              { code: result.exitCode },
+            ),
+          }
+        : {}),
     })
   },
 )

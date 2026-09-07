@@ -237,6 +237,30 @@ describe('AssistantMessage', () => {
     expect(dialogText).not.toContain('null')
   })
 
+  it('does not break hook order when re-rendering from an empty message to a content message', () => {
+    const emptyMessage: Message = {
+      id: 'assistant-empty',
+      role: 'assistant',
+      content: '',
+      timestamp: '2024-01-01T00:00:00.000Z',
+      tokenCount: 0,
+      isStreaming: false,
+    }
+    const contentMessage: Message = {
+      id: 'assistant-content',
+      role: 'assistant',
+      content: 'Hello there',
+      timestamp: '2024-01-01T00:00:00.000Z',
+      tokenCount: 0,
+      isStreaming: false,
+    }
+
+    const { rerender } = render(<AssistantMessage message={emptyMessage} />)
+
+    expect(() => rerender(<AssistantMessage message={contentMessage} />)).not.toThrow()
+    expect(screen.getByText('Hello there')).toBeTruthy()
+  })
+
   it('shows the message timestamp in the right-click menu', () => {
     render(
       <AssistantMessage

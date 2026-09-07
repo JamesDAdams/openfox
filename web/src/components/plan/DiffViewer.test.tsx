@@ -19,6 +19,7 @@ function seedConfig(platform: { isWSL: boolean; wslDistro: string } | null): voi
     visionFallback: null,
     platform,
     workdir: null,
+    locale: 'automatic',
   })
 }
 

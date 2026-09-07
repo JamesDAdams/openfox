@@ -94,6 +94,7 @@ describe('configResource', () => {
       platform: null,
       workdir: null,
       visionFallback: null,
+      locale: 'automatic',
     })
   })
 })

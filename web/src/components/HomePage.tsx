@@ -5,6 +5,7 @@ import { useSessionStore } from '../stores/session'
 import { useProjectStore } from '../stores/project'
 import { useProjects } from '../hooks/useProjects'
 import { useResource } from '../hooks/useResource'
+import { useT } from '../hooks/useT'
 import { summariesResource } from '../lib/resources'
 import { Button } from './shared/Button'
 import { CurrentlyRunning } from './split/CurrentlyRunning'
@@ -16,21 +17,23 @@ import { Spinner } from './shared/Spinner'
 import { fuzzyMatch, highlightMatches } from '../lib/modal-utils'
 import { shouldAutofocus } from '../lib/device'
 import { TasksModal } from './tasks/TasksModal'
+import type { Translation } from '@shared/i18n/index.js'
 import type { SessionSummary, ProjectTaskCounts } from '@shared/types.js'
 
 /** Color-coded task-state chips shown on each project's Tasks button. */
 const TASK_STATE_CHIPS: {
   key: keyof Pick<ProjectTaskCounts, 'todo' | 'queued' | 'running' | 'done'>
-  label: string
+  label: Translation
   color: string
 }[] = [
-  { key: 'todo', label: 'To Do', color: 'text-blue-400' },
-  { key: 'queued', label: 'Queued', color: 'text-amber-400' },
-  { key: 'running', label: 'Running', color: 'text-emerald-400' },
-  { key: 'done', label: 'Done', color: 'text-text-muted' },
+  { key: 'todo', label: { en: 'To Do', fr: 'À faire' }, color: 'text-blue-400' },
+  { key: 'queued', label: { en: 'Queued', fr: 'En file' }, color: 'text-amber-400' },
+  { key: 'running', label: { en: 'Running', fr: 'En cours' }, color: 'text-emerald-400' },
+  { key: 'done', label: { en: 'Done', fr: 'Terminé' }, color: 'text-text-muted' },
 ]
 
 function TaskStateChips({ counts }: { counts?: ProjectTaskCounts }) {
+  const t = useT()
   if (!counts) return null
   const total = counts.todo + counts.queued + counts.running + counts.done
   if (total === 0) return null
@@ -40,7 +43,7 @@ function TaskStateChips({ counts }: { counts?: ProjectTaskCounts }) {
         const count = counts[chip.key]
         if (count === 0) return null
         return (
-          <span key={chip.key} title={chip.label} className={`flex items-center gap-1 ${chip.color}`}>
+          <span key={chip.key} title={t(chip.label)} className={`flex items-center gap-1 ${chip.color}`}>
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
             {count}
           </span>
@@ -57,6 +60,7 @@ function ProjectTaskChips({ projectId }: { projectId: string }) {
 }
 
 export function HomePage() {
+  const t = useT()
   const [showOpenModal, setShowOpenModal] = useState(false)
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -82,8 +86,8 @@ export function HomePage() {
   }, [connectionStatus, listHomeSessions])
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(searchQuery), 150)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 150)
+    return () => clearTimeout(timer)
   }, [searchQuery])
 
   // Searching needs every session (with prompts) — load the full list lazily,
@@ -157,9 +161,9 @@ export function HomePage() {
   const lastActivityByProject = useMemo(() => {
     const map = new Map<string, number>()
     for (const s of sessions) {
-      const t = new Date(s.updatedAt).getTime()
+      const time = new Date(s.updatedAt).getTime()
       const prev = map.get(s.projectId) ?? 0
-      if (t > prev) map.set(s.projectId, t)
+      if (time > prev) map.set(s.projectId, time)
     }
     return map
   }, [sessions])
@@ -239,7 +243,12 @@ export function HomePage() {
         <div className="mb-6 md:mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-accent-primary">OpenFox</h1>
-            <p className="text-text-secondary">Local LLM-powered coding assistant with contract-driven execution</p>
+            <p className="text-text-secondary">
+              {t({
+                en: 'Local LLM-powered coding assistant with contract-driven execution',
+                fr: 'Assistant de codage local propulsé par LLM avec exécution pilotée par contrat',
+              })}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -247,10 +256,10 @@ export function HomePage() {
               className="inline-flex items-center gap-1.5 rounded font-medium transition-colors bg-bg-secondary border border-border text-text-primary hover:bg-bg-tertiary px-3 py-1.5 text-sm"
             >
               <ColumnsIcon className="w-4 h-4" />
-              Open split view
+              {t({ en: 'Open split view', fr: 'Ouvrir la vue divisée' })}
             </Link>
             <Button variant="primary" onClick={handleOpenProject}>
-              Open Project
+              {t({ en: 'Open Project', fr: 'Ouvrir un projet' })}
             </Button>
           </div>
         </div>
@@ -267,7 +276,10 @@ export function HomePage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="Search sessions by title or keyword..."
+                placeholder={t({
+                  en: 'Search sessions by title or keyword...',
+                  fr: 'Rechercher des sessions par titre ou mot-clé…',
+                })}
                 className="w-full bg-bg-secondary border border-border rounded-lg pl-10 pr-10 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary transition-colors"
               />
               {searchQuery && (
@@ -275,7 +287,7 @@ export function HomePage() {
                   type="button"
                   onClick={handleClearSearch}
                   className="absolute right-3 p-0.5 rounded text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-                  aria-label="Clear search"
+                  aria-label={t({ en: 'Clear search', fr: 'Effacer la recherche' })}
                 >
                   <XCloseIcon className="w-4 h-4" />
                 </button>
@@ -283,7 +295,13 @@ export function HomePage() {
             </div>
             {isSearching && !hasNoResults && (
               <div className="mt-1.5 text-xs text-text-muted px-1">
-                {matchCount} {matchCount === 1 ? 'match' : 'matches'}
+                {t(
+                  {
+                    en: { one: '{{count}} match', other: '{{count}} matches' },
+                    fr: { one: '{{count}} résultat', other: '{{count}} résultats' },
+                  },
+                  { count: matchCount },
+                )}
               </div>
             )}
           </div>
@@ -293,9 +311,15 @@ export function HomePage() {
           <div className="text-center py-16 text-text-muted">
             <SearchIcon className="w-10 h-10 mx-auto mb-4 opacity-40" />
             <p className="text-lg">
-              No sessions matching <span className="text-text-primary font-medium">&ldquo;{debouncedQuery}&rdquo;</span>
+              {t({ en: 'No sessions matching', fr: 'Aucune session correspondant à' })}{' '}
+              <span className="text-text-primary font-medium">&ldquo;{debouncedQuery}&rdquo;</span>
             </p>
-            <p className="mt-2 text-sm">Try a different keyword or clear the search</p>
+            <p className="mt-2 text-sm">
+              {t({
+                en: 'Try a different keyword or clear the search',
+                fr: 'Essayez un autre mot-clé ou effacez la recherche',
+              })}
+            </p>
           </div>
         ) : (
           sortedProjects.map((project) => {
@@ -316,26 +340,26 @@ export function HomePage() {
                         variant="secondary"
                         size="sm"
                         onClick={() => setTasksProjectId(project.id)}
-                        title={`Tasks for ${project.name}`}
-                        aria-label={`Tasks for ${project.name}`}
+                        title={t({ en: 'Tasks for {{name}}', fr: 'Tâches pour {{name}}' }, { name: project.name })}
+                        aria-label={t({ en: 'Tasks for {{name}}', fr: 'Tâches pour {{name}}' }, { name: project.name })}
                         className="flex items-center gap-1.5"
                       >
                         <TasksIcon className="w-4 h-4" />
-                        <span>Tasks</span>
+                        <span>{t({ en: 'Tasks', fr: 'Tâches' })}</span>
                         <ProjectTaskChips projectId={project.id} />
                       </Button>
                       <Link
                         href={`/p/${project.id}/new`}
                         className="rounded font-medium transition-colors bg-accent-primary/25 text-text-primary hover:bg-accent-primary/40 px-1.5 py-1 text-xs"
                       >
-                        + New Session
+                        {t({ en: '+ New Session', fr: '+ Nouvelle session' })}
                       </Link>
                     </div>
                     <button
                       type="button"
                       onClick={() => setProjectToDelete({ id: project.id, name: project.name })}
                       className="p-1.5 rounded text-text-muted hover:text-accent-error hover:bg-accent-error/10 transition-colors"
-                      title="Delete project"
+                      title={t({ en: 'Delete project', fr: 'Supprimer le projet' })}
                     >
                       <TrashIcon className="w-4 h-4" />
                     </button>
@@ -364,7 +388,9 @@ export function HomePage() {
                                   {isSearching && matchType && matchType !== 'title' && (
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                       <span className="text-[10px] font-medium text-accent-primary border border-accent-primary/30 bg-accent-primary/8 rounded px-1 py-0.5 leading-none">
-                                        {matchType === 'prompts' ? 'prompts' : 'project'}
+                                        {matchType === 'prompts'
+                                          ? t({ en: 'prompts', fr: 'invites' })
+                                          : t({ en: 'project', fr: 'projet' })}
                                       </span>
                                       {matchType === 'prompts' && promptSnippets?.get(session.id) && (
                                         <span className="text-[11px] text-text-muted truncate max-w-[250px]">
@@ -377,14 +403,18 @@ export function HomePage() {
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <span className="text-text-muted text-xs">{formatRelativeDate(session.updatedAt)}</span>
-                                <span className="text-text-muted text-xs">{session.messageCount} msgs</span>
+                                <span className="text-text-muted text-xs">
+                                  {t({ en: '{{count}} msgs', fr: '{{count}} msg' }, { count: session.messageCount })}
+                                </span>
                               </div>
                             </div>
                           </Link>
                         )
                       })
                     ) : (
-                      <div className="p-3 md:p-4 text-text-muted text-sm">No sessions yet</div>
+                      <div className="p-3 md:p-4 text-text-muted text-sm">
+                        {t({ en: 'No sessions yet', fr: 'Aucune session pour le moment' })}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -394,7 +424,12 @@ export function HomePage() {
         )}
 
         {!isSearching && sortedProjects.length === 0 && !loading && (
-          <div className="text-center py-12 text-text-muted">No projects yet. Open a project to get started.</div>
+          <div className="text-center py-12 text-text-muted">
+            {t({
+              en: 'No projects yet. Open a project to get started.',
+              fr: 'Aucun projet pour le moment. Ouvrez un projet pour commencer.',
+            })}
+          </div>
         )}
 
         {loading && (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { authFetch } from '../../../lib/api'
+import { useT } from '../../../hooks/useT'
 import { Button } from '../../shared/Button'
 import { ConfirmModal } from '../../shared/ConfirmModal'
 import { SettingsIcon } from '../../shared/icons/SettingsIcon'
@@ -55,6 +56,7 @@ function saveUserPlugins(plugins: RegistryPlugin[]) {
 }
 
 function AddPluginForm({ onAdd }: { onAdd: (p: RegistryPlugin) => void }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [githubUrl, setGithubUrl] = useState('')
   const [added, setAdded] = useState(false)
@@ -65,7 +67,7 @@ function AddPluginForm({ onAdd }: { onAdd: (p: RegistryPlugin) => void }) {
     onAdd({
       name: name.trim(),
       displayName: name.trim(),
-      description: 'User-added plugin',
+      description: t({ en: 'User-added plugin', fr: 'Plugin ajouté par l’utilisateur' }),
       githubUrl: githubUrl.trim(),
     })
     setName('')
@@ -77,7 +79,7 @@ function AddPluginForm({ onAdd }: { onAdd: (p: RegistryPlugin) => void }) {
   return (
     <form onSubmit={handleSubmit} className="flex gap-2 items-end">
       <div className="flex-1">
-        <label className="text-xs text-text-muted block mb-1">Name</label>
+        <label className="text-xs text-text-muted block mb-1">{t({ en: 'Name', fr: 'Nom' })}</label>
         <input
           type="text"
           value={name}
@@ -87,7 +89,7 @@ function AddPluginForm({ onAdd }: { onAdd: (p: RegistryPlugin) => void }) {
         />
       </div>
       <div className="flex-[2]">
-        <label className="text-xs text-text-muted block mb-1">GitHub URL</label>
+        <label className="text-xs text-text-muted block mb-1">{t({ en: 'GitHub URL', fr: 'URL GitHub' })}</label>
         <input
           type="text"
           value={githubUrl}
@@ -97,7 +99,7 @@ function AddPluginForm({ onAdd }: { onAdd: (p: RegistryPlugin) => void }) {
         />
       </div>
       <Button type="submit" variant="primary" size="sm">
-        {added ? 'Added' : 'Add'}
+        {added ? t({ en: 'Added', fr: 'Ajouté' }) : t({ en: 'Add', fr: 'Ajouter' })}
       </Button>
     </form>
   )
@@ -118,6 +120,7 @@ function PluginCard({
   onRemove: (name: string) => void
   onOpenFolder: (name: string) => void
 }) {
+  const t = useT()
   const [installState, setInstallState] = useState<InstallState>(initiallyInstalled ? 'installed' : 'idle')
   const [updating, setUpdating] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -140,11 +143,15 @@ function PluginCard({
     if (res.ok) {
       setInstallState('installed')
       if (plugin.latestVersion) setLocalVersion(plugin.latestVersion)
-      if (!data.loaded) setErrorMsg(data.loadError ?? 'Plugin installed but failed to load')
+      if (!data.loaded)
+        setErrorMsg(
+          data.loadError ??
+            t({ en: 'Plugin installed but failed to load', fr: 'Plugin installé mais échec du chargement' }),
+        )
     } else {
-      throw new Error(data.error ?? 'Install failed')
+      throw new Error(data.error ?? t({ en: 'Install failed', fr: 'Échec de l’installation' }))
     }
-  }, [plugin.githubUrl, plugin.name])
+  }, [plugin.githubUrl, plugin.name, t])
 
   const handleInstall = async () => {
     setInstallState('installing')
@@ -153,7 +160,7 @@ function PluginCard({
       await doInstall()
     } catch (e) {
       setInstallState('error')
-      setErrorMsg(e instanceof Error ? e.message : 'Connection error')
+      setErrorMsg(e instanceof Error ? e.message : t({ en: 'Connection error', fr: 'Erreur de connexion' }))
     }
   }
 
@@ -182,7 +189,7 @@ function PluginCard({
     try {
       await doInstall()
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Update failed')
+      setErrorMsg(e instanceof Error ? e.message : t({ en: 'Update failed', fr: 'Échec de la mise à jour' }))
     }
     setUpdating(false)
   }
@@ -192,12 +199,12 @@ function PluginCard({
     plugin.latestVersion && displayVersion && displayVersion !== 'unknown' && plugin.latestVersion !== displayVersion
   const buttonLabel =
     installState === 'installing'
-      ? 'Installing…'
+      ? t({ en: 'Installing…', fr: 'Installation…' })
       : updating
-        ? 'Updating…'
+        ? t({ en: 'Updating…', fr: 'Mise à jour…' })
         : installState === 'installed'
-          ? 'Installed ✓'
-          : 'Install'
+          ? t({ en: 'Installed ✓', fr: 'Installé ✓' })
+          : t({ en: 'Install', fr: 'Installer' })
   const disabled = installState === 'installing' || installState === 'installed' || updating
 
   return (
@@ -221,12 +228,14 @@ function PluginCard({
               </a>
             )}
             {plugin.versionLoading ? (
-              <span className="text-text-muted">Loading version…</span>
+              <span className="text-text-muted">{t({ en: 'Loading version…', fr: 'Chargement de la version…' })}</span>
             ) : plugin.latestVersion ? (
-              <span className="text-text-muted">v{plugin.latestVersion}</span>
+              <span className="text-text-muted">{`v${plugin.latestVersion}`}</span>
             ) : null}
             {displayVersion && displayVersion !== 'unknown' && (
-              <span className="text-text-muted">installed: v{displayVersion}</span>
+              <span className="text-text-muted">
+                {t({ en: 'installed: v{{version}}', fr: 'installé : v{{version}}' }, { version: displayVersion })}
+              </span>
             )}
           </div>
           {installState === 'error' && errorMsg && <p className="text-xs text-accent-error mt-1">{errorMsg}</p>}
@@ -245,7 +254,7 @@ function PluginCard({
             )}
             {hasUpdate && (
               <Button variant="primary" size="sm" onClick={handleUpdate}>
-                Update
+                {t({ en: 'Update', fr: 'Mettre à jour' })}
               </Button>
             )}
             {installState === 'installed' && hasSettings && (
@@ -261,13 +270,13 @@ function PluginCard({
             )}
             {installState === 'installed' && (
               <Button variant="danger" size="sm" onClick={handleRemove}>
-                Remove
+                {t({ en: 'Remove', fr: 'Supprimer' })}
               </Button>
             )}
           </div>
           {installState === 'installed' && (
             <button onClick={() => onOpenFolder(plugin.name)} className="text-xs text-accent-primary hover:underline">
-              Open folder
+              {t({ en: 'Open folder', fr: 'Ouvrir le dossier' })}
             </button>
           )}
         </div>
@@ -277,9 +286,15 @@ function PluginCard({
         isOpen={showRemoveConfirm}
         onClose={() => setShowRemoveConfirm(false)}
         onConfirm={handleConfirmRemove}
-        title={`Remove "${plugin.displayName}"?`}
-        message={`Remove the "${plugin.displayName}" plugin from your installation.`}
-        confirmLabel="Remove"
+        title={t({ en: 'Remove "{{name}}"?', fr: 'Supprimer « {{name}} » ?' }, { name: plugin.displayName })}
+        message={t(
+          {
+            en: 'Remove the "{{name}}" plugin from your installation.',
+            fr: 'Supprimez le plugin « {{name}} » de votre installation.',
+          },
+          { name: plugin.displayName },
+        )}
+        confirmLabel={t({ en: 'Remove', fr: 'Supprimer' })}
         confirmVariant="danger"
         disabled={removing}
       />
@@ -297,6 +312,7 @@ function PluginCard({
 }
 
 export function PluginsTab() {
+  const t = useT()
   const [registryPlugins, setRegistryPlugins] = useState<PluginWithVersion[]>([])
   const [userPlugins, setUserPlugins] = useState<PluginWithVersion[]>([])
   const [installedVersions, setInstalledVersions] = useState<Record<string, string | null>>({})
@@ -359,7 +375,7 @@ export function PluginsTab() {
             discovered.push({
               name: p.name,
               displayName: p.name,
-              description: 'Found on disk',
+              description: t({ en: 'Found on disk', fr: 'Trouvé sur le disque' }),
               githubUrl: '',
               latestVersion: null,
               versionLoading: false,
@@ -369,7 +385,12 @@ export function PluginsTab() {
         if (discovered.length > 0) setUserPlugins((prev) => [...prev, ...discovered])
       })
       .catch((err) => {
-        if (!cancelled) setFetchError(err instanceof Error ? err.message : 'Failed to load plugins')
+        if (!cancelled)
+          setFetchError(
+            err instanceof Error
+              ? err.message
+              : t({ en: 'Failed to load plugins', fr: 'Échec du chargement des plugins' }),
+          )
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -417,7 +438,15 @@ export function PluginsTab() {
     (p: RegistryPlugin) => {
       const registryNames = new Set(registryPlugins.map((x) => x.name))
       if (registryNames.has(p.name)) {
-        setDuplicateWarning(`"${p.displayName}" is already listed in the registry and won't be added again.`)
+        setDuplicateWarning(
+          t(
+            {
+              en: '"{{name}}" is already listed in the registry and won\'t be added again.',
+              fr: '« {{name}} » figure déjà dans le registre et ne sera pas ajouté à nouveau.',
+            },
+            { name: p.displayName },
+          ),
+        )
         return
       }
       const saved = loadUserPlugins()
@@ -439,13 +468,17 @@ export function PluginsTab() {
     return true
   })
 
-  if (loading) return <div className="text-sm text-text-muted">Loading plugins...</div>
+  if (loading)
+    return (
+      <div className="text-sm text-text-muted">{t({ en: 'Loading plugins...', fr: 'Chargement des plugins…' })}</div>
+    )
 
   return (
     <div className="space-y-4">
       {fetchError && (
         <div className="text-sm text-accent-error bg-accent-error/10 border border-accent-error/30 rounded-lg p-3">
-          Failed to load plugin registry: {fetchError}
+          {t({ en: 'Failed to load plugin registry:', fr: 'Échec du chargement du registre des plugins :' })}{' '}
+          {fetchError}
         </div>
       )}
       {duplicateWarning && (
@@ -457,11 +490,15 @@ export function PluginsTab() {
         </div>
       )}
       <div className="border border-border rounded-lg p-4">
-        <h3 className="text-sm font-medium text-text-primary mb-3">Add Plugin</h3>
+        <h3 className="text-sm font-medium text-text-primary mb-3">
+          {t({ en: 'Add Plugin', fr: 'Ajouter un plugin' })}
+        </h3>
         <AddPluginForm onAdd={handleAddUserPlugin} />
       </div>
 
-      {allPlugins.length === 0 && !fetchError && <div className="text-sm text-text-muted">No plugins found.</div>}
+      {allPlugins.length === 0 && !fetchError && (
+        <div className="text-sm text-text-muted">{t({ en: 'No plugins found.', fr: 'Aucun plugin trouvé.' })}</div>
+      )}
 
       {allPlugins.map((plugin) => (
         <PluginCard

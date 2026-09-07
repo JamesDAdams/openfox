@@ -6,6 +6,7 @@ import { AssistantMessage } from './AssistantMessage'
 import { SubAgentContainer } from './SubAgentContainer'
 import { FEED_REVEAL_EVENT } from './feed-window'
 import { useDisplaySettings } from '../../hooks/useDisplaySettings'
+import { useT } from '../../hooks/useT'
 
 const ITEM_CONTAINMENT_STYLE = { contentVisibility: 'auto', containIntrinsicSize: 'auto 200px' } as const
 const PLACEHOLDER_STYLE = { contentVisibility: 'auto', containIntrinsicSize: '160px', minHeight: '160px' } as const
@@ -46,6 +47,7 @@ export const ChatFeedItems = memo(function ChatFeedItems({
   showAgentDefinitions = true,
   showWorkflowBars = true,
 }: ChatFeedItemsProps) {
+  const t = useT()
   const totalItems = displayItems.length
   const { feedVirtualization } = useDisplaySettings()
   // Absolute index of the first mounted item. New items appended at the end
@@ -172,7 +174,16 @@ export const ChatFeedItems = memo(function ChatFeedItems({
             className="flex items-center justify-center gap-2 py-3 text-xs text-text-muted"
             data-testid="feed-unmounted-hint"
           >
-            Scroll up to load {displayStart} older item{displayStart !== 1 ? 's' : ''}
+            {t(
+              {
+                en: { one: 'Scroll up to load {{count}} older item', other: 'Scroll up to load {{count}} older items' },
+                fr: {
+                  one: 'Faites défiler vers le haut pour charger {{count}} élément plus ancien',
+                  other: 'Faites défiler vers le haut pour charger {{count}} éléments plus anciens',
+                },
+              },
+              { count: displayStart },
+            )}
           </div>
           {Array.from({ length: displayStart }, (_, i) => (
             <div key={`ph-${i}`} data-item-index={i} data-placeholder style={PLACEHOLDER_STYLE} />
@@ -190,7 +201,9 @@ export const ChatFeedItems = memo(function ChatFeedItems({
               className="flex items-center gap-2 feed-item px-2 @md:px-4"
             >
               <div className="flex-1 border-t border-border" />
-              <span className="text-[10px] text-text-muted font-medium px-2">Earlier context summarized</span>
+              <span className="text-[10px] text-text-muted font-medium px-2">
+                {t({ en: 'Earlier context summarized', fr: 'Contexte antérieur résumé' })}
+              </span>
               <div className="flex-1 border-t border-border" />
             </div>
           )

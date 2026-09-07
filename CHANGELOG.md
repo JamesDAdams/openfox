@@ -1,5 +1,90 @@
 # Changelog
 
+## 2.0.139 - 2026-09-06
+
+### Features
+
+- **Caveman thinking mode** — opt-in setting that compresses the agent's reasoning into terse fragments to cut thinking tokens
+
+### Enhancements
+
+- **Pause-in-progress is now obvious** — pulsing pause button while waiting, cancel cross on hover, height matched to Send
+
+## 2.0.138 - 2026-09-06
+
+### Features
+
+- **Pause button** — pause the next LLM request without aborting the in-flight turn
+- **Resume a paused run from the chat input** — session status shows Pausing…/Paused
+
+### Bug Fixes
+
+- **Dangerous mode applies immediately** — switching auto-approves every pending path confirmation
+- **Allow Everything clears the whole batch** — sibling tool calls continue without re-prompting
+
+## 2.0.137 - 2026-09-03
+
+### Bug Fixes
+
+- **Image descriptions survive reloads** — vision details no longer drop from tool results after a page reload
+
+## 2.0.136 - 2026-09-02
+
+### Features
+
+- **Model favorites** — heart-toggle any model and pin a Favorites section at the top of the model selector
+- **Model selector display settings** — full-height sizing, and start with providers or favorites collapsed
+- **Describe-image tool for non-vision models** — delegates image questions to a vision-capable fallback
+- **Sync button in the provider editor** — refetch the model catalog without losing current selections
+
+### Enhancements
+
+- **Hover tooltips for truncated tool-call labels** — reveal the full path or command
+- **Compact provider auth badge** — the Connected/Connect button is smaller and better aligned
+
+### Bug Fixes
+
+- **Localized modal footer buttons** — Cancel/Save now translate to French
+- **Tool schemas work with strict providers** — Vertex AI, Antigravity, and Gemini no longer reject tool calls
+- **New sessions inherit project MCP overrides** — forked sessions keep the parent's MCP state too
+- **No more duplicate models after a sync** — merged model families and selections survive a catalog refresh
+- **Deleting a provider cleans up its sessions** — no dead provider pins, wrong context windows, or auto-compaction
+- **Ollama vision images work again** — content arrays are converted to Ollama's native format
+- **grep patterns no longer trigger path confirmations** — only real file operands are checked
+- **Quoted paths can't sneak past path security** — nested quotes are now detected
+- **DeepSeek reasoning preserved** — chain-of-thought is echoed under reasoning_content instead of being dropped
+- **Per-model reasoning efforts accepted** — validation now honors each model's modes and effort lists
+
+## 2.0.135 - 2026-09-01
+
+### Features
+
+- **Export and import sessions** — save a session to a JSON file and restore it elsewhere, preserving its cached layout
+
+### Enhancements
+
+- **Fuller mobile header navigation** — the project and session dropdowns from desktop now appear on mobile, with a Home shortcut back to the project list
+- **Shorter French UI labels** — history, stop, and related controls use more concise wording
+
+### Bug Fixes
+
+- **Live turn stats stay visible** — they no longer disappear while the assistant waits for your input
+- **Header dropdown closes on middle-click** — navigating via a link's middle-click now dismisses the menu
+- **Dev server status loads at startup** — the header no longer shows “Aucune config” until the popover is opened
+- **Missing French labels translated** — “No matches” and “Task Completed” now render in French
+
+## 2.0.134 - 2026-08-31
+
+### Features
+
+- **Interface language setting** — pick Automatic, English, or French to localize the web UI, server messages, and CLI
+- **Agent language setting** — the agent replies in your chosen language via injected instructions
+- **Create projects without git** — git init is skipped when git is missing, so git-less codebases work out of the box
+
+### Enhancements
+
+- **Full error on LLM failures** — an (i) button on failed bubbles and retry pills opens a modal with the details
+
 ## 2.0.133 - 2026-08-30
 
 ### Features

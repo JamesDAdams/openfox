@@ -2,6 +2,7 @@ import { createTool, validateActionWithPermission } from './tool-helpers.js'
 import type { TasksService } from '../tasks/service.js'
 import { isTaskGateError, isTaskConflictError } from '../tasks/service.js'
 import { getGateConfig } from '../db/tasks.js'
+import { serverT } from '../i18n.js'
 
 /**
  * project_tasks — agent participation on the project task board.
@@ -139,7 +140,7 @@ export const projectTasksTool = createTool<ProjectTasksArgs>(
     if (permError) return permError
 
     const session = context.sessionManager.getSession(context.sessionId)
-    if (!session) return helpers.error('Session not found')
+    if (!session) return helpers.error(serverT({ en: 'Session not found', fr: 'Session introuvable' }))
     const projectId = session.projectId
     const svc = getTasksService()
     const actor = { actor: 'agent' as const, actorName: 'agent' }
@@ -150,7 +151,13 @@ export const projectTasksTool = createTool<ProjectTasksArgs>(
           const status = args.status
           if (status !== undefined && !LIST_STATUSES.includes(status)) {
             return helpers.error(
-              `Invalid "status" filter for action=list: "${String(status)}". Expected one of: todo, in_progress, done, all.`,
+              serverT(
+                {
+                  en: 'Invalid "status" filter for action=list: "{{status}}". Expected one of: todo, in_progress, done, all.',
+                  fr: 'Filtre « status » invalide pour action=list : « {{status}} ». Valeurs attendues : todo, in_progress, done, all.',
+                },
+                { status: String(status) },
+              ),
             )
           }
           const page = parseListPage(args.limit, args.offset)
@@ -194,7 +201,13 @@ export const projectTasksTool = createTool<ProjectTasksArgs>(
         }
 
         case 'edit': {
-          if (!args.taskId) return helpers.error('Parameter "taskId" is required for action=edit')
+          if (!args.taskId)
+            return helpers.error(
+              serverT({
+                en: 'Parameter "taskId" is required for action=edit',
+                fr: 'Le paramètre « taskId » est requis pour action=edit',
+              }),
+            )
           const result = await svc.update(
             projectId,
             args.taskId,
@@ -212,9 +225,20 @@ export const projectTasksTool = createTool<ProjectTasksArgs>(
         }
 
         case 'move': {
-          if (!args.taskId) return helpers.error('Parameter "taskId" is required for action=move')
+          if (!args.taskId)
+            return helpers.error(
+              serverT({
+                en: 'Parameter "taskId" is required for action=move',
+                fr: 'Le paramètre « taskId » est requis pour action=move',
+              }),
+            )
           if (!args.to)
-            return helpers.error('Parameter "to" is required for action=move ("todo" | "in_progress" | "done")')
+            return helpers.error(
+              serverT({
+                en: 'Parameter "to" is required for action=move ("todo" | "in_progress" | "done")',
+                fr: 'Le paramètre « to » est requis pour action=move (« todo » | « in_progress » | « done »)',
+              }),
+            )
           const result = await svc.move(projectId, args.taskId, args.to, {
             actor: 'agent',
             actorName: 'agent',
@@ -226,9 +250,27 @@ export const projectTasksTool = createTool<ProjectTasksArgs>(
         }
 
         case 'set_gate_value': {
-          if (!args.taskId) return helpers.error('Parameter "taskId" is required for action=set_gate_value')
-          if (!args.gateId) return helpers.error('Parameter "gateId" is required for action=set_gate_value')
-          if (args.value === undefined) return helpers.error('Parameter "value" is required for action=set_gate_value')
+          if (!args.taskId)
+            return helpers.error(
+              serverT({
+                en: 'Parameter "taskId" is required for action=set_gate_value',
+                fr: 'Le paramètre « taskId » est requis pour action=set_gate_value',
+              }),
+            )
+          if (!args.gateId)
+            return helpers.error(
+              serverT({
+                en: 'Parameter "gateId" is required for action=set_gate_value',
+                fr: 'Le paramètre « gateId » est requis pour action=set_gate_value',
+              }),
+            )
+          if (args.value === undefined)
+            return helpers.error(
+              serverT({
+                en: 'Parameter "value" is required for action=set_gate_value',
+                fr: 'Le paramètre « value » est requis pour action=set_gate_value',
+              }),
+            )
           const result = await svc.setGateValue(
             projectId,
             args.taskId,
@@ -242,9 +284,18 @@ export const projectTasksTool = createTool<ProjectTasksArgs>(
         }
 
         case 'delete': {
-          if (!args.taskId) return helpers.error('Parameter "taskId" is required for action=delete')
+          if (!args.taskId)
+            return helpers.error(
+              serverT({
+                en: 'Parameter "taskId" is required for action=delete',
+                fr: 'Le paramètre « taskId » est requis pour action=delete',
+              }),
+            )
           const task = svc.get(projectId, args.taskId)
-          if (!task) return helpers.error(`Task not found: ${args.taskId}`)
+          if (!task)
+            return helpers.error(
+              serverT({ en: 'Task not found: {{id}}', fr: 'Tâche introuvable : {{id}}' }, { id: args.taskId ?? '' }),
+            )
           await svc.remove(projectId, args.taskId, actor)
           return helpers.success(
             JSON.stringify(
@@ -256,20 +307,32 @@ export const projectTasksTool = createTool<ProjectTasksArgs>(
         }
 
         default:
-          return helpers.error(`Unknown action: ${String(action)}`)
+          return helpers.error(
+            serverT(
+              { en: 'Unknown action: {{action}}', fr: 'Action inconnue : {{action}}' },
+              { action: String(action) },
+            ),
+          )
       }
     } catch (error) {
       if (isTaskGateError(error)) {
         const missing = error.missing.map((m) => `'${m.name}' (${m.gateId}): ${m.description}`).join('; ')
         return helpers.error(
-          `Move blocked by column gates. Missing required gate fields: ${missing}. ` +
-            `Fill them with action=set_gate_value (taskId, gateId, value=<acceptable proof>) and then call move again. ` +
-            `You set these values as part of your work — this is the intended loop, not a dead end.`,
+          serverT(
+            {
+              en: 'Move blocked by column gates. Missing required gate fields: {{missing}}. Fill them with action=set_gate_value (taskId, gateId, value=<acceptable proof>) and then call move again. You set these values as part of your work — this is the intended loop, not a dead end.',
+              fr: 'Déplacement bloqué par les portes de colonne. Champs de porte requis manquants : {{missing}}. Renseignez-les avec action=set_gate_value (taskId, gateId, value=<preuve acceptable>) puis appelez à nouveau move. Vous définissez ces valeurs dans le cadre de votre travail — c’est la boucle prévue, pas une impasse.',
+            },
+            { missing },
+          ),
         )
       }
       if (isTaskConflictError(error)) {
         return helpers.error(
-          `Task changed, refresh and retry. Another actor modified this task since your last read. Re-list and retry with the latest updatedAt.`,
+          serverT({
+            en: 'Task changed, refresh and retry. Another actor modified this task since your last read. Re-list and retry with the latest updatedAt.',
+            fr: 'Tâche modifiée, actualisez et réessayez. Un autre acteur a modifié cette tâche depuis votre dernière lecture. Re-listez et réessayez avec le updatedAt le plus récent.',
+          }),
         )
       }
       throw error

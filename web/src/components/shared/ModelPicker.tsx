@@ -10,6 +10,7 @@ import type { Provider } from '../../stores/config'
 import { shouldAutofocus } from '../../lib/device'
 import { formatModelValue, parseModelValue } from '../../lib/model-value'
 import { resolveDisplayEffort } from '../../lib/effort-gate'
+import { useT } from '../../hooks/useT'
 
 export interface ModelPickerProps {
   providers: Provider[]
@@ -18,7 +19,9 @@ export interface ModelPickerProps {
   defaultLabel?: string
 }
 
-export function ModelPicker({ providers, value, onChange, defaultLabel = 'Default (global model)' }: ModelPickerProps) {
+export function ModelPicker({ providers, value, onChange, defaultLabel }: ModelPickerProps) {
+  const t = useT()
+  const resolvedDefaultLabel = defaultLabel ?? t({ en: 'Default (global model)', fr: 'Défaut (modèle global)' })
   const [isOpen, setIsOpen] = useState(false)
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null)
   const [showProviderModal, setShowProviderModal] = useState(false)
@@ -151,7 +154,7 @@ export function ModelPicker({ providers, value, onChange, defaultLabel = 'Defaul
         className="w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-bg-tertiary border border-border rounded text-sm text-text-primary hover:bg-bg-secondary transition-colors"
       >
         <span className={shortModelName ? 'text-text-primary' : 'text-text-muted'}>
-          {shortModelName ?? defaultLabel}
+          {shortModelName ?? resolvedDefaultLabel}
           {shortModelName && displayEffort && <span className="text-text-muted">:{displayEffort}</span>}
         </span>
         <ChevronDownIcon className={`w-3 h-3 text-text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -160,7 +163,7 @@ export function ModelPicker({ providers, value, onChange, defaultLabel = 'Defaul
       {isOpen &&
         typeof document !== 'undefined' &&
         createPortal(
-          <div data-model-picker-dropdown className="z-50" style={dropdownStyle}>
+          <div data-model-picker-dropdown data-dropdown-container className="z-50" style={dropdownStyle}>
             <div className="bg-bg-secondary border border-border rounded-lg shadow-lg flex flex-col max-h-80">
               <div className="flex items-center gap-1 px-3 py-2 border-b border-border flex-shrink-0">
                 <SearchIcon className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
@@ -173,7 +176,7 @@ export function ModelPicker({ providers, value, onChange, defaultLabel = 'Defaul
                     setHighlightedIndex(-1)
                   }}
                   onKeyDown={handleSearchKeyDown}
-                  placeholder="Search models..."
+                  placeholder={t({ en: 'Search models...', fr: 'Rechercher des modèles...' })}
                   className="bg-transparent border-none outline-none text-sm text-text-primary w-full placeholder:text-text-muted"
                 />
               </div>
@@ -190,7 +193,7 @@ export function ModelPicker({ providers, value, onChange, defaultLabel = 'Defaul
                     !value ? 'text-accent-primary bg-accent-primary/5' : 'text-text-muted'
                   }`}
                 >
-                  {defaultLabel}
+                  {resolvedDefaultLabel}
                 </button>
 
                 {visibleGroups.map((group) => (
@@ -201,8 +204,11 @@ export function ModelPicker({ providers, value, onChange, defaultLabel = 'Defaul
                         type="button"
                         onClick={() => handleEditProvider(group.provider)}
                         className="p-0.5 text-text-muted hover:text-text-primary rounded transition-colors flex-shrink-0"
-                        title="Edit provider"
-                        aria-label={`Edit provider ${group.provider.name}`}
+                        title={t({ en: 'Edit provider', fr: 'Modifier le fournisseur' })}
+                        aria-label={t({
+                          en: `Edit provider ${group.provider.name}`,
+                          fr: `Modifier le fournisseur ${group.provider.name}`,
+                        })}
                       >
                         <EditSmallIcon className="w-3 h-3" />
                       </button>
@@ -253,7 +259,9 @@ export function ModelPicker({ providers, value, onChange, defaultLabel = 'Defaul
                 ))}
 
                 {visibleGroups.length === 0 && searchQuery.trim() && (
-                  <div className="px-4 py-3 text-sm text-text-muted text-center">No models match your search</div>
+                  <div className="px-4 py-3 text-sm text-text-muted text-center">
+                    {t({ en: 'No models match your search', fr: 'Aucun modèle ne correspond à votre recherche' })}
+                  </div>
                 )}
               </ScrollArea>
             </div>

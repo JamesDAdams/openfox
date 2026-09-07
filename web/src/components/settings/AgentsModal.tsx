@@ -10,6 +10,7 @@ import { AgentGroup } from './agents/AgentListItem'
 import { AgentForm } from './agents/AgentForm'
 import { ModelPicker } from '../shared/ModelPicker'
 import { parseModelValue } from '../../lib/model-value'
+import { useT } from '../../hooks/useT'
 
 interface AgentsModalProps {
   isOpen: boolean
@@ -28,6 +29,7 @@ function toSlug(name: string): string {
 }
 
 export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: AgentsModalProps) {
+  const t = useT()
   const { data, loading } = useResource(agentsResource, projectDir)
   const defaults = data?.defaults ?? []
   const userItems = data?.userItems ?? []
@@ -86,7 +88,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
   }
 
   const applyDuplicateFromContent = (content: AgentFull, id: string, setAsNew: boolean) => {
-    setFormName(content.metadata.name + ' (copy)')
+    setFormName(content.metadata.name + ' ' + t({ en: '(copy)', fr: '(copie)' }))
     setFormId(`${id}-copy-${Date.now()}`)
     setFormDescription(content.metadata.description)
     setFormSubagent(content.metadata.subagent)
@@ -205,7 +207,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
   const handleSave = async () => {
     const id = editingId ?? formId
     if (!id || !formName || !formPrompt) {
-      setFormError('Name and prompt are required.')
+      setFormError(t({ en: 'Name and prompt are required.', fr: 'Le nom et l’invite sont requis.' }))
       return
     }
 
@@ -230,7 +232,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
 
     if (!result.success) {
       setSaving(false)
-      setFormError(result.error ?? 'Failed to save agent.')
+      setFormError(result.error ?? t({ en: 'Failed to save agent.', fr: 'Échec de l’enregistrement de l’agent.' }))
       return
     }
 
@@ -275,21 +277,27 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
         <Modal
           isOpen={isOpen}
           onClose={handleCancel}
-          title={isReadOnly ? `${formName}` : editingId ? 'Edit Agent' : 'New Agent'}
+          title={
+            isReadOnly
+              ? `${formName}`
+              : editingId
+                ? t({ en: 'Edit Agent', fr: 'Modifier l’agent' })
+                : t({ en: 'New Agent', fr: 'Nouvel agent' })
+          }
           size="xl"
           footer={
             isReadOnly ? (
               <div className="flex justify-end">
                 <button
                   onClick={() => {
-                    setFormName(formName + ' (copy)')
+                    setFormName(formName + ' ' + t({ en: '(copy)', fr: '(copie)' }))
                     setFormId(`${editingId}-copy-${Date.now()}`)
                     setEditingId(null)
                     setIsReadOnly(false)
                   }}
                   className="px-3 py-1.5 rounded bg-accent-primary/20 text-sm text-accent-primary font-medium hover:bg-accent-primary/30 transition-colors"
                 >
-                  Duplicate & Customize
+                  {t({ en: 'Duplicate & Customize', fr: 'Dupliquer et personnaliser' })}
                 </button>
               </div>
             ) : (
@@ -343,9 +351,12 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title="Agents" size="lg">
+      <Modal isOpen={isOpen} onClose={onClose} title={t({ en: 'Agents', fr: 'Agents' })} size="lg">
         <CRUDListHeader
-          description="Agents define behavior, tools, and prompts for top-level modes and sub-agents."
+          description={t({
+            en: 'Agents define behavior, tools, and prompts for top-level modes and sub-agents.',
+            fr: 'Les agents définissent le comportement, les outils et les invites des modes principaux et des sous-agents.',
+          })}
           onNew={handleNew}
           loading={loading}
           hasItems={defaults.length > 0 || userItems.length > 0 || projectItems.length > 0}
@@ -353,7 +364,7 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
           <div className="space-y-4">
             {defaults.length > 0 && (
               <AgentGroup
-                title="Built-in"
+                title={t({ en: 'Built-in', fr: 'Intégrés' })}
                 agents={defaultTopLevelAgents}
                 subagents={defaultSubAgents}
                 isBuiltIn={true}
@@ -370,11 +381,17 @@ export function AgentsModal({ isOpen, onClose, initialEditId, projectDir }: Agen
               projectTopLevelAgents.length > 0 ||
               projectSubAgents.length > 0) && (
               <div>
-                <h3 className="text-xs font-medium text-text-secondary mb-2 uppercase tracking-wide">Custom</h3>
+                <h3 className="text-xs font-medium text-text-secondary mb-2 uppercase tracking-wide">
+                  {t({ en: 'Custom', fr: 'Personnalisés' })}
+                </h3>
                 <div className="ml-3 space-y-3">
                   {[
-                    { title: 'Global', agents: userTopLevelAgents, subagents: userSubAgents },
-                    { title: 'Project', agents: projectTopLevelAgents, subagents: projectSubAgents },
+                    { title: t({ en: 'Global', fr: 'Global' }), agents: userTopLevelAgents, subagents: userSubAgents },
+                    {
+                      title: t({ en: 'Project', fr: 'Projet' }),
+                      agents: projectTopLevelAgents,
+                      subagents: projectSubAgents,
+                    },
                   ].map(
                     (section) =>
                       (section.agents.length > 0 || section.subagents.length > 0) && (
@@ -460,6 +477,7 @@ function BuiltInModelModal({
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const t = useT()
   const { data } = useResource(agentsResource, projectDir)
   const agents = data ? [...data.defaults, ...data.userItems, ...data.projectItems] : []
   const agent = agentId ? agents.find((a) => a.id === agentId) : undefined
@@ -488,21 +506,34 @@ function BuiltInModelModal({
       onSaved()
       onClose()
     } catch {
-      setError('Failed to save. Please try again.')
+      setError(t({ en: 'Failed to save. Please try again.', fr: 'Échec de l’enregistrement. Veuillez réessayer.' }))
     }
     setSaving(false)
   }
 
   return (
-    <Modal isOpen={!!agentId} onClose={onClose} title={`Model — ${agent?.name ?? agentId ?? ''}`} size="md">
+    <Modal
+      isOpen={!!agentId}
+      onClose={onClose}
+      title={t({ en: 'Model — {{name}}', fr: 'Modèle — {{name}}' }, { name: agent?.name ?? agentId ?? '' })}
+      size="md"
+    >
       <div className="space-y-4 p-2">
         <p className="text-xs text-text-muted">
-          Choose which model to use when this agent is active. This overrides the session/global model.
+          {t({
+            en: 'Choose which model to use when this agent is active. This overrides the session/global model.',
+            fr: 'Choisissez le modèle à utiliser lorsque cet agent est actif. Il remplace le modèle de session/global.',
+          })}
         </p>
         {loading ? (
-          <div className="text-sm text-text-muted py-2">Loading...</div>
+          <div className="text-sm text-text-muted py-2">{t({ en: 'Loading...', fr: 'Chargement...' })}</div>
         ) : (
-          <ModelPicker providers={providers} value={value} onChange={setValue} defaultLabel="Default (global model)" />
+          <ModelPicker
+            providers={providers}
+            value={value}
+            onChange={setValue}
+            defaultLabel={t({ en: 'Default (global model)', fr: 'Défaut (modèle global)' })}
+          />
         )}
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
@@ -510,14 +541,14 @@ function BuiltInModelModal({
             onClick={onClose}
             className="px-4 py-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors"
           >
-            Cancel
+            {t({ en: 'Cancel', fr: 'Annuler' })}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
             className="px-4 py-1.5 rounded bg-accent-primary/20 text-sm text-accent-primary font-medium hover:bg-accent-primary/30 disabled:opacity-50 transition-colors"
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? t({ en: 'Saving...', fr: 'Enregistrement...' }) : t({ en: 'Save', fr: 'Enregistrer' })}
           </button>
         </div>
       </div>

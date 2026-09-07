@@ -1,5 +1,6 @@
 import { ScrollArea } from '../shared/ScrollArea'
 import { useState } from 'react'
+import { useT } from '../../hooks/useT'
 import { useSessionStats } from '../../hooks/useSessionStats'
 import { computeSessionStats } from '@shared/stats.js'
 import { useGitStatus } from '../../hooks/useGitStatus'
@@ -30,6 +31,7 @@ interface SessionSidebarProps {
 }
 
 export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
+  const t = useT()
   const [showStatsModal, setShowStatsModal] = useState(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [activeMetadataKey, setActiveMetadataKey] = useState<string | null>(null)
@@ -78,7 +80,10 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
           <button
             onClick={() => setShowStatsModal(true)}
             className="w-full flex items-center justify-center px-3 py-2 rounded bg-bg-tertiary hover:bg-bg-secondary transition-colors"
-            title="View detailed response and call-level stats"
+            title={t({
+              en: 'View detailed response and call-level stats',
+              fr: 'Voir les statistiques détaillées des réponses et des appels',
+            })}
           >
             <div className="flex items-center gap-2 text-sm text-text-muted">
               <span className="text-text-secondary">{formatTime(stats.aiTime)}</span>
@@ -102,7 +107,10 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
             onClick={() => setActiveMetadataKey('criteria')}
             className="w-full text-left cursor-pointer hover:[&_h3]:text-accent-primary transition-colors"
           >
-            <MetadataSectionHeader entries={session?.metadataEntries?.['criteria'] ?? []} title="Acceptance Criteria" />
+            <MetadataSectionHeader
+              entries={session?.metadataEntries?.['criteria'] ?? []}
+              title={t({ en: 'Acceptance Criteria', fr: 'Critères d’acceptation' })}
+            />
           </button>
           {session && <CriteriaEditor entries={session?.metadataEntries?.['criteria'] ?? []} sessionId={session.id} />}
           {session &&
@@ -172,7 +180,7 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
               OpenFox
             </a>
             {' - '}
-            <span className="font-mono">v{version}</span>
+            <span className="font-mono">{`v${version}`}</span>
             <button
               onClick={() => {
                 setManuallyChecked(true)
@@ -180,18 +188,24 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
               }}
               disabled={updateStatus === 'checking'}
               className="p-0.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
-              title="Check for updates"
+              title={t({ en: 'Check for updates', fr: 'Vérifier les mises à jour' })}
             >
               <ReloadIcon className={`w-3 h-3 ${updateStatus === 'checking' ? 'animate-spin' : ''}`} />
             </button>
           </div>
           {updateStatus === 'available' && (
             <button onClick={() => setShowUpdateModal(true)} className="text-accent-primary hover:underline mt-1">
-              Update OpenFox →
+              {t({ en: 'Update OpenFox →', fr: 'Mettre à jour OpenFox →' })}
             </button>
           )}
-          {manuallyChecked && updateStatus === 'upToDate' && <div className="mt-1">Up to date</div>}
-          {updateStatus === 'error' && <div className="mt-1">Update check failed</div>}
+          {manuallyChecked && updateStatus === 'upToDate' && (
+            <div className="mt-1">{t({ en: 'Up to date', fr: 'À jour' })}</div>
+          )}
+          {updateStatus === 'error' && (
+            <div className="mt-1">
+              {t({ en: 'Update check failed', fr: 'Échec de la vérification des mises à jour' })}
+            </div>
+          )}
         </div>
       )}
 

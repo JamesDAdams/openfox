@@ -8,6 +8,7 @@ import { DEFAULT_TERMINAL_FONT } from '../../lib/fonts'
 import { wsClient } from '../../lib/ws'
 import type { ServerMessage } from '@shared/protocol.js'
 import { XCloseSmallIcon } from '../shared/icons'
+import { useT } from '../../hooks/useT'
 
 interface TerminalPaneProps {
   sessionId: string
@@ -17,6 +18,7 @@ interface TerminalPaneProps {
 }
 
 export function TerminalPane({ sessionId, onClose, onEscape, autoFocus }: TerminalPaneProps) {
+  const t = useT()
   const terminalRef = useRef<HTMLDivElement>(null)
   const sessionIdRef = useRef(sessionId)
   const termRef = useRef<{ term: Terminal; fitAddon: FitAddon } | null>(null)
@@ -159,7 +161,7 @@ export function TerminalPane({ sessionId, onClose, onEscape, autoFocus }: Termin
         <button
           onClick={onClose}
           className="p-1 rounded hover:bg-[#333] text-[#888] hover:text-[#ccc] transition-colors"
-          title="Close terminal"
+          title={t({ en: 'Close terminal', fr: 'Fermer le terminal' })}
         >
           <XCloseSmallIcon />
         </button>

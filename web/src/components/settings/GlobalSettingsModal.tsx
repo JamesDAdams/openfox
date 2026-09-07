@@ -1,6 +1,7 @@
 import { ScrollArea } from '../shared/ScrollArea'
 import { useState } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
+import { useT } from '../../hooks/useT'
 import { NotificationSettings } from './NotificationSettings'
 import { SkillsContent } from './SkillsModal'
 import { InstructionsTab } from './tabs/InstructionsTab'
@@ -22,6 +23,18 @@ type Tab = 'instructions' | 'skills' | 'plugins' | 'notifications' | 'display' |
 export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>('instructions')
   const updateAvailable = useUpdateStore((state) => state.status === 'available')
+  const t = useT()
+
+  const tabs: { id: Tab; label: string; showDot?: boolean }[] = [
+    { id: 'instructions', label: t({ en: 'Instructions', fr: 'Instructions' }) },
+    { id: 'tools', label: t({ en: 'Tools', fr: 'Outils' }) },
+    { id: 'skills', label: t({ en: 'Skills', fr: 'Compétences' }) },
+    { id: 'plugins', label: t({ en: 'Plugins', fr: 'Plugins' }) },
+    { id: 'notifications', label: t({ en: 'Notifications', fr: 'Notifications' }) },
+    { id: 'display', label: t({ en: 'Display', fr: 'Affichage' }) },
+    { id: 'keybindings', label: t({ en: 'Keybindings', fr: 'Raccourcis clavier' }) },
+    { id: 'advanced', label: t({ en: 'Advanced', fr: 'Avancé' }), showDot: updateAvailable },
+  ]
 
   const handleClose = () => {
     try {
@@ -33,7 +46,13 @@ export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProp
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Settings" size="xl" scrollable={false}>
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={t({ en: 'Settings', fr: 'Paramètres' })}
+      size="xl"
+      scrollable={false}
+    >
       <div data-global-settings className="flex flex-col h-full min-h-0 -m-4">
         {/* Tab bar - always visible, horizontally scrollable on mobile */}
         <ScrollArea
@@ -41,31 +60,15 @@ export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProp
           options={{ scrollbars: { visibility: 'hidden' } }}
           className="flex border-b border-border mb-4 flex-shrink-0 px-4 pt-4"
         >
-          <TabButton
-            label="Instructions"
-            active={activeTab === 'instructions'}
-            onClick={() => setActiveTab('instructions')}
-          />
-          <TabButton label="Tools" active={activeTab === 'tools'} onClick={() => setActiveTab('tools')} />
-          <TabButton label="Skills" active={activeTab === 'skills'} onClick={() => setActiveTab('skills')} />
-          <TabButton label="Plugins" active={activeTab === 'plugins'} onClick={() => setActiveTab('plugins')} />
-          <TabButton
-            label="Notifications"
-            active={activeTab === 'notifications'}
-            onClick={() => setActiveTab('notifications')}
-          />
-          <TabButton label="Display" active={activeTab === 'display'} onClick={() => setActiveTab('display')} />
-          <TabButton
-            label="Keybindings"
-            active={activeTab === 'keybindings'}
-            onClick={() => setActiveTab('keybindings')}
-          />
-          <TabButton
-            label="Advanced"
-            active={activeTab === 'advanced'}
-            onClick={() => setActiveTab('advanced')}
-            showDot={updateAvailable}
-          />
+          {tabs.map((tab) => (
+            <TabButton
+              key={tab.id}
+              label={tab.label}
+              active={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              showDot={tab.showDot}
+            />
+          ))}
         </ScrollArea>
 
         {/* Tab content - scrolls independently, scrollbar at modal edge */}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button } from '../shared/Button'
+import { useT } from '../../hooks/useT'
 
 export interface RetryPatternEntry {
   field: 'thinking' | 'content' | 'both'
@@ -28,6 +29,7 @@ export function isValidRegex(pattern: string): boolean {
 }
 
 export function RetryPatternsEditor({ value, onChange }: RetryPatternsEditorProps) {
+  const t = useT()
   const [validationErrors, setValidationErrors] = useState<Record<number, boolean>>({})
 
   const updatePattern = (index: number, updates: Partial<RetryPatternEntry>) => {
@@ -53,7 +55,9 @@ export function RetryPatternsEditor({ value, onChange }: RetryPatternsEditorProp
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-sm font-medium text-text-primary">Max Retries Per Turn</label>
+        <label className="text-sm font-medium text-text-primary">
+          {t({ en: 'Max Retries Per Turn', fr: 'Nouvelles tentatives max par tour' })}
+        </label>
         <input
           type="number"
           min={1}
@@ -69,15 +73,17 @@ export function RetryPatternsEditor({ value, onChange }: RetryPatternsEditorProp
       </div>
 
       {value.patterns.length === 0 ? (
-        <p className="text-sm text-text-muted">No retry patterns configured.</p>
+        <p className="text-sm text-text-muted">
+          {t({ en: 'No retry patterns configured.', fr: 'Aucun modèle de nouvelle tentative configuré.' })}
+        </p>
       ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-text-muted border-b border-border">
-              <th className="pb-2 pr-2 w-12">Active</th>
-              <th className="pb-2 pr-2">Field</th>
-              <th className="pb-2 pr-2">Pattern</th>
-              <th className="pb-2 pr-2">Action</th>
+              <th className="pb-2 pr-2 w-12">{t({ en: 'Active', fr: 'Active' })}</th>
+              <th className="pb-2 pr-2">{t({ en: 'Field', fr: 'Champ' })}</th>
+              <th className="pb-2 pr-2">{t({ en: 'Pattern', fr: 'Modèle' })}</th>
+              <th className="pb-2 pr-2">{t({ en: 'Action', fr: 'Action' })}</th>
               <th className="pb-2 w-8"></th>
             </tr>
           </thead>
@@ -90,7 +96,7 @@ export function RetryPatternsEditor({ value, onChange }: RetryPatternsEditorProp
                     checked={p.active}
                     onChange={() => updatePattern(i, { active: !p.active })}
                     className="accent-accent-primary"
-                    aria-label={`Toggle pattern ${i + 1}`}
+                    aria-label={t({ en: `Toggle pattern ${i + 1}`, fr: `Activer/désactiver le modèle ${i + 1}` })}
                   />
                 </td>
                 <td className="py-2 pr-2">
@@ -99,9 +105,9 @@ export function RetryPatternsEditor({ value, onChange }: RetryPatternsEditorProp
                     onChange={(e) => updatePattern(i, { field: e.target.value as RetryPatternEntry['field'] })}
                     className="px-2 py-1 bg-bg-secondary border border-border rounded text-sm"
                   >
-                    <option value="content">content</option>
-                    <option value="thinking">thinking</option>
-                    <option value="both">both</option>
+                    <option value="content">{t({ en: 'content', fr: 'contenu' })}</option>
+                    <option value="thinking">{t({ en: 'thinking', fr: 'réflexion' })}</option>
+                    <option value="both">{t({ en: 'both', fr: 'les deux' })}</option>
                   </select>
                 </td>
                 <td className="py-2 pr-2">
@@ -110,7 +116,7 @@ export function RetryPatternsEditor({ value, onChange }: RetryPatternsEditorProp
                       type="text"
                       value={p.pattern}
                       onChange={(e) => handlePatternChange(i, e.target.value)}
-                      placeholder="regex pattern"
+                      placeholder={t({ en: 'regex pattern', fr: 'motif regex' })}
                       className="flex-1 px-2 py-1 bg-bg-secondary border border-border rounded text-sm font-mono"
                     />
                     {p.pattern.length > 0 && (
@@ -120,11 +126,11 @@ export function RetryPatternsEditor({ value, onChange }: RetryPatternsEditorProp
                     )}
                   </div>
                 </td>
-                <td className="py-2 pr-2 text-text-muted">retry</td>
+                <td className="py-2 pr-2 text-text-muted">{t({ en: 'retry', fr: 'réessayer' })}</td>
                 <td className="py-2">
                   <button
                     onClick={() => removePattern(i)}
-                    title="Remove pattern"
+                    title={t({ en: 'Remove pattern', fr: 'Supprimer le modèle' })}
                     className="text-text-muted hover:text-red-500 transition-colors"
                   >
                     ×
@@ -137,7 +143,7 @@ export function RetryPatternsEditor({ value, onChange }: RetryPatternsEditorProp
       )}
 
       <Button variant="secondary" onClick={addPattern}>
-        Add Pattern
+        {t({ en: 'Add Pattern', fr: 'Ajouter un modèle' })}
       </Button>
     </div>
   )

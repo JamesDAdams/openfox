@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
-import { Button } from '../shared/Button'
 import { AttachmentPreview } from '../shared/AttachmentPreview'
 import { ModelPicker } from '../shared/ModelPicker'
+import { SaveCancelButtons } from '../shared/SaveCancelButtons'
 import { SlashAutocomplete, type SlashAutocompleteHandle, type SlashSuggestion } from '../shared/SlashAutocomplete'
 import {
   AtMentionAutocomplete,
@@ -28,6 +28,7 @@ import { dedupById } from '../../lib/modal-utils'
 import { insertSuggestionAtCursor, focusTextareaAt, resolveSlashParamIds } from '../../lib/composer-utils'
 import { processFile } from '../../lib/file-processing'
 import type { ProjectTask, Attachment } from '@shared/types.js'
+import { useT } from '../../hooks/useT'
 
 interface TaskEditorProps {
   projectId: string
@@ -50,6 +51,7 @@ const TEXTAREA_RESIZE_PAD = 8
  * (inverted from chat).
  */
 export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEditorProps) {
+  const t = useT()
   const isEdit = !!initialTask
   const createTask = useTasksStore((state) => state.createTask)
   const updateTask = useTasksStore((state) => state.updateTask)
@@ -235,7 +237,7 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
     const hasText = prompt.trim().length > 0
     const hasAttachments = attachments.length > 0
     if (!hasText && !hasAttachments) {
-      setErrorMessage('Add a prompt or an attachment')
+      setErrorMessage(t({ en: 'Add a prompt or an attachment', fr: 'Ajoutez une invite ou une pièce jointe' }))
       return
     }
     setSaving(true)
@@ -269,7 +271,7 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
       }
       onSaved(saved)
     } else {
-      setErrorMessage(lastError ?? 'Could not save the task')
+      setErrorMessage(lastError ?? t({ en: 'Could not save the task', fr: 'Impossible d’enregistrer la tâche' }))
     }
   }
 
@@ -310,34 +312,47 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
     <Modal
       isOpen
       onClose={onClose}
-      title={isEdit ? 'Edit task' : 'New task'}
+      title={isEdit ? t({ en: 'Edit task', fr: 'Modifier la tâche' }) : t({ en: 'New task', fr: 'Nouvelle tâche' })}
       size="lg"
       showCloseButton
       footer={
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm text-text-muted truncate">
             {isAlreadyRunning
-              ? 'This task is already in progress — changes apply to the next run.'
-              : 'Ctrl/Cmd+Enter to save · Enter for a new line'}
+              ? t({
+                  en: 'This task is already in progress — changes apply to the next run.',
+                  fr: 'Cette tâche est déjà en cours — les modifications s’appliqueront à la prochaine exécution.',
+                })
+              : t({
+                  en: 'Ctrl/Cmd+Enter to save · Enter for a new line',
+                  fr: 'Ctrl/Cmd+Entrée pour enregistrer · Entrée pour une nouvelle ligne',
+                })}
           </span>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button onClick={onClose}>Cancel</Button>
-            <Button variant="primary" onClick={() => void save()} disabled={saving}>
-              {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create task'}
-            </Button>
-          </div>
+          <SaveCancelButtons
+            onCancel={onClose}
+            onSave={() => void save()}
+            saving={saving}
+            saveLabel={
+              isEdit
+                ? t({ en: 'Save changes', fr: 'Enregistrer les modifications' })
+                : t({ en: 'Create task', fr: 'Créer la tâche' })
+            }
+          />
         </div>
       }
     >
       {isAlreadyRunning && (
         <div className="mb-3 px-3 py-2 rounded bg-accent-primary/10 border border-accent-primary/30 text-sm text-text-primary">
-          This task is already in progress — changes apply to the next run.
+          {t({
+            en: 'This task is already in progress — changes apply to the next run.',
+            fr: 'Cette tâche est déjà en cours — les modifications s’appliqueront à la prochaine exécution.',
+          })}
         </div>
       )}
 
       <div className="space-y-3">
         <div>
-          <label className="block text-sm font-medium text-text-muted mb-1">Prompt</label>
+          <label className="block text-sm font-medium text-text-muted mb-1">{t({ en: 'Prompt', fr: 'Invite' })}</label>
           <div className="relative" ref={composerWrapRef} onDragOver={onDragOver} onDrop={onDrop}>
             <textarea
               ref={textareaRef}
@@ -353,9 +368,10 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
               onKeyDown={onKeyDown}
               rows={6}
               spellCheck={false}
-              placeholder={
-                'Describe the task. Slash commands (/cmd) and workflows resolve exactly as in chat when the task launches.'
-              }
+              placeholder={t({
+                en: 'Describe the task. Slash commands (/cmd) and workflows resolve exactly as in chat when the task launches.',
+                fr: 'Décrivez la tâche. Les commandes slash (/cmd) et les workflows se résolvent exactement comme dans le chat au lancement de la tâche.',
+              })}
               className="w-full px-3 py-2 bg-bg-tertiary border border-border rounded text-sm text-text-primary outline-none focus:border-accent-primary resize-y min-h-32"
             />
             <AtMentionAutocomplete
@@ -378,7 +394,19 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
             />
             {activeSlashParams.length > 0 && slashParamCount > 0 && (
               <div className="absolute top-2 right-14 text-xs text-text-muted bg-bg-secondary/90 border border-border rounded px-2 py-1">
-                {slashParamCount} required param{slashParamCount > 1 ? 's' : ''} — tab through after the command
+                {t(
+                  {
+                    en: {
+                      one: '{{count}} required param — tab through after the command',
+                      other: '{{count}} required params — tab through after the command',
+                    },
+                    fr: {
+                      one: '{{count}} paramètre requis — utilisez la tabulation après la commande',
+                      other: '{{count}} paramètres requis — utilisez la tabulation après la commande',
+                    },
+                  },
+                  { count: slashParamCount },
+                )}
               </div>
             )}
             <div className="absolute bottom-2 right-2 flex items-center gap-1">
@@ -387,7 +415,7 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
                 onClick={undoPrompt}
                 disabled={!canUndo}
                 className="p-1.5 rounded hover:bg-bg-secondary text-text-muted hover:text-text-primary transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-                title="Undo (Ctrl+Z)"
+                title={t({ en: 'Undo (Ctrl+Z)', fr: 'Annuler (Ctrl+Z)' })}
               >
                 ↩︎
               </button>
@@ -395,7 +423,7 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="p-1.5 rounded hover:bg-bg-secondary text-text-muted hover:text-text-primary transition-colors"
-                title="Attach files"
+                title={t({ en: 'Attach files', fr: 'Joindre des fichiers' })}
               >
                 <AttachIcon />
               </button>
@@ -427,13 +455,13 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1">Agent</label>
+            <label className="block text-sm font-medium text-text-muted mb-1">{t({ en: 'Agent', fr: 'Agent' })}</label>
             <select
               value={agentId ?? ''}
               onChange={(e) => setAgentId(e.target.value || undefined)}
               className="w-full px-3 py-1.5 bg-bg-tertiary border border-border rounded text-sm text-text-primary outline-none focus:border-accent-primary"
             >
-              <option value="">Default agent</option>
+              <option value="">{t({ en: 'Default agent', fr: 'Agent par défaut' })}</option>
               {agents.map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {agent.name}
@@ -442,7 +470,7 @@ export function TaskEditor({ projectId, initialTask, onClose, onSaved }: TaskEdi
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1">Model</label>
+            <label className="block text-sm font-medium text-text-muted mb-1">{t({ en: 'Model', fr: 'Modèle' })}</label>
             <ModelPicker
               providers={providers}
               value={modelValue}

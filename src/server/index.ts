@@ -40,6 +40,7 @@ import { createServerMessage } from '../shared/protocol.js'
 import { createContextStateMessage } from './ws/protocol.js'
 import { createWebSocketServer } from './ws/index.js'
 import { SessionManager } from './session/manager.js'
+import { clearSessionsForDeletedProvider, reconcileSessionProviders } from './session/provider-reconcile.js'
 import { toClientSession } from './session/client-session.js'
 import { setRuntimeConfig } from './runtime-config.js'
 import { createSkillRoutes } from './routes/skills.js'
@@ -162,6 +163,13 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
   // Create Provider Manager (handles LLM client lifecycle)
   const providerManager = createProviderManager(config, { adapters: providerAdapters })
+
+  // Repair sessions still pinned to a provider that is gone (deleted before the delete
+  // cascade existed, or dropped from a hand-edited config).
+  const repairedSessions = reconcileSessionProviders(providerManager.getProviders().map((p) => p.id))
+  if (repairedSessions > 0) {
+    logger.warn('Cleared unknown provider from sessions', { sessions: repairedSessions })
+  }
 
   // Create SessionManager instance (not singleton!)
   const sessionManager = new SessionManager(providerManager)
@@ -408,9 +416,9 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     if (!name || !workdir) {
       return res.status(400).json({ error: 'name and workdir are required' })
     }
-    const { createDirectoryWithGit } = await import('./utils/project-creator.js')
+    const { createProjectDirectory } = await import('./utils/project-creator.js')
     try {
-      const project = await createDirectoryWithGit(name, workdir)
+      const project = await createProjectDirectory(name, workdir)
       res.status(201).json({ project })
     } catch (err) {
       const eaccError = err as Error & { code?: string; cause?: unknown }
@@ -848,25 +856,13 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     res.json({ sessions: sessionManager.listHomeSessions() })
   })
 
-  app.post('/api/sessions', async (req, res) => {
-    const { projectId, title } = req.body
-    if (!projectId) {
-      return res.status(400).json({ error: 'projectId is required' })
-    }
-
-    const project = sessionManager.getProject(projectId)
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' })
-    }
-
-    // Inherit provider/model from defaultModelSelection config
-    const { providerId, model } = parseDefaultModelSelection(config.defaultModelSelection)
-
-    // maxTokens is no longer passed - it comes from providerManager.getCurrentModelContext() at query time
-    const session = sessionManager.createSession(projectId, title, providerId ?? null, model ?? null)
-
-    wssExports.broadcastForProject(projectId, session.id, {
-      type: 'session.created',
+  /**
+   * Build the session.created broadcast message shared by the create and
+   * import routes, so the payload shape cannot drift between them.
+   */
+  function buildSessionCreatedMessage(session: import('../shared/types.js').Session) {
+    return {
+      type: 'session.created' as const,
       sessionId: session.id,
       payload: {
         session: {
@@ -887,7 +883,27 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
           messageCount: session.messageCount ?? session.messages.length,
         },
       },
-    })
+    }
+  }
+
+  app.post('/api/sessions', async (req, res) => {
+    const { projectId, title } = req.body
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' })
+    }
+
+    const project = sessionManager.getProject(projectId)
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    // Inherit provider/model from defaultModelSelection config
+    const { providerId, model } = parseDefaultModelSelection(config.defaultModelSelection)
+
+    // maxTokens is no longer passed - it comes from providerManager.getCurrentModelContext() at query time
+    const session = sessionManager.createSession(projectId, title, providerId ?? null, model ?? null)
+
+    wssExports.broadcastForProject(projectId, session.id, buildSessionCreatedMessage(session))
     res.status(201).json({ session: toClientSession(session) })
   })
 
@@ -1341,6 +1357,22 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
 
     sessionManager.setDangerLevel(sessionId, dangerLevel)
+
+    // Entering dangerous mode resolves every pending confirmation for the
+    // session (except git_no_verify, which always requires explicit consent),
+    // so sibling tool calls of the same batch continue without prompting again.
+    if (dangerLevel === 'dangerous') {
+      const { autoApprovePendingConfirmationsForSession } = await import('./tools/index.js')
+      const approvedCallIds = autoApprovePendingConfirmationsForSession(sessionId)
+      for (const callId of approvedCallIds) {
+        wssExports.broadcastForSession(sessionId, {
+          type: 'session.confirmation_resolved',
+          sessionId,
+          payload: { sessionId, callId },
+        })
+      }
+    }
+
     const updatedSession = sessionManager.getSession(sessionId)
 
     res.json({ session: toClientSession(updatedSession!) })
@@ -1634,6 +1666,42 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     res.json({ success: true, queuedMessages })
   })
 
+  // Chat pause (cooperative — pauses the NEXT LLM request, never aborts the current one)
+  app.post('/api/sessions/:id/pause', async (req, res) => {
+    const sessionId = req.params.id
+    const session = sessionManager.getSession(sessionId)
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+
+    if (!session.isRunning) {
+      return res.status(409).json({ error: 'Session is not running' })
+    }
+
+    const ok = sessionManager.requestPause(sessionId)
+    if (!ok) {
+      return res.status(409).json({ error: 'A pause is already in progress' })
+    }
+
+    res.json({ success: true, pauseState: sessionManager.getPauseState(sessionId) })
+  })
+
+  // Chat resume (cancels a pending pause, or releases a paused agent)
+  app.post('/api/sessions/:id/resume', async (req, res) => {
+    const sessionId = req.params.id
+    const session = sessionManager.getSession(sessionId)
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+
+    const ok = sessionManager.requestResume(sessionId)
+    if (!ok) {
+      return res.status(409).json({ error: 'Nothing to resume' })
+    }
+
+    res.json({ success: true, pauseState: sessionManager.getPauseState(sessionId) })
+  })
+
   // Truncate session messages at a given index
   app.post('/api/sessions/:id/truncate', async (req, res) => {
     const sessionId = req.params.id as string
@@ -1727,6 +1795,49 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         return res.status(404).json({ error: message })
       }
       return res.status(500).json({ error: message })
+    }
+  })
+
+  // Export: download a session as a self-contained JSON document
+  app.get('/api/sessions/:id/export', async (req, res) => {
+    const sessionId = req.params.id as string
+    const session = sessionManager.getSession(sessionId)
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+
+    try {
+      const { buildSessionExport } = await import('./session/export-import.js')
+      const payload = buildSessionExport(sessionManager, sessionId)
+      const filename = `${(payload.session.title ?? 'session').replace(/[^a-zA-Z0-9-_]/g, '_')}.openfox-session.json`
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      return res.json(payload)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return res.status(500).json({ error: message })
+    }
+  })
+
+  // Import: create a session in a project from an export document
+  app.post('/api/sessions/import', async (req, res) => {
+    const { projectId, payload } = req.body
+    if (typeof projectId !== 'string' || !projectId) {
+      return res.status(400).json({ error: 'projectId is required' })
+    }
+    if (payload === undefined || payload === null) {
+      return res.status(400).json({ error: 'payload is required' })
+    }
+
+    try {
+      const newSession = await sessionManager.importSession(projectId, payload)
+      wssExports.broadcastForProject(projectId, newSession.id, buildSessionCreatedMessage(newSession))
+      return res.status(201).json({ session: toClientSession(newSession) })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('Project not found')) {
+        return res.status(404).json({ error: message })
+      }
+      return res.status(400).json({ error: message })
     }
   })
 
@@ -1878,6 +1989,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       defaultModelSelection: config.defaultModelSelection,
       visionFallback,
       platform: platformInfo,
+      locale: (await import('./db/settings.js')).getSetting('display.locale') ?? 'automatic',
     })
   })
 
@@ -1927,6 +2039,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       ...(m.reasoningEffortOverride !== undefined && { reasoningEffortOverride: m.reasoningEffortOverride }),
       ...(m.modes !== undefined && { modes: m.modes }),
       ...(m.supportsVision !== undefined && { supportsVision: m.supportsVision }),
+      ...(m.pricing !== undefined && { pricing: m.pricing }),
       ...(m.thinkingEnabled !== undefined && { thinkingEnabled: m.thinkingEnabled }),
       ...(m.thinkingLevel !== undefined && { thinkingLevel: m.thinkingLevel }),
       ...(m.nonThinkingEnabled !== undefined && { nonThinkingEnabled: m.nonThinkingEnabled }),
@@ -2107,6 +2220,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
             defaultTopP: profile.topP,
             defaultTopK: profile.topK,
             defaultMaxTokens: profile.defaultMaxTokens,
+            ...(m.pricing ? { pricing: m.pricing } : {}),
             ...(catalog ? { reasoningEfforts: catalog.reasoningEfforts } : {}),
           }
         }),
@@ -2584,6 +2698,11 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     providerManager.setProviders(updatedConfig.providers, updatedConfig.defaultModelSelection ?? undefined)
     config.defaultModelSelection = updatedConfig.defaultModelSelection
 
+    // Sessions pinned to this provider would keep an id that no longer resolves.
+    const clearedSessions = clearSessionsForDeletedProvider(id)
+    if (clearedSessions > 0) {
+      logger.info('Cleared provider from sessions of deleted provider', { providerId: id, sessions: clearedSessions })
+    }
     const { pruneFavoriteModels } = await import('./db/settings.js')
     pruneFavoriteModels(updatedConfig.providers)
 
@@ -3599,8 +3718,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     sessionManager,
     listProjects: () => listProjects(),
     createProject: async (name, workdir) => {
-      const { createDirectoryWithGit } = await import('./utils/project-creator.js')
-      return createDirectoryWithGit(name, workdir)
+      const { createProjectDirectory } = await import('./utils/project-creator.js')
+      return createProjectDirectory(name, workdir)
     },
     deleteProject: (projectId) => {
       const project = getProject(projectId)

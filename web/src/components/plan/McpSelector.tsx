@@ -2,6 +2,7 @@ import { ScrollArea } from '../shared/ScrollArea'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { ChevronDownIcon } from '../shared/icons'
 import { Toggle } from '../shared/Toggle'
+import { useT } from '../../hooks/useT'
 import { useSessionStore } from '../../stores/session'
 import { useResource } from '../../hooks/useResource'
 import { mcpServersResource } from '../../lib/resources'
@@ -10,6 +11,7 @@ import { authFetch } from '../../lib/api'
 import { useClickOutside } from '../../hooks/useClickOutside'
 
 export function McpSelector() {
+  const t = useT()
   const { data: serversData, refresh: refreshServers } = useResource(mcpServersResource)
   const servers = serversData ?? []
   const currentSession = useSessionStore((s) => s.currentSession)
@@ -104,7 +106,14 @@ export function McpSelector() {
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors group"
-        title={connectedCount > 0 ? `${connectedCount} MCP server(s) active` : 'No MCP server active'}
+        title={
+          connectedCount > 0
+            ? t(
+                { en: '{{count}} MCP server(s) active', fr: '{{count}} serveur(s) MCP actif(s)' },
+                { count: connectedCount },
+              )
+            : t({ en: 'No MCP server active', fr: 'Aucun serveur MCP actif' })
+        }
       >
         <span className="text-sm text-accent-primary whitespace-nowrap">
           {connectedCount > 0 ? `● ${connectedCount} MCP (${formatTokens(totalTokens)})` : 'MCP'}
@@ -116,7 +125,9 @@ export function McpSelector() {
         <div className="absolute bottom-full right-0 mb-1 min-w-72 max-w-[100vw] bg-bg-secondary border border-border rounded-lg shadow-lg z-50 flex flex-col max-h-[80vh]">
           <ScrollArea className="flex-1 min-h-0">
             {servers.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-text-muted text-center">No MCP servers configured</div>
+              <div className="px-4 py-3 text-sm text-text-muted text-center">
+                {t({ en: 'No MCP servers configured', fr: 'Aucun serveur MCP configuré' })}
+              </div>
             ) : (
               servers.map((server) => {
                 const effectiveDisabled = isServerEffectiveDisabled(server)
@@ -132,8 +143,17 @@ export function McpSelector() {
                           <span className="text-sm font-medium text-text-primary truncate">{server.name}</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-text-muted ml-3.5">
-                          <span>{server.tools.length} tools</span>
-                          {server.estimatedTokens > 0 && <span>{formatTokens(server.estimatedTokens)} tokens</span>}
+                          <span>
+                            {t({ en: '{{count}} tools', fr: '{{count}} outils' }, { count: server.tools.length })}
+                          </span>
+                          {server.estimatedTokens > 0 && (
+                            <span>
+                              {t(
+                                { en: '{{count}} tokens', fr: '{{count}} jetons' },
+                                { count: formatTokens(server.estimatedTokens) },
+                              )}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -153,7 +173,12 @@ export function McpSelector() {
             {toggleError ? (
               <div className="text-xs text-accent-error">{toggleError}</div>
             ) : (
-              <span className="text-xs text-text-muted">{servers.length} server(s) configured</span>
+              <span className="text-xs text-text-muted">
+                {t(
+                  { en: '{{count}} server(s) configured', fr: '{{count}} serveur(s) configuré(s)' },
+                  { count: servers.length },
+                )}
+              </span>
             )}
           </div>
         </div>

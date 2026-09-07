@@ -28,6 +28,16 @@ export type ToolMode = string
 // Workflow phase shown to user (more granular than mode)
 export type SessionPhase = 'plan' | 'build' | 'verification' | 'waiting' | 'blocked' | 'done'
 
+/**
+ * Pause state of a running session (cooperative pause — never aborts the
+ * in-flight LLM request, only gates the NEXT one):
+ * - none: no pause requested
+ * - pending: pause requested, agent is finishing the current LLM request
+ * - paused: agent is blocked before the next LLM request, waiting for resume
+ * - resuming: resume requested, agent is about to issue the next LLM request
+ */
+export type PauseState = 'none' | 'pending' | 'paused' | 'resuming'
+
 // ============================================================================
 // Workflow Types
 // ============================================================================
@@ -90,6 +100,7 @@ export interface Session {
   mode: SessionMode
   phase: SessionPhase // Current workflow phase
   isRunning: boolean // Is the agent actively working?
+  pauseState?: PauseState // Cooperative pause state (default 'none' when absent)
   providerId?: string | null // Per-session provider override
   providerModel?: string | null // Per-session model override
   providerReasoningEffort?: string | null // Per-session reasoning effort override (with providerModel)
@@ -667,6 +678,22 @@ export type LlmBackend =
 /** Extended backend type including cloud providers */
 export type ProviderBackend = LlmBackend
 
+/** Model pricing metadata per 1M tokens or credits */
+export interface ModelPricing {
+  /** Cost in credits or USD per 1M input (prompt) tokens */
+  input?: number
+  /** Cost in credits or USD per 1M output (completion) tokens */
+  output?: number
+  /** Cost per 1M cache read tokens */
+  cacheRead?: number
+  /** Cost per 1M cache write tokens */
+  cacheWrite?: number
+  /** Discount percentage (e.g. 60 or "60% off") */
+  discount?: number | string
+  /** Currency / pricing unit for this model's rates (e.g. 'usd' | 'eur' | 'tokens') */
+  currency?: 'usd' | 'eur' | 'tokens'
+}
+
 /** Model configuration with context window */
 export interface ModelConfig {
   id: string // Model ID exposed in OpenFox (may be a projected mode such as "gpt-5.6-sol-fast")
@@ -712,6 +739,8 @@ export interface ModelConfig {
   defaultTopP?: number
   defaultTopK?: number
   defaultMaxTokens?: number
+  /** Pricing per 1M tokens or credits */
+  pricing?: ModelPricing
 }
 
 /** LLM provider configuration */

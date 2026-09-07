@@ -14,11 +14,28 @@ vi.mock('../../lib/ws', () => ({
   },
 }))
 
-vi.mock('wouter', () => ({
-  Link: ({ children, href, className }: any) => `<a href="${href}" class="${className}">${children}</a>`,
-  useLocation: vi.fn(() => ['/', vi.fn()]),
-  useSearch: () => '',
-}))
+vi.mock('wouter', () => {
+  const useLocation = vi.fn<() => [string, (to: string) => void]>(() => ['/', () => {}])
+  return {
+    Link: ({ children, href, className, onClick }: any) => {
+      const [, navigate] = useLocation()
+      return (
+        <a
+          href={href}
+          className={className}
+          onClick={(e) => {
+            onClick?.(e)
+            navigate(href)
+          }}
+        >
+          {children}
+        </a>
+      )
+    },
+    useLocation,
+    useSearch: () => '',
+  }
+})
 
 const projectState = vi.hoisted(() => ({
   currentProject: null as { id: string; name: string; workdir: string } | null,
@@ -270,6 +287,157 @@ describe('Header', () => {
     const { Header } = await import('./Header')
     const container = render(<Header />)
     expect(container.textContent).toContain('My Project')
+  })
+
+  it('hides the leading separator before the project dropdown on mobile', async () => {
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
+
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    const separators = Array.from(container.querySelectorAll('span')).filter(
+      (s) => s.textContent === '/' && s.className.includes('text-text-muted'),
+    )
+    expect(separators.length).toBe(2)
+    // The leading separator (between OpenFox and the project) is desktop-only;
+    // the one between project and session shows at all breakpoints.
+    expect(separators[0]!.className).toContain('hidden')
+    expect(separators[1]!.className).not.toContain('hidden')
+  })
+
+  it('wraps the project name in a truncating span so the header cannot overflow', async () => {
+    projectState.currentProject = { id: 'p1', name: 'My Project', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'My Project', workdir: '/tmp' }]
+
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    const trigger = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('My Project'))
+    expect(trigger).toBeTruthy()
+    const label = trigger!.querySelector('span.truncate')
+    expect(label).toBeTruthy()
+    expect(label!.textContent).toContain('My Project')
+  })
+
+  it('wraps the session label in a truncating span so the header cannot overflow', async () => {
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
+
+    const { useSessionStore } = await import('../../stores/session')
+    ;(useSessionStore as unknown as MockStore).setState({
+      currentSession: { id: 's1', metadata: { title: 'A very long session title' } },
+      sessions: [
+        { id: 's1', projectId: 'p1', title: 'A very long session title', updatedAt: new Date().toISOString() },
+      ],
+    })
+
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/p/p1/s/s1', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    const btn = container.querySelector('[data-testid="header-session-dropdown"]')
+    expect(btn).toBeTruthy()
+    const label = btn!.querySelector('span.truncate')
+    expect(label).toBeTruthy()
+    expect(label!.textContent).toContain('A very long session title')
+  })
+
+  it('keeps the project dropdown trigger compact: sized chevron and a label truncation floor', async () => {
+    projectState.currentProject = { id: 'p1', name: 'My Project', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'My Project', workdir: '/tmp' }]
+
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    const trigger = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('My Project'))
+    expect(trigger).toBeTruthy()
+    const chevron = trigger!.querySelector('svg')
+    expect(chevron?.getAttribute('class')).toContain('w-3')
+    expect(chevron?.getAttribute('class')).toContain('flex-shrink-0')
+    const label = trigger!.querySelector('span.truncate')
+    expect(label?.getAttribute('class')).toContain('max-w-[')
+  })
+
+  it('keeps the separator stable with a non-shrinking project dropdown wrapper', async () => {
+    projectState.currentProject = { id: 'p1', name: 'My Project', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'My Project', workdir: '/tmp' }]
+
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/p/p1/', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    const trigger = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('My Project'))
+    expect(trigger).toBeTruthy()
+    // button -> trigger wrapper -> dropdown root -> the non-shrinking flex wrapper
+    const wrapper = trigger!.parentElement!.parentElement!.parentElement!
+    expect(wrapper.className).toContain('flex-shrink-0')
+  })
+
+  it('keeps the session dropdown trigger compact: sized chevron and a label truncation floor', async () => {
+    projectState.currentProject = { id: 'p1', name: 'P', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'P', workdir: '/tmp' }]
+
+    const { useSessionStore } = await import('../../stores/session')
+    ;(useSessionStore as unknown as MockStore).setState({
+      currentSession: { id: 's1', metadata: { title: 'A very long session title' } },
+      sessions: [
+        { id: 's1', projectId: 'p1', title: 'A very long session title', updatedAt: new Date().toISOString() },
+      ],
+    })
+
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/p/p1/s/s1', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    const btn = container.querySelector('[data-testid="header-session-dropdown"]')
+    expect(btn).toBeTruthy()
+    const chevron = btn!.querySelector('svg')
+    expect(chevron?.getAttribute('class')).toContain('w-3')
+    expect(chevron?.getAttribute('class')).toContain('flex-shrink-0')
+    const label = btn!.querySelector('span.truncate')
+    expect(label?.getAttribute('class')).toContain('min-w-[')
+    expect(btn!.getAttribute('class')).toContain('w-full')
+  })
+
+  it('offers a Home footer item in the project dropdown that navigates to the homepage', async () => {
+    projectState.currentProject = { id: 'p1', name: 'My Project', workdir: '/tmp' }
+    projectState.projects = [{ id: 'p1', name: 'My Project', workdir: '/tmp' }]
+
+    const { useLocation } = await import('wouter')
+    const setLocation = vi.fn()
+    vi.mocked(useLocation).mockReturnValue(['/p/p1/', setLocation])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+
+    const projectTrigger = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('My Project'),
+    )
+    expect(projectTrigger).toBeTruthy()
+    act(() => {
+      projectTrigger!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+
+    const menu = document.querySelector('[data-testid="session-dropdown-menu"]')
+    expect(menu).toBeTruthy()
+    const homeLink = Array.from(menu!.querySelectorAll('a')).find((a) => a.textContent?.includes('Home'))
+    expect(homeLink).toBeTruthy()
+    expect(homeLink!.getAttribute('href')).toBe('/')
+
+    act(() => {
+      homeLink!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    expect(setLocation).toHaveBeenCalledWith('/')
   })
 
   it('shows terminal toggle on project page', async () => {

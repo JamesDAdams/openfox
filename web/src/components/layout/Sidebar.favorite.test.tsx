@@ -78,6 +78,11 @@ vi.mock('../shared/icons', () => ({
   XCloseIcon: () => <span data-testid="xclose-icon">✕</span>,
   StarIcon: () => <span data-testid="star-icon">☆</span>,
   StarFilledIcon: () => <span data-testid="star-filled-icon">★</span>,
+  DownloadIcon: () => <span data-testid="download-icon" />,
+  UploadIcon: () => <span data-testid="upload-icon" />,
+  GearIcon: () => <span data-testid="gear-icon" />,
+  TrashIcon: () => <span data-testid="trash-icon" />,
+  EditSmallIcon: () => <span data-testid="edit-small-icon" />,
 }))
 
 function session(overrides: Partial<SessionSummary> & { id: string }): SessionSummary {

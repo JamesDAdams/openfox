@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react'
 import { useLocation } from 'wouter'
 import { useProjectStore } from '../stores/project'
 import { useProjects } from '../hooks/useProjects'
+import { useT } from '../hooks/useT'
 import { Modal } from './shared/Modal'
 import { Button } from './shared/Button'
 import { FolderIcon, TrashIcon } from './shared/icons'
@@ -19,6 +20,7 @@ interface OpenProjectModalProps {
 }
 
 export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
+  const t = useT()
   const [, navigate] = useLocation()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const baseWorkdir = useWorkdir()
@@ -96,12 +98,12 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Open Project"
+      title={t({ en: 'Open Project', fr: 'Ouvrir un projet' })}
       size="xl"
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
-            Close
+            {t({ en: 'Close', fr: 'Fermer' })}
           </Button>
         </div>
       }
@@ -109,13 +111,20 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
       <div className="flex flex-col sm:flex-row flex-1 -m-4">
         <div className="w-full sm:w-1/2 border-b sm:border-b-0 sm:border-r border-border flex flex-col max-h-[40vh] sm:max-h-[50vh]">
           <div className="p-3 border-b border-border bg-bg-tertiary/30 shrink-0">
-            <h3 className="font-medium text-sm text-text-secondary">Recent Projects</h3>
+            <h3 className="font-medium text-sm text-text-secondary">
+              {t({ en: 'Recent Projects', fr: 'Projets récents' })}
+            </h3>
           </div>
           <ScrollArea className="flex-1">
             {projects.length === 0 ? (
               <div className="p-6 text-center text-text-muted text-sm">
-                <p className="mb-2">No recent projects</p>
-                <p className="text-xs">Click "Create new project" to add one</p>
+                <p className="mb-2">{t({ en: 'No recent projects', fr: 'Aucun projet récent' })}</p>
+                <p className="text-xs">
+                  {t({
+                    en: 'Click "Create new project" to add one',
+                    fr: 'Cliquez sur « Créer un nouveau projet » pour en ajouter un',
+                  })}
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -137,7 +146,7 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
                     <button
                       onClick={(e) => handleDeleteClick(project, e)}
                       className="text-accent-error/70 hover:text-accent-error p-1"
-                      title="Delete project"
+                      title={t({ en: 'Delete project', fr: 'Supprimer le projet' })}
                     >
                       <TrashIcon className="w-4 h-4" />
                     </button>
@@ -151,14 +160,14 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
         <div className="w-full sm:w-1/2 flex flex-col items-center justify-center p-6 sm:p-8 text-center">
           <div className="flex flex-col gap-3 w-full max-w-sm">
             <Button variant="primary" onClick={() => setShowBrowser(true)}>
-              Select existing project
+              {t({ en: 'Select existing project', fr: 'Sélectionner un projet existant' })}
             </Button>
             <Button
               variant="secondary"
               onClick={() => setShowCreateModal(true)}
               data-testid="open-project-create-button"
             >
-              Create new project
+              {t({ en: 'Create new project', fr: 'Créer un nouveau projet' })}
             </Button>
           </div>
         </div>

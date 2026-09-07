@@ -12,6 +12,7 @@ import { isDirectoryEntry } from '../utils/fs.js'
 import type { ProviderRegistry } from '../providers/plugins/registry.js'
 import type { Config } from '../../shared/types.js'
 import { getSetting, setSetting } from '../db/settings.js'
+import { serverT } from '../i18n.js'
 
 interface Logger {
   debug: (message: string, context?: Record<string, unknown>) => void
@@ -77,17 +78,17 @@ export function createPluginRoutes(options: {
   router.post('/install', async (req, res) => {
     const { githubUrl } = req.body as { githubUrl?: string }
     if (!githubUrl || typeof githubUrl !== 'string') {
-      return res.status(400).json({ error: 'githubUrl is required' })
+      return res.status(400).json({ error: serverT({ en: 'githubUrl is required', fr: 'githubUrl est requis' }) })
     }
 
     const parsed = githubUrl.match(/github\.com\/([^/]+)\/([^/]+?)(?:\/|$)/)
     if (!parsed) {
-      return res.status(400).json({ error: 'Invalid GitHub URL' })
+      return res.status(400).json({ error: serverT({ en: 'Invalid GitHub URL', fr: 'URL GitHub invalide' }) })
     }
 
     const repoName = parsed[2]!.replace(/\.git$/, '')
     if (!/^[a-zA-Z0-9_-]+$/.test(repoName)) {
-      return res.status(400).json({ error: 'Invalid repository name' })
+      return res.status(400).json({ error: serverT({ en: 'Invalid repository name', fr: 'Nom de dépôt invalide' }) })
     }
 
     const pluginsDir = join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins')
@@ -97,7 +98,12 @@ export function createPluginRoutes(options: {
     try {
       await execFileP('mkdir', ['-p', pluginsDir], { timeout: 5000 })
     } catch {
-      return res.status(500).json({ error: 'Failed to create plugins directory' })
+      return res.status(500).json({
+        error: serverT({
+          en: 'Failed to create plugins directory',
+          fr: 'Échec de la création du répertoire des plugins',
+        }),
+      })
     }
 
     let gitOk = false
@@ -108,7 +114,12 @@ export function createPluginRoutes(options: {
       // fall through
     }
     if (!gitOk) {
-      return res.status(500).json({ error: 'git is not installed or not found in PATH' })
+      return res.status(500).json({
+        error: serverT({
+          en: 'git is not installed or not found in PATH',
+          fr: 'git n’est pas installé ou introuvable dans le PATH',
+        }),
+      })
     }
 
     try {
@@ -122,7 +133,10 @@ export function createPluginRoutes(options: {
         await execFileP('npm', ['install', '--no-audit', '--no-fund'], { cwd: targetDir, timeout: 120000 })
         await execFileP('npm', ['run', 'build'], { cwd: targetDir, timeout: 120000 })
       } catch (err) {
-        loadError = 'Failed to install/build plugin dependencies'
+        loadError = serverT({
+          en: 'Failed to install/build plugin dependencies',
+          fr: 'Échec de l’installation/du build des dépendances du plugin',
+        })
         logger.error('Plugin build failed', { repoName, error: String(err) })
       }
 
@@ -133,15 +147,27 @@ export function createPluginRoutes(options: {
           const apiVersion = manifest.openfox?.apiVersion as number | undefined
 
           if (!pluginEntry || !manifest.name) {
-            loadError = 'Plugin package.json is missing openfox.plugin or name field'
+            loadError = serverT({
+              en: 'Plugin package.json is missing openfox.plugin or name field',
+              fr: 'Le package.json du plugin ne contient pas le champ openfox.plugin ou name',
+            })
           } else if (apiVersion !== 1) {
-            loadError = `Unsupported plugin API version: ${String(apiVersion)}`
+            loadError = serverT(
+              {
+                en: 'Unsupported plugin API version: {{version}}',
+                fr: 'Version d’API de plugin non prise en charge : {{version}}',
+              },
+              { version: String(apiVersion) },
+            )
           } else {
             const mod = (await import(pathToFileURL(join(targetDir, pluginEntry)).href)) as {
               register?: (registry: ProviderPluginRegistry) => void | Promise<void>
             }
             if (typeof mod.register !== 'function') {
-              loadError = 'Plugin does not export register(registry)'
+              loadError = serverT({
+                en: 'Plugin does not export register(registry)',
+                fr: 'Le plugin n’exporte pas register(registry)',
+              })
             } else {
               const diagnostic: ProviderPluginDiagnostic = {
                 packageName: manifest.name,
@@ -188,7 +214,10 @@ export function createPluginRoutes(options: {
             }
           }
         } catch (err) {
-          loadError = err instanceof Error ? err.message : 'Failed to load plugin'
+          loadError =
+            err instanceof Error
+              ? err.message
+              : serverT({ en: 'Failed to load plugin', fr: 'Échec du chargement du plugin' })
           logger.error('Plugin runtime load failed', { repoName, error: loadError })
         }
       }
@@ -196,7 +225,7 @@ export function createPluginRoutes(options: {
       res.json({ success: true, loaded, loadError, path: targetDir })
     } catch (err) {
       await rm(tmpDir, { recursive: true, force: true })
-      const msg = err instanceof Error ? err.message : 'Clone failed'
+      const msg = err instanceof Error ? err.message : serverT({ en: 'Clone failed', fr: 'Échec du clonage' })
       logger.error('Plugin install failed', { githubUrl, error: msg })
       res.status(500).json({ error: msg })
     }
@@ -378,7 +407,8 @@ export function createPluginRoutes(options: {
 
   router.get('/:name/open-folder', async (req, res) => {
     const name = req.params.name as string
-    if (!/^[a-zA-Z0-9_-]+$/.test(name)) return res.status(400).json({ error: 'Invalid plugin name' })
+    if (!/^[a-zA-Z0-9_-]+$/.test(name))
+      return res.status(400).json({ error: serverT({ en: 'Invalid plugin name', fr: 'Nom de plugin invalide' }) })
     const targetDir = join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins', name)
     await openFolderRoute(targetDir, res)
   })
@@ -386,7 +416,7 @@ export function createPluginRoutes(options: {
   router.delete('/:name', async (req, res) => {
     const name = req.params.name as string
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-      return res.status(400).json({ error: 'Invalid plugin name' })
+      return res.status(400).json({ error: serverT({ en: 'Invalid plugin name', fr: 'Nom de plugin invalide' }) })
     }
     const targetDir = join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins', name)
     try {
@@ -396,7 +426,12 @@ export function createPluginRoutes(options: {
       }
       res.json({ success: true })
     } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to remove plugin' })
+      res.status(500).json({
+        error:
+          err instanceof Error
+            ? err.message
+            : serverT({ en: 'Failed to remove plugin', fr: 'Échec de la suppression du plugin' }),
+      })
     }
   })
 

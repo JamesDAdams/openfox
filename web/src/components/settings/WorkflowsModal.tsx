@@ -39,6 +39,7 @@ import { TransitionPanel } from './workflows/TransitionPanel'
 import { CONDITION_LABELS, CONDITION_TYPES, resolveAgent } from './workflows/layout'
 import { useWorkflowZoom } from './workflows/useWorkflowZoom'
 import type { WorkflowScope } from '@shared/types.js'
+import { useT } from '../../hooks/useT'
 
 interface WorkflowsModalProps {
   isOpen: boolean
@@ -70,6 +71,7 @@ const labelClass = 'block text-[11px] text-text-secondary mb-0.5'
 const DEFAULT_STEPS: WorkflowStep[] = []
 
 export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: WorkflowsModalProps) {
+  const t = useT()
   const { data: workflowsData, loading } = useResource(workflowsResource, projectDir)
   const defaults = workflowsData?.defaults ?? []
   const userItems = workflowsData?.userItems ?? []
@@ -121,7 +123,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                 ...workflow,
                 metadata: {
                   ...workflow.metadata,
-                  name: workflow.metadata.name + ' (copy)',
+                  name: workflow.metadata.name + ' ' + t({ en: '(copy)', fr: '(copie)' }),
                   id: `${initialEditId}-copy-${Date.now()}`,
                 },
               },
@@ -187,23 +189,31 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
   const doSave = async () => {
     const id = editingId ?? formId
     if (!id || !formName) {
-      setFormError('Name is required.')
+      setFormError(t({ en: 'Name is required.', fr: 'Le nom est requis.' }))
       return false
     }
     if (formSteps.length === 0) {
-      setFormError('Add at least one step.')
+      setFormError(t({ en: 'Add at least one step.', fr: 'Ajoutez au moins une étape.' }))
       return false
     }
     const invalidParam = formParameters.find((p) => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(p.id))
     if (invalidParam) {
-      setFormError(`Invalid parameter ID "${invalidParam.id}". Use letters, digits, and underscores only.`)
+      setFormError(
+        t(
+          {
+            en: 'Invalid parameter ID "{{id}}". Use letters, digits, and underscores only.',
+            fr: 'ID de paramètre invalide « {{id}} ». Utilisez uniquement des lettres, chiffres et tirets bas.',
+          },
+          { id: invalidParam.id },
+        ),
+      )
       return false
     }
     let entry = formEntryStep
     if (!entry || !formSteps.some((s) => s.id === entry)) {
       entry = formSteps.find((s) => s.id)?.id ?? ''
       if (!entry) {
-        setFormError('All steps need an ID.')
+        setFormError(t({ en: 'All steps need an ID.', fr: 'Toutes les étapes nécessitent un ID.' }))
         return false
       }
       setFormEntryStep(entry)
@@ -229,7 +239,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
       : await createWorkflow(workflow, formDestination, projectDir)
     setSaving(false)
     if (!result.success) {
-      setFormError(result.error ?? 'Failed to save.')
+      setFormError(result.error ?? t({ en: 'Failed to save.', fr: 'Échec de l’enregistrement.' }))
       return false
     }
     if (!editingId) setEditingId(id)
@@ -274,7 +284,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
         ...content,
         metadata: {
           ...content.metadata,
-          name: content.metadata.name + ' (copy)',
+          name: content.metadata.name + ' ' + t({ en: '(copy)', fr: '(copie)' }),
           id: `${workflowId}-copy-${Date.now()}`,
         },
       },
@@ -356,7 +366,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
       ...formSteps,
       {
         id,
-        name: defaultAgent?.name ?? 'Agent',
+        name: defaultAgent?.name ?? t({ en: 'Agent', fr: 'Agent' }),
         type: 'agent',
         phase: 'build',
         agentId: defaultAgent?.id ?? 'builder',
@@ -488,7 +498,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
       const entryStepObj = formSteps.find((s) => s.id === formEntryStep)
       return {
         type: 'start' as const,
-        fromLabel: 'Start',
+        fromLabel: t({ en: 'Start', fr: 'Début' }),
         toLabel: entryStepObj ? resolveStepLabel(entryStepObj) : '(none)',
         condition: formStartCondition,
       }
@@ -501,7 +511,12 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
     const transition = step.transitions[transIdx]
     if (!transition) return null
     const toStep = formSteps.find((s) => s.id === transition.goto)
-    const toLabel = transition.goto === '$done' ? 'Done' : toStep ? resolveStepLabel(toStep) : transition.goto
+    const toLabel =
+      transition.goto === '$done'
+        ? t({ en: 'Done', fr: 'Terminé' })
+        : toStep
+          ? resolveStepLabel(toStep)
+          : transition.goto
     return {
       type: 'step' as const,
       fromLabel: resolveStepLabel(step),
@@ -523,27 +538,27 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={handleCancelEdit}>
-              Close
+              {t({ en: 'Close', fr: 'Fermer' })}
             </Button>
             {isReadOnly ? (
               <Button
                 variant="primary"
                 onClick={() => {
-                  setFormName(formName + ' (copy)')
+                  setFormName(formName + ' ' + t({ en: '(copy)', fr: '(copie)' }))
                   setFormId(`${editingId}-copy-${Date.now()}`)
                   setEditingId(null)
                   setIsReadOnly(false)
                 }}
               >
-                Duplicate & Customize
+                {t({ en: 'Duplicate & Customize', fr: 'Dupliquer et personnaliser' })}
               </Button>
             ) : (
               <>
                 <Button variant="primary" onClick={handleSave}>
-                  Save
+                  {t({ en: 'Save', fr: 'Enregistrer' })}
                 </Button>
                 <Button variant="primary" onClick={handleSaveAndClose}>
-                  Save & Close
+                  {t({ en: 'Save & Close', fr: 'Enregistrer et fermer' })}
                 </Button>
               </>
             )}
@@ -570,7 +585,9 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
         {/* Parameters */}
         {!isReadOnly && (
           <div className="mb-3 pb-3 border-b border-border">
-            <CollapsibleSection title={`Parameters (${formParameters.length})`}>
+            <CollapsibleSection
+              title={t({ en: 'Parameters ({{n}})', fr: 'Paramètres ({{n}})' }, { n: formParameters.length })}
+            >
               {formParameters.map((p, i) => (
                 <div key={p.id} className="flex items-center gap-2 text-sm">
                   <input
@@ -580,7 +597,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                       next[i] = { ...p, id: e.target.value }
                       setFormParameters(next)
                     }}
-                    placeholder="ID"
+                    placeholder={t({ en: 'ID', fr: 'ID' })}
                     className="w-28 px-2 py-1 bg-bg-tertiary border border-border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-accent-primary"
                   />
                   <input
@@ -590,7 +607,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                       next[i] = { ...p, label: e.target.value }
                       setFormParameters(next)
                     }}
-                    placeholder="Label"
+                    placeholder={t({ en: 'Label', fr: 'Libellé' })}
                     className="w-36 px-2 py-1 bg-bg-tertiary border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-accent-primary"
                   />
                   <input
@@ -600,7 +617,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                       next[i] = { ...p, description: e.target.value || undefined }
                       setFormParameters(next)
                     }}
-                    placeholder="Description"
+                    placeholder={t({ en: 'Description', fr: 'Description' })}
                     className="flex-1 px-2 py-1 bg-bg-tertiary border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-accent-primary"
                   />
                   <label className="flex items-center gap-1 text-[10px] text-text-muted whitespace-nowrap">
@@ -614,7 +631,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                       }}
                       className="rounded border-border"
                     />
-                    Req.
+                    {t({ en: 'Req.', fr: 'Oblig.' })}
                   </label>
                   <div className="flex gap-0.5">
                     <button
@@ -630,8 +647,8 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                       }}
                       disabled={i === 0}
                       className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
-                      title="Move up"
-                      aria-label={`Move ${p.label || p.id} up`}
+                      title={t({ en: 'Move up', fr: 'Monter' })}
+                      aria-label={t({ en: `Move ${p.label || p.id} up`, fr: `Monter ${p.label || p.id}` })}
                     >
                       ▲
                     </button>
@@ -648,8 +665,8 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                       }}
                       disabled={i === formParameters.length - 1}
                       className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30 transition-colors"
-                      title="Move down"
-                      aria-label={`Move ${p.label || p.id} down`}
+                      title={t({ en: 'Move down', fr: 'Descendre' })}
+                      aria-label={t({ en: `Move ${p.label || p.id} down`, fr: `Descendre ${p.label || p.id}` })}
                     >
                       ▼
                     </button>
@@ -657,7 +674,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                   <button
                     onClick={() => setFormParameters(formParameters.filter((_, j) => j !== i))}
                     className="p-1 text-text-muted hover:text-accent-error transition-colors"
-                    title="Remove parameter"
+                    title={t({ en: 'Remove parameter', fr: 'Supprimer le paramètre' })}
                   >
                     ✕
                   </button>
@@ -670,7 +687,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                 }}
                 className="text-xs text-accent-primary hover:text-accent-primary/80 transition-colors"
               >
-                + Add parameter
+                {t({ en: '+ Add parameter', fr: '+ Ajouter un paramètre' })}
               </button>
             </CollapsibleSection>
           </div>
@@ -681,10 +698,12 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
         <div className="flex gap-3" style={{ height: 'calc(90vh - 220px)', minHeight: 300 }}>
           <div className="flex-1 min-w-0 bg-bg-primary/50 border border-border rounded-lg flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50 shrink-0">
-              <span className="text-[10px] text-text-muted uppercase tracking-wider font-medium">Flow</span>
+              <span className="text-[10px] text-text-muted uppercase tracking-wider font-medium">
+                {t({ en: 'Flow', fr: 'Flux' })}
+              </span>
               {!isReadOnly && (
                 <button onClick={addStep} className="text-[11px] text-accent-primary hover:text-accent-primary/80">
-                  + Add Step
+                  {t({ en: '+ Add Step', fr: '+ Ajouter une étape' })}
                 </button>
               )}
             </div>
@@ -725,12 +744,12 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                 />
                 {formSteps.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-8 text-text-muted">
-                    <p className="text-xs mb-2">No steps yet</p>
+                    <p className="text-xs mb-2">{t({ en: 'No steps yet', fr: 'Aucune étape pour l’instant' })}</p>
                     <button
                       onClick={addStep}
                       className="px-3 py-1.5 rounded bg-accent-primary/10 text-accent-primary text-xs hover:bg-accent-primary/20"
                     >
-                      + Add your first step
+                      {t({ en: '+ Add your first step', fr: '+ Ajouter votre première étape' })}
                     </button>
                   </div>
                 )}
@@ -741,13 +760,13 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                     onClick={zoomOut}
                     disabled={!canZoomOut}
                     className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title="Zoom out"
+                    title={t({ en: 'Zoom out', fr: 'Dézoomer' })}
                   >
                     <MinusIcon className="w-3.5 h-3.5" />
                   </button>
                   <span
                     className="px-1.5 py-0.5 text-[10px] text-text-muted tabular-nums select-none"
-                    title="Current zoom"
+                    title={t({ en: 'Current zoom', fr: 'Zoom actuel' })}
                   >
                     {Math.round(zoom * 100)}%
                   </span>
@@ -755,7 +774,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                     onClick={zoomIn}
                     disabled={!canZoomIn}
                     className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title="Zoom in"
+                    title={t({ en: 'Zoom in', fr: 'Zoomer' })}
                   >
                     <PlusIcon className="w-3.5 h-3.5" />
                   </button>
@@ -763,7 +782,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                     onClick={fitToScreen}
                     disabled={isFitted}
                     className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title="Fit to screen"
+                    title={t({ en: 'Fit to screen', fr: 'Ajuster à l’écran' })}
                   >
                     <ZoomFitIcon className="w-3.5 h-3.5" />
                   </button>
@@ -774,30 +793,37 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
 
           <div className="w-[300px] shrink-0 border border-border rounded-lg bg-bg-secondary flex flex-col overflow-hidden">
             <div className="px-3 py-1.5 border-b border-border shrink-0">
-              <span className="text-[10px] text-text-muted uppercase tracking-wider font-medium">Properties</span>
+              <span className="text-[10px] text-text-muted uppercase tracking-wider font-medium">
+                {t({ en: 'Properties', fr: 'Propriétés' })}
+              </span>
             </div>
             <ScrollArea className="p-3 flex-1 min-h-0">
               {isReadOnly && (edgeInfo || selectedStep) ? (
                 <p className="text-text-muted text-xs text-center py-8">
-                  View only — click "Duplicate & Customize" to edit.
+                  {t({
+                    en: 'View only — click "Duplicate & Customize" to edit.',
+                    fr: 'Lecture seule — cliquez sur « Dupliquer et personnaliser » pour modifier.',
+                  })}
                 </p>
               ) : edgeInfo ? (
                 edgeInfo.type === 'start' ? (
                   <div className="space-y-3 text-sm">
                     <div className="flex items-center gap-2">
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-300">
-                        Start
+                        {t({ en: 'Start', fr: 'Début' })}
                       </span>
                     </div>
                     {formEntryStep && (
                       <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-                        <span className="text-text-primary font-medium">Start</span>
+                        <span className="text-text-primary font-medium">{t({ en: 'Start', fr: 'Début' })}</span>
                         <ArrowRightIcon />
                         <span className="text-text-primary font-medium">{edgeInfo.toLabel}</span>
                       </div>
                     )}
                     <div>
-                      <label className={labelClass}>Activation Condition</label>
+                      <label className={labelClass}>
+                        {t({ en: 'Activation Condition', fr: 'Condition d’activation' })}
+                      </label>
                       <select
                         value={formStartCondition.type}
                         onChange={(e) =>
@@ -822,7 +848,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                     </div>
                     {formStartCondition.type === 'step_result' && (
                       <div>
-                        <label className={labelClass}>Result</label>
+                        <label className={labelClass}>{t({ en: 'Result', fr: 'Résultat' })}</label>
                         {formEntryStep &&
                           (() => {
                             const entryStep = formSteps.find((s) => s.id === formEntryStep)
@@ -865,7 +891,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                       formStartCondition.type === 'metadata_all_in') && (
                       <>
                         <div>
-                          <label className={labelClass}>Metadata Key</label>
+                          <label className={labelClass}>{t({ en: 'Metadata Key', fr: 'Clé de métadonnées' })}</label>
                           <input
                             type="text"
                             value={formStartCondition.key ?? ''}
@@ -875,7 +901,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                           />
                         </div>
                         <div>
-                          <label className={labelClass}>Field</label>
+                          <label className={labelClass}>{t({ en: 'Field', fr: 'Champ' })}</label>
                           <input
                             type="text"
                             value={formStartCondition.field ?? ''}
@@ -886,7 +912,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                         </div>
                         {formStartCondition.type === 'metadata_all_match' ? (
                           <div>
-                            <label className={labelClass}>Value</label>
+                            <label className={labelClass}>{t({ en: 'Value', fr: 'Valeur' })}</label>
                             <input
                               type="text"
                               value={formStartCondition.value ?? ''}
@@ -897,7 +923,9 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                           </div>
                         ) : (
                           <div>
-                            <label className={labelClass}>Values (comma-separated)</label>
+                            <label className={labelClass}>
+                              {t({ en: 'Values (comma-separated)', fr: 'Valeurs (séparées par des virgules)' })}
+                            </label>
                             <input
                               type="text"
                               value={formStartCondition.values?.join(', ') ?? ''}
@@ -918,7 +946,10 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                       </>
                     )}
                     <p className="text-text-muted text-[10px]">
-                      Workflow only proceeds when this condition is met. Drag the target handle to change entry step.
+                      {t({
+                        en: 'Workflow only proceeds when this condition is met. Drag the target handle to change entry step.',
+                        fr: 'Le workflow ne continue que si cette condition est remplie. Faites glisser la poignée cible pour changer l’étape d’entrée.',
+                      })}
                     </p>
                   </div>
                 ) : (
@@ -995,9 +1026,9 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                 />
               ) : (
                 <p className="text-text-muted text-xs text-center py-8">
-                  Click a node or edge to edit.
+                  {t({ en: 'Click a node or edge to edit.', fr: 'Cliquez sur un nœud ou une arête pour modifier.' })}
                   <br />
-                  Drag from a port to connect.
+                  {t({ en: 'Drag from a port to connect.', fr: 'Faites glisser depuis un port pour connecter.' })}
                 </p>
               )}
             </ScrollArea>
@@ -1008,16 +1039,19 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Workflows" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={t({ en: 'Workflows', fr: 'Workflows' })} size="lg">
       <CRUDListHeader
-        description="Workflows define multi-step agentic processes with branching transitions."
+        description={t({
+          en: 'Workflows define multi-step agentic processes with branching transitions.',
+          fr: 'Les workflows définissent des processus agentiques en plusieurs étapes avec des transitions conditionnelles.',
+        })}
         onNew={handleNew}
         loading={loading}
         hasItems={defaults.length > 0 || userItems.length > 0 || projectItems.length > 0}
       >
         <div className="space-y-4">
           <WorkflowListSection
-            title="Built-in"
+            title={t({ en: 'Built-in', fr: 'Intégrés' })}
             items={defaults}
             renderActions={(wf) => (
               <>
@@ -1028,12 +1062,12 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
             )}
           />
           <WorkflowListSection
-            title="Custom"
+            title={t({ en: 'Custom', fr: 'Personnalisés' })}
             items={userItems}
             renderActions={(wf) => (
               <>
                 <EditButton onClick={() => handleEdit(wf.id, 'user')}>
-                  <span className="text-[10px]">Edit</span>
+                  <span className="text-[10px]">{t({ en: 'Edit', fr: 'Modifier' })}</span>
                 </EditButton>
                 <DuplicateIcon onClick={() => handleDuplicate(wf.id, 'user')} />
                 {isConfirming(`user:${wf.id}`, 'delete') ? (
@@ -1046,12 +1080,12 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
           />
           {projectItems.length > 0 && (
             <WorkflowListSection
-              title="Project"
+              title={t({ en: 'Project', fr: 'Projet' })}
               items={projectItems}
               renderActions={(wf) => (
                 <>
                   <EditButton onClick={() => handleEdit(wf.id, 'project')}>
-                    <span className="text-[10px]">Edit</span>
+                    <span className="text-[10px]">{t({ en: 'Edit', fr: 'Modifier' })}</span>
                   </EditButton>
                   <DuplicateIcon onClick={() => handleDuplicate(wf.id, 'project')} />
                   {isConfirming(`project:${wf.id}`, 'delete') ? (

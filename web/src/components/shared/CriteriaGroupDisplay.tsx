@@ -4,6 +4,8 @@ import type { ToolCall, MetadataEntry } from '@shared/types.js'
 import { Markdown } from './Markdown'
 import { MetadataStatusIcon } from './MetadataStatusIcon'
 import { formatMetadataKeyLabel } from '../../lib/metadata-keys'
+import { useT } from '../../hooks/useT'
+import type { Translation } from '@shared/i18n/index.js'
 
 interface CriteriaGroupDisplayProps {
   toolCalls: ToolCall[]
@@ -39,6 +41,7 @@ export const CriteriaGroupDisplay = memo(function CriteriaGroupDisplay({
   toolCalls,
   criteria,
 }: CriteriaGroupDisplayProps) {
+  const t = useT()
   if (toolCalls.length === 0) return null
 
   // Build a map for fast criterion lookup by ID
@@ -48,17 +51,17 @@ export const CriteriaGroupDisplay = memo(function CriteriaGroupDisplay({
 
   // Expand each tool call into one or more display rows, preserving order
   const rows = toolCalls.flatMap((tc) =>
-    READ_ACTIONS.has(String(tc.arguments['action'])) ? readRows(tc) : [itemRow(tc, criteriaMap)],
+    READ_ACTIONS.has(String(tc.arguments['action'])) ? readRows(tc, t) : [itemRow(tc, criteriaMap, t)],
   )
 
   const headerTitle = (() => {
-    if (!isSessionMetadata) return 'Acceptance Criteria'
+    if (!isSessionMetadata) return t({ en: 'Acceptance Criteria', fr: 'Critères d’acceptation' })
     const keys = new Set(toolCalls.map((tc) => tc.arguments['key'] as string | undefined).filter(Boolean))
     if (keys.size === 1) {
       const key = keys.values().next().value
-      return key ? formatMetadataKeyLabel(key) : 'Session Data'
+      return key ? formatMetadataKeyLabel(key) : t({ en: 'Session Data', fr: 'Données de session' })
     }
-    return 'Session Data'
+    return t({ en: 'Session Data', fr: 'Données de session' })
   })()
 
   return (
@@ -83,24 +86,30 @@ export const CriteriaGroupDisplay = memo(function CriteriaGroupDisplay({
   )
 })
 
-function itemRow(tc: ToolCall, criteriaMap: Map<string, MetadataEntry>): DisplayRow {
+function itemRow(tc: ToolCall, criteriaMap: Map<string, MetadataEntry>, t: TFunc): DisplayRow {
   return {
     key: tc.id,
-    node: <SingleCriterionRow tc={tc} criteriaMap={criteriaMap} />,
+    node: <SingleCriterionRow tc={tc} criteriaMap={criteriaMap} t={t} />,
   }
 }
+
+type TFunc = (tx: Translation, vars?: Record<string, string | number>) => string
 
 // Expand a read-style session_metadata call (get/list/schema) into display
 // rows. Result output is shown directly instead of being shoehorned into an
 // item row; failed or output-less reads still leave a trace.
-function readRows(tc: ToolCall): DisplayRow[] {
+function readRows(tc: ToolCall, t: TFunc): DisplayRow[] {
   const output = tc.result?.output
 
   if (tc.result && !tc.result.success) {
     return [
       {
         key: `${tc.id}-error`,
-        node: <span className="text-text-muted text-sm">{tc.result.error ?? 'Read failed.'}</span>,
+        node: (
+          <span className="text-text-muted text-sm">
+            {tc.result.error ?? t({ en: 'Read failed.', fr: 'Lecture impossible.' })}
+          </span>
+        ),
       },
     ]
   }
@@ -109,7 +118,7 @@ function readRows(tc: ToolCall): DisplayRow[] {
     return [
       {
         key: `${tc.id}-empty`,
-        node: <span className="text-text-muted text-sm">No output.</span>,
+        node: <span className="text-text-muted text-sm">{t({ en: 'No output.', fr: 'Aucune sortie.' })}</span>,
       },
     ]
   }
@@ -144,7 +153,9 @@ function readRows(tc: ToolCall): DisplayRow[] {
           <>
             <span className="text-accent-success text-sm leading-tight flex-shrink-0">✓</span>
             <div className="flex-1 min-w-0 text-sm">
-              {key ? `Schema loaded for '${key}' metadata` : 'Schema loaded.'}
+              {key
+                ? t({ en: `Schema loaded for '${key}' metadata`, fr: `Schéma chargé pour les métadonnées « ${key} »` })
+                : t({ en: 'Schema loaded.', fr: 'Schéma chargé.' })}
             </div>
           </>
         ),
@@ -170,9 +181,10 @@ function readRows(tc: ToolCall): DisplayRow[] {
 interface SingleCriterionRowProps {
   tc: ToolCall
   criteriaMap: Map<string, MetadataEntry>
+  t: TFunc
 }
 
-function SingleCriterionRow({ tc, criteriaMap }: SingleCriterionRowProps) {
+function SingleCriterionRow({ tc, criteriaMap, t }: SingleCriterionRowProps) {
   const action = tc.arguments['action'] as CriterionMutation | undefined
   const args = tc.arguments
 
@@ -183,14 +195,16 @@ function SingleCriterionRow({ tc, criteriaMap }: SingleCriterionRowProps) {
   const lookedUpCriterion = criterionId ? criteriaMap.get(criterionId) : undefined
 
   const actionPastTense: Partial<Record<CriterionMutation, string>> = {
-    add: 'Added',
-    update: 'Updated',
-    remove: 'Removed',
-    complete: 'Completed',
-    pass: 'Passed',
-    fail: 'Failed',
+    add: t({ en: 'Added', fr: 'Ajouté' }),
+    update: t({ en: 'Updated', fr: 'Mis à jour' }),
+    remove: t({ en: 'Removed', fr: 'Supprimé' }),
+    complete: t({ en: 'Completed', fr: 'Terminé' }),
+    pass: t({ en: 'Passed', fr: 'Réussi' }),
+    fail: t({ en: 'Failed', fr: 'Échoué' }),
   }
-  const fallback = isSessionMetadata ? `${(action && actionPastTense[action]) ?? 'Managed'} item` : 'Criterion updated'
+  const fallback = isSessionMetadata
+    ? `${(action && actionPastTense[action]) ?? t({ en: 'Managed', fr: 'Géré' })} ${t({ en: 'item', fr: 'élément' })}`
+    : t({ en: 'Criterion updated', fr: 'Critère mis à jour' })
   const displayText =
     argDescription ?? lookedUpCriterion?.description ?? (isRemoved && criterionId ? `[${criterionId}]` : fallback)
 
@@ -215,7 +229,8 @@ function SingleCriterionRow({ tc, criteriaMap }: SingleCriterionRowProps) {
         {/* Show reason for complete/pass/fail */}
         {reason && (
           <div className={`mt-1 text-sm ${isFailed ? 'text-accent-error' : 'text-text-muted'}`}>
-            <span className="text-text-muted">└ </span>"{reason}"
+            <span className="text-text-muted">└ </span>
+            {t({ en: '“{{reason}}”', fr: '« {{reason}} »' }, { reason: reason ?? '' })}
           </div>
         )}
       </div>

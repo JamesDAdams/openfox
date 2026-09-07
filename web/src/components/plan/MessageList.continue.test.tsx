@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { MessageList } from './MessageList'
 
 const mockContinueWorkflow = vi.fn()
@@ -15,6 +15,10 @@ const mockState = {
   criteriaPending: false,
   displayItems: [] as Array<Record<string, unknown>>,
   pendingChoices: undefined as Array<{ id: string; label: string; goto: string; nextStepName?: string }> | undefined,
+  llmRetry: null as
+    | { status: 'retrying'; attempt: number; retryInMs: number; error: string }
+    | { status: 'failed'; error: string }
+    | null,
 }
 
 function buildSessionState() {
@@ -64,6 +68,9 @@ function buildSessionState() {
     clearError: vi.fn(),
     continueWorkflow: mockContinueWorkflow,
     exitWorkflow: vi.fn(),
+    retryLLMNow: vi.fn(),
+    retryLLM: vi.fn(),
+    llmRetry: mockState.llmRetry,
   }
 }
 
@@ -241,5 +248,89 @@ describe('MessageList blocked workflow step', () => {
     renderMessageList()
     expect(screen.queryByText(/step stopped before finishing/i)).toBeNull()
     expect(screen.queryByRole('button', { name: /resuming/i })).toBeNull()
+  })
+})
+
+describe('MessageList LLM retry error modal', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
+  beforeEach(() => {
+    mockState.hasWaitingWorkflow = false
+    mockState.isRunning = false
+    mockState.llmRetry = null
+    mockState.displayItems = []
+    mockState.pendingChoices = undefined
+  })
+
+  it('opens the error modal from the retrying pill info button', () => {
+    mockState.isRunning = true
+    mockState.llmRetry = { status: 'retrying', attempt: 2, retryInMs: 4000, error: 'HTTP 500: boom' }
+    renderMessageList()
+
+    fireEvent.click(screen.getByRole('button', { name: /error details/i }))
+
+    expect(screen.getByRole('dialog')).toBeDefined()
+    expect(screen.getByText('HTTP 500: boom')).toBeDefined()
+  })
+
+  it('keeps the modal open when a new retry attempt arrives with a new error', () => {
+    mockState.isRunning = true
+    mockState.llmRetry = { status: 'retrying', attempt: 1, retryInMs: 4000, error: 'boom' }
+    const { rerender } = renderMessageList()
+
+    fireEvent.click(screen.getByRole('button', { name: /error details/i }))
+    expect(screen.getByText('boom')).toBeDefined()
+
+    mockState.llmRetry = { status: 'retrying', attempt: 2, retryInMs: 8000, error: 'rate limited' }
+    rerender(
+      <MessageList
+        displayItems={mockState.displayItems as never}
+        scrollContainerRef={{
+          current: { osInstance: () => null, getElement: () => null },
+        }}
+        highlightedMessageId={null}
+        onLaunchWorkflow={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('rate limited')).toBeDefined()
+    expect(screen.queryByText('boom')).toBeNull()
+  })
+
+  it('closes the modal when the retry state clears', () => {
+    mockState.isRunning = true
+    mockState.llmRetry = { status: 'retrying', attempt: 1, retryInMs: 4000, error: 'boom' }
+    const { rerender } = renderMessageList()
+
+    fireEvent.click(screen.getByRole('button', { name: /error details/i }))
+    expect(screen.getByText('boom')).toBeDefined()
+
+    mockState.llmRetry = null
+    rerender(
+      <MessageList
+        displayItems={mockState.displayItems as never}
+        scrollContainerRef={{
+          current: { osInstance: () => null, getElement: () => null },
+        }}
+        highlightedMessageId={null}
+        onLaunchWorkflow={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByText('boom')).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('opens the error modal from the failed bubble info button and pretty-prints JSON', () => {
+    mockState.isRunning = false
+    mockState.llmRetry = { status: 'failed', error: '{"error":"boom"}' }
+    renderMessageList()
+
+    fireEvent.click(screen.getByRole('button', { name: /error details/i }))
+
+    expect(screen.getByRole('dialog')).toBeDefined()
+    expect(screen.getByText(/"error": "boom"/)).toBeDefined()
   })
 })

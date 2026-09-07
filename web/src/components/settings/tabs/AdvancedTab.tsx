@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useLocation } from 'wouter'
 import { authFetch } from '../../../lib/api'
+import { useT } from '../../../hooks/useT'
 import { Button } from '../../shared/Button'
 import { Input } from '../../shared/Input'
 import { Toggle } from '../../shared/Toggle'
@@ -15,9 +16,11 @@ import { ChangelogModal } from '../../ChangelogModal'
 import { useAgents } from '../../../hooks/useAgents'
 
 export function AdvancedTab({ onClose }: { onClose: () => void }) {
+  const t = useT()
   const [, navigate] = useLocation()
   const showOpenInEditor = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR).value === 'true'
   const dynamicSystemPrompt = useSetting(SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT).value === 'true'
+  const cavemanThinking = useSetting(SETTINGS_KEYS.LLM_CAVEMAN_THINKING).value === 'true'
   const cacheWarming = useSetting(SETTINGS_KEYS.CACHE_WARMING).value === 'true'
   const retryPatternsSetting = useSetting(SETTINGS_KEYS.RETRY_PATTERNS).value
   const proxyUrlSetting = useSetting(SETTINGS_KEYS.PROXY_URL).value
@@ -28,6 +31,7 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     openInEditor: showOpenInEditor,
     dynamicPrompt: dynamicSystemPrompt,
     cacheWarming,
+    cavemanThinking,
   })
 
   const [retryPatterns, setRetryPatterns] = useState<RetryPatternsValue>({ patterns: [], maxRetriesPerTurn: 10 })
@@ -53,8 +57,9 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
       openInEditor: showOpenInEditor,
       dynamicPrompt: dynamicSystemPrompt,
       cacheWarming,
+      cavemanThinking,
     })
-  }, [showOpenInEditor, dynamicSystemPrompt, cacheWarming])
+  }, [showOpenInEditor, dynamicSystemPrompt, cacheWarming, cavemanThinking])
 
   useEffect(() => {
     if (retryPatternsSetting) {
@@ -114,6 +119,12 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     void setSetting(SETTINGS_KEYS.CACHE_WARMING, String(newValue))
   }
 
+  const handleToggleCavemanThinking = () => {
+    const newValue = !localToggles.cavemanThinking
+    setLocalToggles((prev) => ({ ...prev, cavemanThinking: newValue }))
+    void setSetting(SETTINGS_KEYS.LLM_CAVEMAN_THINKING, String(newValue))
+  }
+
   function handleLaunchOnboarding() {
     onClose()
     navigate('/onboarding')
@@ -126,15 +137,19 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
           {updateStatus === 'available' && (
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary mr-1.5 align-middle" />
           )}
-          Updates
+          {t({ en: 'Updates', fr: 'Mises à jour' })}
         </h3>
         <p className="text-sm text-text-muted mb-4">
           {version ? (
             <>
-              Current version: <span className="font-mono">v{version}</span>
+              {t({ en: 'Current version:', fr: 'Version actuelle :' })}{' '}
+              <span className="font-mono">{`v${version}`}</span>
             </>
           ) : (
-            'Check for a new OpenFox version.'
+            t({
+              en: 'Check for a new OpenFox version.',
+              fr: 'Vérifiez si une nouvelle version d’OpenFox est disponible.',
+            })
           )}
         </p>
         <div className="flex items-center gap-3">
@@ -146,15 +161,24 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
             }}
             disabled={updateStatus === 'checking'}
           >
-            {updateStatus === 'checking' ? 'Checking…' : 'Check for Updates'}
+            {updateStatus === 'checking'
+              ? t({ en: 'Checking…', fr: 'Vérification…' })
+              : t({ en: 'Check for Updates', fr: 'Vérifier les mises à jour' })}
           </Button>
           {manuallyChecked && updateStatus === 'upToDate' && (
-            <span className="text-sm text-text-muted">Up to date</span>
+            <span className="text-sm text-text-muted">{t({ en: 'Up to date', fr: 'À jour' })}</span>
           )}
-          {updateStatus === 'error' && <span className="text-sm text-text-muted">Update check failed</span>}
+          {updateStatus === 'error' && (
+            <span className="text-sm text-text-muted">
+              {t({ en: 'Update check failed', fr: 'Échec de la vérification des mises à jour' })}
+            </span>
+          )}
           {updateStatus === 'available' && (
             <button onClick={() => setShowUpdateModal(true)} className="text-sm text-accent-primary hover:underline">
-              Update to v{latestVersion} →
+              {t(
+                { en: 'Update to v{{version}} →', fr: 'Mettre à jour vers la v{{version}} →' },
+                { version: latestVersion ?? '' },
+              )}
             </button>
           )}
         </div>
@@ -162,10 +186,12 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
       <AutoUpdateModal isOpen={showUpdateModal} onClose={() => setShowUpdateModal(false)} versionInfo={versionInfo} />
       <div className="flex items-center justify-between pt-2">
         <button onClick={() => setShowChangelogModal(true)} className="text-sm text-accent-primary hover:underline">
-          View Changelog →
+          {t({ en: 'View Changelog →', fr: 'Voir le journal →' })}
         </button>
         <label className="flex items-center gap-2 cursor-pointer">
-          <span className="text-xs text-text-muted">Show on update</span>
+          <span className="text-xs text-text-muted">
+            {t({ en: 'Show on update', fr: 'Afficher lors des mises à jour' })}
+          </span>
           <Toggle
             enabled={showChangelogSetting === 'true'}
             onClick={() => {
@@ -178,10 +204,14 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
       <ChangelogModal isOpen={showChangelogModal} onClose={() => setShowChangelogModal(false)} />
       <hr className="border-border" />
       <div>
-        <h3 className="text-sm font-medium text-text-primary mb-1">Default Agent</h3>
+        <h3 className="text-sm font-medium text-text-primary mb-1">
+          {t({ en: 'Default Agent', fr: 'Agent par défaut' })}
+        </h3>
         <p className="text-sm text-text-muted mb-3">
-          Choose which agent is used by default for new sessions. The stock Planner is read-only; custom agents can have
-          broader capabilities.
+          {t({
+            en: 'Choose which agent is used by default for new sessions. The stock Planner is read-only; custom agents can have broader capabilities.',
+            fr: 'Choisissez l’agent utilisé par défaut pour les nouvelles sessions. Le Planner standard est en lecture seule ; les agents personnalisés peuvent avoir des capacités plus étendues.',
+          })}
         </p>
         <select
           value={defaultAgentLoaded ? defaultAgent : ''}
@@ -192,8 +222,10 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
           }}
           className="w-full px-3 py-2 text-sm bg-bg-primary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
         >
-          {!defaultAgentLoaded && <option value="">Loading…</option>}
-          {defaultAgentLoaded && <option value="">System default (planner)</option>}
+          {!defaultAgentLoaded && <option value="">{t({ en: 'Loading…', fr: 'Chargement…' })}</option>}
+          {defaultAgentLoaded && (
+            <option value="">{t({ en: 'System default (planner)', fr: 'Défaut système (planner)' })}</option>
+          )}
           {topLevelAgents.map((agent) => (
             <option key={agent.id} value={agent.id}>
               {agent.name}
@@ -201,39 +233,55 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
           ))}
         </select>
         {topLevelAgents.length === 0 && defaultAgentLoaded && (
-          <p className="text-xs text-text-muted mt-1">No agents available. Create one in the Agents modal.</p>
+          <p className="text-xs text-text-muted mt-1">
+            {t({
+              en: 'No agents available. Create one in the Agents modal.',
+              fr: 'Aucun agent disponible. Créez-en un dans la fenêtre des agents.',
+            })}
+          </p>
         )}
       </div>
       <hr className="border-border" />
       <div>
-        <h3 className="text-sm font-medium text-text-primary mb-1">Onboarding</h3>
-        <p className="text-sm text-text-muted mb-4">Manage providers, workdir and vision fallback.</p>
+        <h3 className="text-sm font-medium text-text-primary mb-1">{t({ en: 'Onboarding', fr: 'Prise en main' })}</h3>
+        <p className="text-sm text-text-muted mb-4">
+          {t({
+            en: 'Manage providers, workdir and vision fallback.',
+            fr: 'Gérez les fournisseurs, le dossier de travail et le fallback vision.',
+          })}
+        </p>
         <Button variant="secondary" onClick={handleLaunchOnboarding}>
-          Launch Onboarding
+          {t({ en: 'Launch Onboarding', fr: 'Lancer la prise en main' })}
         </Button>
       </div>
       <hr className="border-border" />
       <div>
         <SettingsToggle
-          title='Show "Open in VSCode" links'
-          description="Display a link on file reads to open the file directly in VS Code."
+          title={t({ en: 'Show "Open in VSCode" links', fr: 'Afficher les liens « Ouvrir dans VSCode »' })}
+          description={t({
+            en: 'Display a link on file reads to open the file directly in VS Code.',
+            fr: 'Affiche un lien sur les lectures de fichiers pour ouvrir le fichier directement dans VS Code.',
+          })}
           enabled={localToggles.openInEditor}
           onToggle={handleToggleOpenInEditor}
         />
       </div>
       <hr className="border-border" />
       <SettingsToggle
-        title="Speculative Cache Warming"
-        description="On first keystroke in an empty session, prefill the LLM KV cache to reduce time-to-first-token."
+        title={t({ en: 'Speculative Cache Warming', fr: 'Préchauffage spéculatif du cache' })}
+        description={t({
+          en: 'On first keystroke in an empty session, prefill the LLM KV cache to reduce time-to-first-token.',
+          fr: 'Au premier caractère saisi dans une session vide, préremplit le cache KV du LLM pour réduire le délai avant le premier jeton.',
+        })}
         enabled={localToggles.cacheWarming}
         onToggle={handleToggleCacheWarming}
         boldTitle
       />
       <hr className="border-border" />
       <div>
-        <h3 className="text-sm font-medium text-text-primary mb-3">Network</h3>
+        <h3 className="text-sm font-medium text-text-primary mb-3">{t({ en: 'Network', fr: 'Réseau' })}</h3>
         <div>
-          <label className="text-xs text-text-secondary block mb-1">HTTP Proxy</label>
+          <label className="text-xs text-text-secondary block mb-1">{t({ en: 'HTTP Proxy', fr: 'Proxy HTTP' })}</label>
           <div className="flex gap-2 items-center">
             <Input
               type="text"
@@ -252,26 +300,46 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
           </div>
           {proxyTestError && <p className="text-xs text-red-500 mt-1">{proxyTestError}</p>}
           <p className="text-xs text-text-muted mt-1">
-            Proxy server all OpenFox network requests (AI, model fetching, web search, terminal). Leave empty for direct
-            connection.
+            {t({
+              en: 'Proxy server all OpenFox network requests (AI, model fetching, web search, terminal). Leave empty for direct connection.',
+              fr: 'Passe toutes les requêtes réseau d’OpenFox par le serveur proxy (IA, téléchargement de modèles, recherche web, terminal). Laissez vide pour une connexion directe.',
+            })}
           </p>
         </div>
       </div>
       <hr className="border-border" />
       <div>
-        <h3 className="text-sm font-medium text-text-primary mb-3">Auto-Retry Patterns</h3>
+        <h3 className="text-sm font-medium text-text-primary mb-3">
+          {t({ en: 'Auto-Retry Patterns', fr: 'Modèles de nouvelle tentative automatique' })}
+        </h3>
         <p className="text-sm text-text-muted mb-3">
-          Define regex patterns that, when matched against LLM responses mid-stream, trigger an automatic retry with a
-          "continue" prompt. The content that triggered the match is preserved in the chat feed.
+          {t({
+            en: 'Define regex patterns that, when matched against LLM responses mid-stream, trigger an automatic retry with a "continue" prompt. The content that triggered the match is preserved in the chat feed.',
+            fr: 'Définissez des motifs regex qui, lorsqu’ils correspondent aux réponses du LLM en cours de diffusion, déclenchent une nouvelle tentative automatique avec une invite « continue ». Le contenu ayant déclenché la correspondance est conservé dans le fil.',
+          })}
         </p>
         <RetryPatternsEditor value={retryPatterns} onChange={handleRetryPatternsChange} />
       </div>
       <hr className="border-border" />
       <SettingsToggle
-        title="Dynamic System Prompt"
-        description="Rebuild the system prompt on every turn. Recommended value: off."
+        title={t({ en: 'Dynamic System Prompt', fr: 'Prompt système dynamique' })}
+        description={t({
+          en: 'Rebuild the system prompt on every turn. Recommended value: off.',
+          fr: 'Reconstruit le prompt système à chaque tour. Valeur recommandée : désactivé.',
+        })}
         enabled={localToggles.dynamicPrompt}
         onToggle={handleToggleDynamicSystemPrompt}
+        boldTitle
+      />
+      <hr className="border-border" />
+      <SettingsToggle
+        title={t({ en: 'Caveman thinking', fr: 'Pensée caveman' })}
+        description={t({
+          en: 'Instruct the agent to reason in compressed, telegraphic fragments to cut thinking tokens. Experimental — may affect output quality.',
+          fr: 'Demande à l’agent de raisonner en fragments télégraphiques pour réduire les jetons de réflexion. Expérimental — peut affecter la qualité des réponses.',
+        })}
+        enabled={localToggles.cavemanThinking}
+        onToggle={handleToggleCavemanThinking}
         boldTitle
       />
     </div>

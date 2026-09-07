@@ -20,6 +20,7 @@ import { buildSnapshotFromSessionState } from '../events/folding.js'
 import type { SessionManager } from '../session/index.js'
 import { getToolRegistryForAgent, PathAccessDeniedError } from '../tools/index.js'
 import { buildAgentReminder, buildAgentSmallReminder, buildTopLevelSystemPrompt } from './prompts.js'
+import { serverT } from '../i18n.js'
 import {
   TurnMetrics,
   createMessageStartEvent,
@@ -205,14 +206,23 @@ export async function runChatTurn(options: OrchestratorOptions): Promise<void> {
       const errorMsgId = crypto.randomUUID()
       const reasonText =
         error.reason === 'sensitive_file'
-          ? 'sensitive files that may contain secrets'
+          ? serverT({
+              en: 'sensitive files that may contain secrets',
+              fr: 'des fichiers sensibles pouvant contenir des secrets',
+            })
           : error.reason === 'both'
-            ? 'files outside the project and sensitive files'
-            : 'files outside the project directory'
+            ? serverT({
+                en: 'files outside the project and sensitive files',
+                fr: 'des fichiers hors du projet et des fichiers sensibles',
+              })
+            : serverT({ en: 'files outside the project directory', fr: 'des fichiers hors du dossier du projet' })
       eventStore.append(sessionId, {
         type: 'chat.error',
         data: {
-          error: `User denied access to ${reasonText}.`,
+          error: serverT(
+            { en: 'User denied access to {{reason}}.', fr: 'Accès refusé par l’utilisateur : {{reason}}.' },
+            { reason: reasonText },
+          ),
           recoverable: false,
         },
       })
@@ -221,7 +231,13 @@ export async function runChatTurn(options: OrchestratorOptions): Promise<void> {
         createMessageStartEvent(
           errorMsgId,
           'user',
-          `Access denied: ${error.paths.join(', ')}. If you need this file, explain why and ask the user for permission.`,
+          serverT(
+            {
+              en: 'Access denied: {{paths}}. If you need this file, explain why and ask the user for permission.',
+              fr: 'Accès refusé : {{paths}}. Si vous avez besoin de ce fichier, expliquez pourquoi et demandez l’autorisation à l’utilisateur.',
+            },
+            { paths: error.paths.join(', ') },
+          ),
           {
             ...(getCurrentWindowMessageOptions(sessionId) ?? {}),
             isSystemGenerated: true,
@@ -248,7 +264,7 @@ export async function runChatTurn(options: OrchestratorOptions): Promise<void> {
     eventStore.append(sessionId, {
       type: 'chat.error',
       data: {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : serverT({ en: 'Unknown error', fr: 'Erreur inconnue' }),
         recoverable: false,
       },
     })
@@ -257,7 +273,10 @@ export async function runChatTurn(options: OrchestratorOptions): Promise<void> {
       createMessageStartEvent(
         errorMsgId,
         'user',
-        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        serverT(
+          { en: 'Error: {{message}}', fr: 'Erreur : {{message}}' },
+          { message: error instanceof Error ? error.message : serverT({ en: 'Unknown error', fr: 'Erreur inconnue' }) },
+        ),
         {
           ...(getCurrentWindowMessageOptions(sessionId) ?? {}),
           isSystemGenerated: true,

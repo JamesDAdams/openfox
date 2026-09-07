@@ -1,37 +1,25 @@
-import { useEffect, useState } from 'react'
-import { Modal } from '../shared/SelfContainedModal'
-import { ConfirmModal } from '../shared/ConfirmModal'
+import { useState } from 'react'
+import { Modal } from '../shared/Modal'
+import { BellIcon, TrashIcon } from '../shared/icons'
 import { Button } from '../shared/Button'
-import { TrashIcon, BellIcon } from '../shared/icons'
+import { ConfirmModal } from '../shared/ConfirmModal'
 import { useNotificationHistoryStore } from '../../stores/notificationHistory'
+import { formatRelativeDate } from '../../lib/format-date'
+import { useT } from '../../hooks/useT'
 
 interface NotificationCenterProps {
   isOpen: boolean
   onClose: () => void
 }
 
-function formatDate(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleString()
-}
-
 export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps) {
-  const notifications = useNotificationHistoryStore((state) => state.notifications)
-  const load = useNotificationHistoryStore((state) => state.load)
-  const deleteNotification = useNotificationHistoryStore((state) => state.deleteNotification)
-  const clearAll = useNotificationHistoryStore((state) => state.clearAll)
-  const markAllRead = useNotificationHistoryStore((state) => state.markAllRead)
+  const t = useT()
+  const notifications = useNotificationHistoryStore((s) => s.notifications)
+  const deleteNotification = useNotificationHistoryStore((s) => s.deleteNotification)
+  const clearAll = useNotificationHistoryStore((s) => s.clearAll)
+
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
-
-  useEffect(() => {
-    if (isOpen) {
-      void load()
-      // Opening the center marks everything as read (badge resets).
-      void markAllRead()
-    }
-  }, [isOpen, load, markAllRead])
 
   const handleDelete = async () => {
     if (!deleteTarget) return
@@ -44,7 +32,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title="Notifications"
+        title={t({ en: 'Notifications', fr: 'Notifications' })}
         size="md"
         showCloseButton
         closeOnBackdropClick
@@ -52,7 +40,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
         headerRight={
           notifications.length > 0 ? (
             <Button size="sm" onClick={() => setConfirmClear(true)}>
-              Clear all
+              {t({ en: 'Clear all', fr: 'Tout effacer' })}
             </Button>
           ) : undefined
         }
@@ -61,7 +49,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
           {notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-text-muted gap-2">
               <BellIcon className="w-8 h-8" />
-              <span className="text-sm">No notifications</span>
+              <span className="text-sm">{t({ en: 'No notifications', fr: 'Aucune notification' })}</span>
             </div>
           ) : (
             <ul className="divide-y divide-border">
@@ -79,14 +67,16 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
                     {n.body && (
                       <p className="text-xs text-text-secondary mt-0.5 whitespace-pre-wrap break-words">{n.body}</p>
                     )}
-                    <span className="text-[10px] text-text-muted mt-1 inline-block">{formatDate(n.createdAt)}</span>
+                    <span className="text-[10px] text-text-muted mt-1 inline-block">
+                      {formatRelativeDate(n.createdAt)}
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setDeleteTarget(n.id)}
                     className="shrink-0 p-1.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-accent-error transition-colors"
-                    title="Dismiss notification"
-                    aria-label="Dismiss notification"
+                    title={t({ en: 'Dismiss notification', fr: 'Ignorer la notification' })}
+                    aria-label={t({ en: 'Dismiss notification', fr: 'Ignorer la notification' })}
                   >
                     <TrashIcon className="w-3.5 h-3.5" />
                   </button>
@@ -102,9 +92,12 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
           isOpen
           onClose={() => setDeleteTarget(null)}
           onConfirm={() => void handleDelete()}
-          title="Delete notification?"
-          message="This notification will be removed from your history."
-          confirmLabel="Delete"
+          title={t({ en: 'Delete notification?', fr: 'Supprimer la notification ?' })}
+          message={t({
+            en: 'This notification will be removed from your history.',
+            fr: 'Cette notification sera supprimée de votre historique.',
+          })}
+          confirmLabel={t({ en: 'Delete', fr: 'Supprimer' })}
           confirmVariant="danger"
         />
       )}
@@ -117,9 +110,12 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
             void clearAll()
             setConfirmClear(false)
           }}
-          title="Clear all notifications?"
-          message="Your entire notification history will be deleted."
-          confirmLabel="Clear all"
+          title={t({ en: 'Clear all notifications?', fr: 'Effacer toutes les notifications ?' })}
+          message={t({
+            en: 'Your entire notification history will be deleted.',
+            fr: 'Tout votre historique de notifications sera supprimé.',
+          })}
+          confirmLabel={t({ en: 'Clear all', fr: 'Tout effacer' })}
           confirmVariant="danger"
         />
       )}

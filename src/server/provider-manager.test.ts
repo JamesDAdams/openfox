@@ -203,6 +203,86 @@ describe('ProviderManager - Model Selection', () => {
     })
   })
 
+  describe('thinkingField resolution', () => {
+    it('derives thinkingField from the provider URL when config lacks it (DeepSeek rescue)', async () => {
+      const deepseekProvider: Provider = {
+        id: 'provider-deepseek',
+        name: 'DeepSeek API',
+        url: 'https://api.deepseek.com',
+        backend: 'unknown',
+        apiKey: 'sk-x',
+        models: [{ id: 'deepseek-v4-flash', contextWindow: 1000000, source: 'default' }],
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      }
+
+      const dsConfig: Config = {
+        ...config,
+        providers: [deepseekProvider],
+        defaultModelSelection: 'provider-deepseek/deepseek-v4-flash',
+      }
+
+      const manager = createProviderManager(dsConfig)
+      manager.createClient('provider-deepseek', 'deepseek-v4-flash')
+
+      const calls = (createLLMClient as ReturnType<typeof vi.fn>).mock.calls
+      const lastCallConfig = calls[calls.length - 1]![0] as { llm: { thinkingField?: string } }
+      expect(lastCallConfig.llm.thinkingField).toBe('reasoning_content')
+    })
+
+    it('lets an explicit provider thinkingField override the URL default', async () => {
+      const deepseekProvider: Provider = {
+        id: 'provider-deepseek',
+        name: 'DeepSeek API',
+        url: 'https://api.deepseek.com',
+        backend: 'unknown',
+        apiKey: 'sk-x',
+        thinkingField: 'custom_field',
+        models: [{ id: 'deepseek-v4-flash', contextWindow: 1000000, source: 'default' }],
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      }
+
+      const dsConfig: Config = {
+        ...config,
+        providers: [deepseekProvider],
+        defaultModelSelection: 'provider-deepseek/deepseek-v4-flash',
+      }
+
+      const manager = createProviderManager(dsConfig)
+      manager.createClient('provider-deepseek', 'deepseek-v4-flash')
+
+      const calls = (createLLMClient as ReturnType<typeof vi.fn>).mock.calls
+      const lastCallConfig = calls[calls.length - 1]![0] as { llm: { thinkingField?: string } }
+      expect(lastCallConfig.llm.thinkingField).toBe('custom_field')
+    })
+
+    it('leaves thinkingField undefined for providers without a URL default', async () => {
+      const localProvider: Provider = {
+        id: 'provider-local',
+        name: 'Local',
+        url: 'http://192.168.1.223:8000',
+        backend: 'vllm',
+        models: [{ id: 'deepseek-v4-flash', contextWindow: 1000000, source: 'default' }],
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      }
+
+      const localConfig: Config = {
+        ...config,
+        providers: [localProvider],
+        defaultModelSelection: 'provider-local/deepseek-v4-flash',
+      }
+
+      const manager = createProviderManager(localConfig)
+      manager.createClient('provider-local', 'deepseek-v4-flash')
+
+      const calls = (createLLMClient as ReturnType<typeof vi.fn>).mock.calls
+      const lastCallConfig = calls[calls.length - 1]![0] as { llm: { thinkingField?: string } }
+      expect(lastCallConfig.llm.thinkingField).toBeUndefined()
+    })
+  })
+
   describe('setDefaultModelSelection', () => {
     it('returns error for non-existent provider', async () => {
       const result = await providerManager.setDefaultModelSelection('non-existent', 'new-model')
@@ -1239,6 +1319,31 @@ describe('ProviderManager - Model Selection', () => {
       const stored = manager.getProviders()[0]!.models.find((m) => m.id === 'model-a')!
       expect(stored.reasoningEfforts).toEqual(['low', 'medium'])
       expect(stored.reasoningEffortOverride).toBe('deep')
+    })
+
+    it('preserves and exposes model pricing', () => {
+      const manager = buildManager([
+        providerWith([
+          {
+            id: 'gpt-4o',
+            contextWindow: 128000,
+            source: 'user' as const,
+            pricing: {
+              input: 2.5,
+              output: 10,
+              cacheRead: 1.25,
+              cacheWrite: 3.75,
+            },
+          },
+        ]),
+      ])
+      const model = manager.getProviders()[0]!.models[0]!
+      expect(model.pricing).toEqual({
+        input: 2.5,
+        output: 10,
+        cacheRead: 1.25,
+        cacheWrite: 3.75,
+      })
     })
 
     it('catalog enrichment never overrides a stored preset list or override', () => {

@@ -13,6 +13,7 @@ import { Route, Switch, useRoute, useLocation } from 'wouter'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useSessionStore } from './stores/session'
 import { useConfigStore } from './stores/config'
+import { useLocaleStore } from './stores/locale'
 import { useCurrentProject } from './hooks/useCurrentProject'
 import { useProviders } from './hooks/useProviders'
 import { useThemeStore } from './stores/theme'
@@ -155,10 +156,12 @@ function ProjectSessionView({
 
 function OnboardingPage() {
   const fetchConfig = useConfigStore((state) => state.fetchConfig)
+  const applyLocale = useLocaleStore((state) => state.applyLocale)
   const [, navigate] = useLocation()
 
   async function handleComplete() {
     await fetchConfig()
+    applyLocale(readConfig()?.locale)
     navigate('/')
   }
 
@@ -173,6 +176,7 @@ function App() {
   const { connectionStatus } = useWebSocket()
   const fetchConfig = useConfigStore((state) => state.fetchConfig)
   const refreshProviderModels = useConfigStore((state) => state.refreshProviderModels)
+  const applyLocale = useLocaleStore((state) => state.applyLocale)
   const { providers, activeProviderId } = useProviders()
   const [, navigate] = useLocation()
 
@@ -184,6 +188,7 @@ function App() {
     if (connectionStatus === 'connected' || hasToken) {
       fetchConfig().then(() => {
         setConfigFetched(true)
+        applyLocale(readConfig()?.locale)
         // Warm the settings cache in one batched request (write-through into
         // the per-key entries) so display prefs land together, no flash of
         // defaults. MCP servers are eager-loaded for the chat MCP indicator.

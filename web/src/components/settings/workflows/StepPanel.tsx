@@ -1,6 +1,7 @@
 import type { WorkflowStep, TemplateVariable } from '../../../lib/workflows-actions'
 import type { AgentInfo } from '../../../lib/agents-actions'
 import { resolveAgent, STEP_TYPES } from './layout'
+import { useT } from '../../../hooks/useT'
 
 const inputClass =
   'w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-accent-primary'
@@ -52,6 +53,7 @@ export function StepPanel({
   onRemove: () => void
   onSetEntry: () => void
 }) {
+  const t = useT()
   const { color, name: agentName } = resolveAgent(step, agentTypes)
 
   return (
@@ -66,34 +68,34 @@ export function StepPanel({
           </span>
           {isEntry && (
             <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-accent-primary/15 text-accent-primary">
-              Entry
+              {t({ en: 'Entry', fr: 'Entrée' })}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1">
           {!isEntry && (
             <button onClick={onSetEntry} className="p-1 rounded text-text-muted hover:text-accent-primary text-xs">
-              Set entry
+              {t({ en: 'Set entry', fr: 'Définir comme entrée' })}
             </button>
           )}
           <button onClick={onRemove} className="p-1 rounded text-text-muted hover:text-accent-error text-xs">
-            Delete
+            {t({ en: 'Delete', fr: 'Supprimer' })}
           </button>
         </div>
       </div>
 
       <div>
-        <label className={labelClass}>Name</label>
+        <label className={labelClass}>{t({ en: 'Name', fr: 'Nom' })}</label>
         <input
           value={step.name}
           onChange={(e) => onUpdate({ ...step, name: e.target.value })}
-          placeholder="Step name"
+          placeholder={t({ en: 'Step name', fr: 'Nom de l’étape' })}
           className={inputClass}
         />
       </div>
 
       <div>
-        <label className={labelClass}>Type</label>
+        <label className={labelClass}>{t({ en: 'Type', fr: 'Type' })}</label>
         <select
           value={step.type}
           onChange={(e) => {
@@ -106,7 +108,7 @@ export function StepPanel({
                 type: newType,
                 phase,
                 agentId: agent?.id ?? 'builder',
-                name: agent?.name ?? 'Agent',
+                name: agent?.name ?? t({ en: 'Agent', fr: 'Agent' }),
               })
             } else if (newType === 'sub_agent') {
               const agent = agentTypes.find((a) => a.subagent)
@@ -115,12 +117,12 @@ export function StepPanel({
                 type: newType,
                 phase,
                 subAgentType: agent?.id ?? '',
-                name: agent?.name ?? 'Sub-Agent',
+                name: agent?.name ?? t({ en: 'Sub-Agent', fr: 'Sous-agent' }),
               })
             } else if (newType === 'user') {
-              onUpdate({ ...step, type: newType, phase, name: 'User' })
+              onUpdate({ ...step, type: newType, phase, name: t({ en: 'User', fr: 'Utilisateur' }) })
             } else {
-              onUpdate({ ...step, type: newType, phase, name: 'Shell' })
+              onUpdate({ ...step, type: newType, phase, name: t({ en: 'Shell', fr: 'Shell' }) })
             }
           }}
           className={selectClass}
@@ -135,7 +137,7 @@ export function StepPanel({
 
       {step.type === 'agent' && (
         <div>
-          <label className={labelClass}>Agent Type</label>
+          <label className={labelClass}>{t({ en: 'Agent Type', fr: 'Type d’agent' })}</label>
           <select
             value={step.agentId ?? 'builder'}
             onChange={(e) => {
@@ -161,7 +163,7 @@ export function StepPanel({
 
       {step.type === 'sub_agent' && (
         <div>
-          <label className={labelClass}>Sub-Agent Type</label>
+          <label className={labelClass}>{t({ en: 'Sub-Agent Type', fr: 'Type de sous-agent' })}</label>
           <select
             value={step.subAgentType ?? ''}
             onChange={(e) => {
@@ -170,7 +172,7 @@ export function StepPanel({
             }}
             className={selectClass}
           >
-            <option value="">— select —</option>
+            <option value="">{t({ en: '— select —', fr: '— sélectionner —' })}</option>
             {agentTypes
               .filter((a) => a.subagent)
               .map((a) => (
@@ -185,13 +187,13 @@ export function StepPanel({
       {(step.type === 'agent' || step.type === 'sub_agent') && (
         <>
           <div>
-            <label className={labelClass}>Prompt</label>
+            <label className={labelClass}>{t({ en: 'Prompt', fr: 'Invite' })}</label>
             <textarea
               value={step.prompt ?? ''}
               onChange={(e) => onUpdate({ ...step, prompt: e.target.value || undefined })}
               rows={6}
               className={`${inputClass} resize-y text-xs`}
-              placeholder="Injected on first entry..."
+              placeholder={t({ en: 'Injected on first entry...', fr: 'Injecté à la première entrée...' })}
             />
             <TemplateVariablesHint
               variables={templateVariables}
@@ -199,13 +201,13 @@ export function StepPanel({
             />
           </div>
           <div>
-            <label className={labelClass}>Nudge Prompt</label>
+            <label className={labelClass}>{t({ en: 'Nudge Prompt', fr: 'Invite de relance' })}</label>
             <textarea
               value={step.nudgePrompt ?? ''}
               onChange={(e) => onUpdate({ ...step, nudgePrompt: e.target.value || undefined })}
               rows={6}
               className={`${inputClass} resize-y text-xs`}
-              placeholder="Injected on re-entry..."
+              placeholder={t({ en: 'Injected on re-entry...', fr: 'Injecté à chaque ré-entrée...' })}
             />
             <TemplateVariablesHint
               variables={templateVariables}
@@ -218,7 +220,7 @@ export function StepPanel({
       {step.type === 'shell' && (
         <>
           <div>
-            <label className={labelClass}>Command</label>
+            <label className={labelClass}>{t({ en: 'Command', fr: 'Commande' })}</label>
             <textarea
               value={step.command ?? ''}
               onChange={(e) => onUpdate({ ...step, command: e.target.value })}
@@ -233,7 +235,7 @@ export function StepPanel({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className={labelClass}>Timeout (ms)</label>
+              <label className={labelClass}>{t({ en: 'Timeout (ms)', fr: 'Délai (ms)' })}</label>
               <input
                 type="number"
                 value={step.timeout ?? 60000}
@@ -242,7 +244,7 @@ export function StepPanel({
               />
             </div>
             <div>
-              <label className={labelClass}>Success Codes</label>
+              <label className={labelClass}>{t({ en: 'Success Codes', fr: 'Codes de succès' })}</label>
               <input
                 value={(step.successExitCodes ?? [0]).join(', ')}
                 onChange={(e) =>
@@ -262,7 +264,7 @@ export function StepPanel({
       )}
 
       <div>
-        <label className={labelClass}>Sub-group</label>
+        <label className={labelClass}>{t({ en: 'Sub-group', fr: 'Sous-groupe' })}</label>
         <input
           value={step.subGroup ?? ''}
           onChange={(e) => onUpdate({ ...step, subGroup: e.target.value || undefined })}
@@ -273,8 +275,19 @@ export function StepPanel({
 
       <div className="pt-1 border-t border-border/50">
         <p className="text-text-muted text-[10px]">
-          {transitionCount} outgoing transition{transitionCount !== 1 ? 's' : ''} — drag from the bottom port to
-          connect.
+          {t(
+            {
+              en: {
+                one: '{{count}} outgoing transition — drag from the bottom port to connect.',
+                other: '{{count}} outgoing transitions — drag from the bottom port to connect.',
+              },
+              fr: {
+                one: '{{count}} transition sortante — faites glisser depuis le port du bas pour connecter.',
+                other: '{{count}} transitions sortantes — faites glisser depuis le port du bas pour connecter.',
+              },
+            },
+            { count: transitionCount },
+          )}
         </p>
       </div>
     </div>

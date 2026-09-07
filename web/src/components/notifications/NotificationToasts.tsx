@@ -1,7 +1,9 @@
 import { useNotificationHistoryStore } from '../../stores/notificationHistory'
 import { BellIcon, XCloseIcon } from '../shared/icons'
+import { useT } from '../../hooks/useT'
 
 export function NotificationToasts() {
+  const t = useT()
   const toasts = useNotificationHistoryStore((state) => state.toasts)
   const dismissToast = useNotificationHistoryStore((state) => state.dismissToast)
 
@@ -27,8 +29,8 @@ export function NotificationToasts() {
             type="button"
             onClick={() => dismissToast(toast.id)}
             className="shrink-0 p-1 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-            title="Dismiss"
-            aria-label="Dismiss notification"
+            title={t({ en: 'Dismiss', fr: 'Ignorer' })}
+            aria-label={t({ en: 'Dismiss notification', fr: 'Ignorer la notification' })}
           >
             <XCloseIcon className="w-3.5 h-3.5" />
           </button>

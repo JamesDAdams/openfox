@@ -294,8 +294,8 @@ export function DropdownMenu({
 
   return (
     <>
-      <div className="relative">
-        <div ref={triggerRef} onClick={handleTriggerClick}>
+      <div className="relative min-w-0">
+        <div ref={triggerRef} onClick={handleTriggerClick} className="min-w-0">
           {trigger}
         </div>
       </div>

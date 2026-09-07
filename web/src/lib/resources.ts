@@ -16,6 +16,7 @@ import type {
   TaskGateConfig,
 } from '@shared/types.js'
 import type { WorkspaceConfig as SharedWorkspaceConfig } from '@shared/workspace.js'
+import type { DevServerConfig, DevServerStatus } from '@shared/dev-server.js'
 
 export interface AgentsData {
   defaults: AgentInfo[]
@@ -392,6 +393,8 @@ export interface ConfigData {
   platform: PlatformInfo | null
   workdir: string | null
   visionFallback: VisionFallbackConfig | null
+  /** UI locale setting: 'automatic' | 'en' | 'fr' (resolved client-side). */
+  locale: string
 }
 
 function normalizePlatform(platform: unknown): PlatformInfo | null {
@@ -418,6 +421,7 @@ export async function fetchConfig(): Promise<ConfigData> {
     platform: normalizePlatform(data.platform),
     workdir: (data.workdir as string | undefined) ?? null,
     visionFallback: (data.visionFallback as VisionFallbackConfig | undefined) ?? null,
+    locale: (data.locale as string | undefined) ?? 'automatic',
   }
 }
 
@@ -572,9 +576,11 @@ export async function fetchSettingsBulk(keys: readonly string[]): Promise<void> 
 // Well-known settings keys (should match server's SETTINGS_KEYS)
 export const SETTINGS_KEYS = {
   GLOBAL_INSTRUCTIONS: 'global_instructions',
+  LANGUAGE: 'agent.language',
   NOTIFICATION_SETTINGS: 'notification_settings',
   DISPLAY_SHOW_THINKING: 'display.showThinking',
   DISPLAY_SHOW_VERBOSE_TOOL_OUTPUT: 'display.showVerboseToolOutput',
+  DISPLAY_LOCALE: 'display.locale',
   DISPLAY_SHOW_STATS: 'display.showStats',
   DISPLAY_SHOW_AGENT_DEFINITIONS: 'display.showAgentDefinitions',
   DISPLAY_SHOW_WORKFLOW_BARS: 'display.showWorkflowBars',
@@ -598,7 +604,23 @@ export const SETTINGS_KEYS = {
   DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT: 'display.collapseFavoritesByDefault',
   DISPLAY_MODEL_FAVORITES: 'display.modelFavorites',
   DISPLAY_FULLSCREEN_SLASH_COMMAND: 'display.fullscreenSlashCommand',
+  DISPLAY_SHOW_MODEL_PRICES: 'display.showModelPrices',
+  DISPLAY_SHOW_MODEL_PRICE_INPUT: 'display.showModelPriceInput',
+  DISPLAY_SHOW_MODEL_PRICE_OUTPUT: 'display.showModelPriceOutput',
+  DISPLAY_SHOW_MODEL_PRICE_CACHE_READ: 'display.showModelPriceCacheRead',
+  DISPLAY_SHOW_MODEL_PRICE_CACHE_WRITE: 'display.showModelPriceCacheWrite',
+  DISPLAY_SHOW_MODEL_PRICE_POPOVER: 'display.showModelPricePopover',
+  DISPLAY_ENABLE_MODEL_PRICE_COLORS: 'display.enableModelPriceColors',
+  DISPLAY_COLOR_MODEL_NAME_BY_OUTPUT_PRICE: 'display.colorModelNameByOutputPrice',
+  DISPLAY_SHOW_MODEL_PRICE_IN_BAR: 'display.showModelPriceInBar',
+  DISPLAY_SHOW_MODEL_PRICE_IN_BAR_INPUT: 'display.showModelPriceInBarInput',
+  DISPLAY_SHOW_MODEL_PRICE_IN_BAR_OUTPUT: 'display.showModelPriceInBarOutput',
+  DISPLAY_SHOW_MODEL_PRICE_IN_BAR_CACHE_READ: 'display.showModelPriceInBarCacheRead',
+  DISPLAY_SHOW_MODEL_PRICE_IN_BAR_CACHE_WRITE: 'display.showModelPriceInBarCacheWrite',
+  DISPLAY_MODEL_PRICE_CURRENCY: 'display.modelPriceCurrency',
+  DISPLAY_MODEL_PRICE_THRESHOLDS: 'display.modelPriceThresholds',
   LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt',
+  LLM_CAVEMAN_THINKING: 'llm.cavemanThinking',
   CACHE_WARMING: 'cache.warming',
   KEYBINDINGS: 'keybindings',
   RETRY_PATTERNS: 'agent.retryPatterns',
@@ -637,6 +659,21 @@ export const DISPLAY_SETTINGS_KEYS = [
   SETTINGS_KEYS.DISPLAY_COLLAPSE_FAVORITES_BY_DEFAULT,
   SETTINGS_KEYS.DISPLAY_MODEL_FAVORITES,
   SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICES,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_INPUT,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_OUTPUT,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_CACHE_READ,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_CACHE_WRITE,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_POPOVER,
+  SETTINGS_KEYS.DISPLAY_ENABLE_MODEL_PRICE_COLORS,
+  SETTINGS_KEYS.DISPLAY_COLOR_MODEL_NAME_BY_OUTPUT_PRICE,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR_INPUT,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR_OUTPUT,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR_CACHE_READ,
+  SETTINGS_KEYS.DISPLAY_SHOW_MODEL_PRICE_IN_BAR_CACHE_WRITE,
+  SETTINGS_KEYS.DISPLAY_MODEL_PRICE_CURRENCY,
+  SETTINGS_KEYS.DISPLAY_MODEL_PRICE_THRESHOLDS,
 ] as const
 
 export async function fetchChangelog(since?: string): Promise<string> {
@@ -767,6 +804,33 @@ export async function fetchBranch(workdir: string): Promise<BranchData> {
 export const branchResource = resource<BranchData, [string]>({
   key: (workdir) => `branch:${workdir}`,
   fetch: fetchBranch,
+  maxAgeMs: 0,
+})
+
+export async function fetchDevServerStatus(workdir: string): Promise<DevServerStatus> {
+  const res = await authFetch(`/api/dev-server?workdir=${encodeURIComponent(workdir)}`)
+  if (!res.ok) throw new Error(`Failed to load dev server status (${res.status})`)
+  return (await res.json()) as DevServerStatus
+}
+
+/** Live dev-server status per workdir. WS `devServer.state` pushes write through. */
+export const devServerStatusResource = resource<DevServerStatus, [string]>({
+  key: (workdir) => `dev-server:status:${workdir}`,
+  fetch: fetchDevServerStatus,
+  maxAgeMs: 0,
+})
+
+export async function fetchDevServerConfig(workdir: string): Promise<DevServerConfig | null> {
+  const res = await authFetch(`/api/dev-server/config?workdir=${encodeURIComponent(workdir)}`)
+  if (!res.ok) throw new Error(`Failed to load dev server config (${res.status})`)
+  const data = (await res.json()) as { config?: DevServerConfig | null }
+  return data.config ?? null
+}
+
+/** Per-workdir `.openfox/dev.json` config; saves POST then write through. */
+export const devServerConfigResource = resource<DevServerConfig | null, [string]>({
+  key: (workdir) => `dev-server:config:${workdir}`,
+  fetch: fetchDevServerConfig,
   maxAgeMs: 0,
 })
 

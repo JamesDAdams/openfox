@@ -2,6 +2,7 @@ import { memo, useRef, useState, useCallback } from 'react'
 import type { Message, ContextState } from '@shared/types.js'
 import { AssistantMessage } from './AssistantMessage'
 import { ChatMessage } from './ChatMessage'
+import { useT } from '../../hooks/useT'
 import { useAgents } from '../../hooks/useAgents'
 import { getAgentColor } from '../../lib/agents-actions'
 import { useSessionStore } from '../../stores/session'
@@ -20,11 +21,11 @@ interface SubAgentContainerProps {
   isStreaming: boolean
 }
 
-const LABELS: Record<string, string> = {
-  verifier: 'Verification',
-  code_reviewer: 'Code Review',
-  test_generator: 'Test Generation',
-  debugger: 'Debug',
+const LABELS: Record<string, { en: string; fr: string }> = {
+  verifier: { en: 'Verification', fr: 'Vérification' },
+  code_reviewer: { en: 'Code Review', fr: 'Revue de code' },
+  test_generator: { en: 'Test Generation', fr: 'Génération de tests' },
+  debugger: { en: 'Debug', fr: 'Débogage' },
 }
 
 function headerStyle(hex: string) {
@@ -43,6 +44,7 @@ function getTextColor(percent: number, dangerZone: boolean): string {
 }
 
 function SubAgentContextBar({ contextState }: { contextState: ContextState }) {
+  const t = useT()
   const { currentTokens, maxTokens, compactionCount, dangerZone } = contextState
   const percent = Math.round((currentTokens / maxTokens) * 100)
 
@@ -51,10 +53,12 @@ function SubAgentContextBar({ contextState }: { contextState: ContextState }) {
       <span className={getTextColor(percent, dangerZone)}>
         {formatTokens(currentTokens)}/{formatTokens(maxTokens)}
       </span>
-      <span className={getTextColor(percent, dangerZone)}>({percent}%)</span>
+      <span className={getTextColor(percent, dangerZone)}>{`(${percent}%)`}</span>
       <ProgressBar percent={percent} dangerZone={dangerZone} size="sm" />
-      {dangerZone && <span className="text-accent-error animate-pulse">Low!</span>}
-      {compactionCount > 0 && <span className="text-text-muted bg-bg-tertiary px-1 rounded">{compactionCount}x</span>}
+      {dangerZone && <span className="text-accent-error animate-pulse">{t({ en: 'Low!', fr: 'Faible !' })}</span>}
+      {compactionCount > 0 && (
+        <span className="text-text-muted bg-bg-tertiary px-1 rounded">{`${compactionCount}x`}</span>
+      )}
     </div>
   )
 }
@@ -65,6 +69,7 @@ export const SubAgentContainer = memo(function SubAgentContainer({
   subAgentId,
   isStreaming: _isStreaming,
 }: SubAgentContainerProps) {
+  const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<OverlayScrollbarsComponentRef<'div'>>(null)
   const [expanded, setExpanded] = useState(false)
@@ -88,7 +93,7 @@ export const SubAgentContainer = memo(function SubAgentContainer({
   }, [expanded])
 
   const agentInfo = agents.find((a) => a.id === subAgentType)
-  const label = agentInfo?.name ?? LABELS[subAgentType] ?? subAgentType
+  const label = agentInfo?.name ?? (LABELS[subAgentType] ? t(LABELS[subAgentType]) : subAgentType)
   const color = getAgentColor(agents, subAgentType)
   const hStyle = headerStyle(color)
 
@@ -121,14 +126,14 @@ export const SubAgentContainer = memo(function SubAgentContainer({
             <span
               className={`w-1 h-1 rounded-full ${isAutoScrollActive ? 'bg-accent-success' : 'border border-text-muted'}`}
             />
-            live
+            {t({ en: 'live', fr: 'direct' })}
           </button>
           <button
             type="button"
             className="text-[10px] px-1.5 py-0.5 rounded bg-bg-tertiary"
             onClick={handleToggleExpand}
           >
-            {expanded ? '▼' : '▶'} Expand
+            {expanded ? '▼' : '▶'} {t({ en: 'Expand', fr: 'Développer' })}
           </button>
         </div>
       </div>

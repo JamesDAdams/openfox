@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useSessionStore } from '../../stores/session'
+import { useT } from '../../hooks/useT'
 import { ProgressBar, LowTokenWarning } from '../shared/ProgressBar'
 import { formatTokens } from '../../lib/format-stats'
 import { exportConversation } from '../../lib/export-conversation'
@@ -14,18 +15,23 @@ interface ContextPopoverProps {
 }
 
 function RebaseIndicator() {
+  const t = useT()
   return (
     <span
       className="ml-1.5 inline-flex items-center gap-1 text-[10px] text-accent-warning"
-      aria-label="System prompt changes available"
+      aria-label={t({
+        en: 'System prompt changes available',
+        fr: 'Des modifications du prompt système sont disponibles',
+      })}
     >
       <span className="w-1.5 h-1.5 rounded-full bg-accent-warning" />
-      changes
+      {t({ en: 'changes', fr: 'modifications' })}
     </span>
   )
 }
 
 export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: ContextPopoverProps) {
+  const t = useT()
   const { sessionId, contextState, currentSession } = useScopedContext()
   const compactContext = useSessionStore((state) => state.compactContext)
   const applyDynamicContext = useApplyDynamicContext()
@@ -49,7 +55,7 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
 
   const tokenDisplay = (
     <span className={getTextColor(percent, dangerZone)}>
-      {formatTokens(currentTokens)} / {formatTokens(maxTokens)} ({percent}%)
+      {`${formatTokens(currentTokens)} / ${formatTokens(maxTokens)} (${percent}%)`}
     </span>
   )
 
@@ -58,7 +64,7 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
       <ProgressBar percent={percent} dangerZone={dangerZone} className="flex-1" />
       <LowTokenWarning dangerZone={dangerZone} />
       {compactionCount > 0 && (
-        <span className="text-[10px] text-text-muted bg-bg-tertiary px-1 py-0.5 rounded">{compactionCount}x</span>
+        <span className="text-[10px] text-text-muted bg-bg-tertiary px-1 py-0.5 rounded">{`${compactionCount}x`}</span>
       )}
     </div>
   )
@@ -68,7 +74,7 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
       <button
         onClick={() => setMenuOpen(!menuOpen)}
         className="p-1 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-        title="More options"
+        title={t({ en: 'More options', fr: 'Plus d’options' })}
       >
         <MoreIcon />
       </button>
@@ -83,9 +89,13 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
               }}
               disabled={isRunning}
               className="w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              title={isRunning ? 'Cannot compact while running' : 'Compact context'}
+              title={
+                isRunning
+                  ? t({ en: 'Cannot compact while running', fr: 'Impossible de compresser pendant l’exécution' })
+                  : t({ en: 'Compact context', fr: 'Compresser le contexte' })
+              }
             >
-              <span className={dangerZone ? 'text-accent-error' : ''}>Compact</span>
+              <span className={dangerZone ? 'text-accent-error' : ''}>{t({ en: 'Compact', fr: 'Compresser' })}</span>
             </button>
             <button
               onClick={() => {
@@ -94,9 +104,14 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
                 else setShowApplyModal(true)
               }}
               className="w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary transition-colors"
-              title="Preview and apply system prompt changes"
+              title={t({
+                en: 'Preview and apply system prompt changes',
+                fr: 'Aperçu et application des modifications du prompt système',
+              })}
             >
-              <span className="text-accent-warning">Rebase system prompt</span>
+              <span className="text-accent-warning">
+                {t({ en: 'Rebase system prompt', fr: 'Redéfinir le prompt système' })}
+              </span>
               {needsRebase && <RebaseIndicator />}
             </button>
             <button
@@ -105,9 +120,9 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
                 setMenuOpen(false)
               }}
               className="w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary transition-colors"
-              title="Export all conversation history"
+              title={t({ en: 'Export all conversation history', fr: 'Exporter tout l’historique de conversation' })}
             >
-              <span>Export all conversation</span>
+              <span>{t({ en: 'Export all conversation', fr: 'Exporter toute la conversation' })}</span>
             </button>
           </div>
         </>
@@ -153,9 +168,13 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
           }}
           disabled={isRunning}
           className="w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary transition-colors disabled:opacity-40 disabled:cursor-not-allowed rounded"
-          title={isRunning ? 'Cannot compact while running' : 'Compact context'}
+          title={
+            isRunning
+              ? t({ en: 'Cannot compact while running', fr: 'Impossible de compresser pendant l’exécution' })
+              : t({ en: 'Compact context', fr: 'Compresser le contexte' })
+          }
         >
-          <span className={dangerZone ? 'text-accent-error' : ''}>Compact</span>
+          <span className={dangerZone ? 'text-accent-error' : ''}>{t({ en: 'Compact', fr: 'Compresser' })}</span>
         </button>
         <button
           onClick={() => {
@@ -163,9 +182,14 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
             else setShowApplyModal(true)
           }}
           className="w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary transition-colors rounded"
-          title="Preview and apply system prompt changes"
+          title={t({
+            en: 'Preview and apply system prompt changes',
+            fr: 'Aperçu et application des modifications du prompt système',
+          })}
         >
-          <span className="text-accent-warning">Rebase system prompt</span>
+          <span className="text-accent-warning">
+            {t({ en: 'Rebase system prompt', fr: 'Redéfinir le prompt système' })}
+          </span>
           {needsRebase && <RebaseIndicator />}
         </button>
         <button
@@ -173,9 +197,9 @@ export function ContextPopover({ variant = 'popover', onUpdateSystemPrompt }: Co
             if (sessionId) exportConversation(sessionId, currentSession)
           }}
           className="w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary transition-colors rounded"
-          title="Export all conversation history"
+          title={t({ en: 'Export all conversation history', fr: 'Exporter tout l’historique de conversation' })}
         >
-          <span>Export all conversation</span>
+          <span>{t({ en: 'Export all conversation', fr: 'Exporter toute la conversation' })}</span>
         </button>
       </div>
       {applyModal}

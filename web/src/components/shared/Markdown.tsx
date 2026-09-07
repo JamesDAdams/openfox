@@ -6,6 +6,7 @@ import { highlightCode, useShikiTheme } from '../../lib/syntax-highlighter'
 import { useDisplaySettings } from '../../hooks/useDisplaySettings'
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { CheckIcon, CopyIcon } from './icons'
+import { useT } from '../../hooks/useT'
 
 interface MarkdownProps {
   content: string
@@ -65,6 +66,7 @@ const CodeBlock = memo(function CodeBlock({
   showSyntaxHighlighting: boolean
   deferHighlight: boolean
 }) {
+  const t = useT()
   const { copied, copy } = useCopyToClipboard()
   const [html, setHtml] = useState<string | null>(null)
   const shikiTheme = useShikiTheme()
@@ -97,7 +99,7 @@ const CodeBlock = memo(function CodeBlock({
             copy(codeString)
           }}
           className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-text-primary p-0.5"
-          title="Copy code"
+          title={t({ en: 'Copy code', fr: 'Copier le code' })}
         >
           {copied ? <CheckIcon /> : <CopyIcon />}
         </button>

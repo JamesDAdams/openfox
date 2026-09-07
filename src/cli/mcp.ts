@@ -6,6 +6,7 @@ import { loadAuthConfig } from './auth.js'
 import { loadGlobalConfig } from './config.js'
 import { getAuthKeyPath } from './paths.js'
 import { buildOpenFoxMcpBootstrap, type OpenFoxMcpBootstrapConfig } from '../server/mcp/server/bootstrap.js'
+import { cliT } from './i18n.js'
 
 const MODE_DEFAULT_PORTS: Record<Mode, number> = { production: 10369, development: 10469, test: 10369 }
 const WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '*'])
@@ -95,7 +96,10 @@ export async function runMcpCommand(mode: Mode, options: { password?: string; po
   const port = livePort ?? requestedPort
   if (!livePort) {
     console.warn(
-      `\n⚠ No running OpenFox server detected near port ${requestedPort} — the config below assumes it will start there.`,
+      cliT({
+        en: `\n⚠ No running OpenFox server detected near port ${requestedPort} — the config below assumes it will start there.`,
+        fr: `\n⚠ Aucun serveur OpenFox en cours détecté près du port ${requestedPort} — la configuration ci-dessous suppose qu’il démarrera là.`,
+      }),
     )
   }
 
@@ -108,7 +112,7 @@ export async function runMcpCommand(mode: Mode, options: { password?: string; po
 
     let entered = options.password
     if (entered == null) {
-      const pwd = await password({ message: 'OpenFox password:' })
+      const pwd = await password({ message: cliT({ en: 'OpenFox password:', fr: 'Mot de passe OpenFox :' }) })
       if (isCancel(pwd)) {
         cancel()
         process.exit(1)
@@ -117,7 +121,7 @@ export async function runMcpCommand(mode: Mode, options: { password?: string; po
     }
 
     if (!verifyPassword(auth.encryptedPassword!, privateKey, entered)) {
-      console.error('Invalid password')
+      console.error(cliT({ en: 'Invalid password', fr: 'Mot de passe invalide' }))
       process.exit(1)
     }
     sessionToken = signSessionToken(privateKey, entered)
@@ -125,12 +129,17 @@ export async function runMcpCommand(mode: Mode, options: { password?: string; po
 
   const bootstrap = buildOpenFoxMcpBootstrap({ host, port, authRequired, sessionToken })
 
-  console.log('OpenFox MCP client config')
-  console.log('=========================')
+  console.log(cliT({ en: 'OpenFox MCP client config', fr: 'Configuration client MCP OpenFox' }))
+  console.log(cliT({ en: '=========================', fr: '=========================' }))
   console.log()
-  console.log(`Endpoint: ${bootstrap.url}`)
+  console.log(cliT({ en: `Endpoint: ${bootstrap.url}`, fr: `Point de terminaison : ${bootstrap.url}` }))
   console.log()
-  console.log('Paste into your MCP client (Claude Desktop, Cursor, ...):')
+  console.log(
+    cliT({
+      en: 'Paste into your MCP client (Claude Desktop, Cursor, ...):',
+      fr: 'Collez dans votre client MCP (Claude Desktop, Cursor, ...) :',
+    }),
+  )
   console.log()
   console.log(renderMcpClientConfig(bootstrap))
 }

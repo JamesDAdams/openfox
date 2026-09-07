@@ -636,6 +636,28 @@ describe('chat.stats handler', () => {
     expect(useSessionStore.getState().liveTurnStats).toEqual(liveStats)
   })
 
+  it('does not clear live turn stats while waiting for user input', async () => {
+    const useSessionStore = await loadSessionStore()
+
+    useSessionStore.setState((state) => ({
+      ...state,
+      currentSession: { id: 'session-1' } as any,
+    }))
+
+    useSessionStore.getState().handleServerMessage({
+      type: 'chat.stats',
+      sessionId: 'session-1',
+      payload: { stats: liveStats },
+    })
+    useSessionStore.getState().handleServerMessage({
+      type: 'chat.done',
+      sessionId: 'session-1',
+      payload: { messageId: 'm1', reason: 'waiting_for_user' },
+    })
+
+    expect(useSessionStore.getState().liveTurnStats).toEqual(liveStats)
+  })
+
   it('ignores chat.stats for sessions that are not open', async () => {
     const useSessionStore = await loadSessionStore()
 

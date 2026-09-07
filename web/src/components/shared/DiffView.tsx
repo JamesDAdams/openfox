@@ -7,6 +7,7 @@ import type { EditContextRegion } from '@shared/types.js'
 import type { DiffLine as ProtocolDiffLine } from '@shared/protocol.js'
 import { ImageModal } from './ImageModal'
 import { Markdown } from './Markdown'
+import { useT } from '../../hooks/useT'
 
 interface DiffViewProps {
   oldString: string
@@ -39,13 +40,14 @@ const DiffSection = memo(function DiffSection({ type, children }: DiffSectionPro
 })
 
 export const DiffView = memo(function DiffView({ oldString, newString, filePath }: DiffViewProps) {
+  const t = useT()
   const language = useMemo(() => getLanguageFromPath(filePath), [filePath])
 
   const hasOld = oldString.length > 0
   const hasNew = newString.length > 0
 
   if (!hasOld && !hasNew) {
-    return <div className="text-xs text-text-muted italic p-2">No changes</div>
+    return <div className="text-xs text-text-muted italic p-2">{t({ en: 'No changes', fr: 'Aucun changement' })}</div>
   }
 
   return (
@@ -92,10 +94,11 @@ export const FilePreview = memo(function FilePreview({ content, filePath }: File
  * Supports multiple edits per region (for replace_all with overlapping contexts).
  */
 export const EditContextView = memo(function EditContextView({ regions, filePath }: EditContextViewProps) {
+  const t = useT()
   const language = useMemo(() => getLanguageFromPath(filePath), [filePath])
 
   if (regions.length === 0) {
-    return <div className="text-xs text-text-muted italic p-2">No changes</div>
+    return <div className="text-xs text-text-muted italic p-2">{t({ en: 'No changes', fr: 'Aucun changement' })}</div>
   }
 
   return (
@@ -215,6 +218,7 @@ function stripLineNumbers(content: string): string {
 }
 
 export const ReadFileView = memo(function ReadFileView({ result, metadata, filePath }: ReadFileViewProps) {
+  const t = useT()
   const [modalOpen, setModalOpen] = useState(false)
   const language = useMemo(() => getLanguageFromPath(filePath), [filePath])
 
@@ -238,7 +242,7 @@ export const ReadFileView = memo(function ReadFileView({ result, metadata, fileP
 
   // Text file - show with syntax highlighting
   if (!result) {
-    return <div className="text-xs text-text-muted italic p-2">Empty file</div>
+    return <div className="text-xs text-text-muted italic p-2">{t({ en: 'Empty file', fr: 'Fichier vide' })}</div>
   }
 
   const content: string = result
@@ -298,6 +302,7 @@ interface UnifiedDiffViewerProps {
  * Used for system prompt diff preview and other text-based diffs.
  */
 export function UnifiedDiffViewer({ diff, hideHeader = false }: UnifiedDiffViewerProps) {
+  const t = useT()
   const changes: Array<{ type: 'removed' | 'added'; content: string }> = []
 
   let i = 0
@@ -332,13 +337,19 @@ export function UnifiedDiffViewer({ diff, hideHeader = false }: UnifiedDiffViewe
   }
 
   if (changes.length === 0) {
-    return <div className="py-8 text-center text-text-muted">No changes detected.</div>
+    return (
+      <div className="py-8 text-center text-text-muted">
+        {t({ en: 'No changes detected.', fr: 'Aucun changement détecté.' })}
+      </div>
+    )
   }
 
   return (
     <div>
       {!hideHeader && (
-        <div className="px-2 py-1 text-xs font-semibold text-text-muted uppercase tracking-wide">Changes:</div>
+        <div className="px-2 py-1 text-xs font-semibold text-text-muted uppercase tracking-wide">
+          {t({ en: 'Changes:', fr: 'Modifications :' })}
+        </div>
       )}
       <div className="font-mono text-xs leading-5">
         {changes.map((change, idx) => (

@@ -1,9 +1,8 @@
 import { ScrollArea } from '../shared/ScrollArea'
 import { useCallback, useEffect, useState } from 'react'
-import { useSessionStore } from '../../stores/session'
 import { authFetch } from '../../lib/api'
 import { sessionBranchesResource } from '../../lib/resources'
-import { useModalState } from '../../hooks/useModalState'
+import { useSessionModalState } from '../../hooks/useSessionModalState'
 import { ModalShell } from '../shared/ModalShell'
 import { BranchIcon } from '../shared/icons'
 import { CreateInputSection } from '../shared/CreateInputSection'
@@ -20,8 +19,9 @@ interface BranchInfo {
 }
 
 export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
-  const refreshSession = useSessionStore((s) => s.loadSession)
   const {
+    t,
+    refreshSession,
     busy,
     setBusy,
     error,
@@ -33,7 +33,7 @@ export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
     handleClose,
     canCreate,
     resetState,
-  } = useModalState(onClose)
+  } = useSessionModalState(onClose)
   const [branches, setBranches] = useState<BranchInfo[]>([])
   const [sourceBranch, setSourceBranch] = useState('')
   const [defaultBranch, setDefaultBranch] = useState('')
@@ -68,7 +68,9 @@ export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
           body: JSON.stringify({ branch: branchName }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Failed to switch branch' }))
+          const err = await res
+            .json()
+            .catch(() => ({ error: t({ en: 'Failed to switch branch', fr: 'Échec du changement de branche' }) }))
           setError(err.error)
           setBusy(false)
           return
@@ -76,11 +78,13 @@ export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
         await refreshSession(sessionId, true)
         onClose()
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to switch branch')
+        setError(
+          e instanceof Error ? e.message : t({ en: 'Failed to switch branch', fr: 'Échec du changement de branche' }),
+        )
         setBusy(false)
       }
     },
-    [sessionId, refreshSession, onClose, setError, setBusy],
+    [sessionId, refreshSession, onClose, setError, setBusy, t],
   )
 
   const handleCreate = useCallback(async () => {
@@ -95,7 +99,9 @@ export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Failed to create branch' }))
+        const err = await res
+          .json()
+          .catch(() => ({ error: t({ en: 'Failed to create branch', fr: 'Échec de la création de la branche' }) }))
         setError(err.error)
         setBusy(false)
         return
@@ -103,17 +109,25 @@ export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
       await refreshSession(sessionId)
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create branch')
+      setError(
+        e instanceof Error ? e.message : t({ en: 'Failed to create branch', fr: 'Échec de la création de la branche' }),
+      )
       setBusy(false)
     }
-  }, [newName, sourceBranch, sessionId, refreshSession, onClose, setError, setBusy])
+  }, [newName, sourceBranch, sessionId, refreshSession, onClose, setError, setBusy, t])
 
   return (
-    <ModalShell isOpen={isOpen} onClose={handleClose} title="Switch Branch" busy={busy} loading={loading}>
+    <ModalShell
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={t({ en: 'Switch Branch', fr: 'Changer de branche' })}
+      busy={busy}
+      loading={loading}
+    >
       <div>
         {branches.length > 0 && (
           <div className="mb-4">
-            <p className="text-sm font-medium text-text-primary mb-2">Branches</p>
+            <p className="text-sm font-medium text-text-primary mb-2">{t({ en: 'Branches', fr: 'Branches' })}</p>
             <ScrollArea className="max-h-48 space-y-0.5 bg-bg-tertiary/30 rounded p-2">
               {branches.map((b) => (
                 <button
@@ -130,8 +144,12 @@ export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
                 >
                   <BranchIcon className="w-3.5 h-3.5 shrink-0" />
                   <span className="font-mono truncate">{b.name}</span>
-                  {b.current && <span className="ml-auto text-xs text-text-muted">(current)</span>}
-                  {!b.current && <span className="ml-auto text-xs text-accent-primary">Switch</span>}
+                  {b.current && (
+                    <span className="ml-auto text-xs text-text-muted">{t({ en: '(current)', fr: '(actuelle)' })}</span>
+                  )}
+                  {!b.current && (
+                    <span className="ml-auto text-xs text-accent-primary">{t({ en: 'Switch', fr: 'Changer' })}</span>
+                  )}
                 </button>
               ))}
             </ScrollArea>
@@ -140,9 +158,9 @@ export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
 
         <CreateInputSection
           icon={<BranchIcon />}
-          title="Create new branch"
+          title={t({ en: 'Create new branch', fr: 'Créer une nouvelle branche' })}
           placeholder="feature/my-branch"
-          buttonLabel="Create Branch"
+          buttonLabel={t({ en: 'Create Branch', fr: 'Créer la branche' })}
           value={newName}
           onChange={setNewName}
           onCreate={handleCreate}
@@ -153,7 +171,13 @@ export function BranchModal({ isOpen, onClose, sessionId }: BranchModalProps) {
         {newName.trim() && (
           <div className="mt-2">
             <label className="text-xs text-text-muted mb-1 block">
-              From branch (optional — defaults to {defaultBranch || 'project default'})
+              {t(
+                {
+                  en: 'From branch (optional — defaults to {{defaultBranch}})',
+                  fr: 'Depuis la branche (facultatif — défaut : {{defaultBranch}})',
+                },
+                { defaultBranch: defaultBranch || t({ en: 'project default', fr: 'branche par défaut du projet' }) },
+              )}
             </label>
             <div className="relative">
               <BranchIcon className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" />

@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { useT } from '../../hooks/useT'
 import { useWorkflows } from '../../hooks/useWorkflows'
 import { useSessionWorkdir } from '../../hooks/useSessionWorkdir'
 import { resolveEffectiveWorkflow } from '../../lib/workflow-scope'
@@ -12,6 +13,7 @@ interface WorkflowStartedData {
 }
 
 export const WorkflowStartedCard = memo(function WorkflowStartedCard({ data }: { data: WorkflowStartedData }) {
+  const t = useT()
   const { workflows } = useWorkflows(useSessionWorkdir())
   const color = resolveEffectiveWorkflow(workflows, data.workflowId)?.color ?? data.workflowColor ?? '#6b7280'
 
@@ -24,7 +26,7 @@ export const WorkflowStartedCard = memo(function WorkflowStartedCard({ data }: {
       <span className="text-sm font-medium" style={{ color }}>
         {data.workflowName}
       </span>
-      <span className="text-text-muted text-sm">started</span>
+      <span className="text-text-muted text-sm">{t({ en: 'started', fr: 'démarré' })}</span>
     </div>
   )
 })

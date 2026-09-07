@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useT } from '../../hooks/useT'
 import { useSessionStore, useIsRunning, useQueuedMessages } from '../../stores/session'
 import { useScopedPaneState } from '../../stores/session/session-scope'
 import { useResource } from '../../hooks/useResource'
@@ -16,7 +17,7 @@ import { AttachmentPreview } from '../shared/AttachmentPreview.js'
 import { PromptHistoryList } from '../shared/PromptHistory.js'
 import { RunningIndicator } from '../shared/RunningIndicator'
 import { AutoScrollToggle } from '../shared/AutoScrollToggle'
-import { SearchIcon, StopIcon } from '../shared/icons'
+import { PauseIcon, PlayIcon, SearchIcon, StopIcon, XCloseIcon } from '../shared/icons'
 import { WorkflowBar } from './WorkflowBar'
 import { processFile } from '../../lib/file-processing.js'
 import { mimeTypeToExtension, isSupportedMimeType } from '../../lib/attachment-utils.js'
@@ -100,6 +101,7 @@ export function ChatInput({
   onSendCommand,
   clearInput,
 }: ChatInputProps) {
+  const t = useT()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const composerWrapRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -111,6 +113,31 @@ export function ChatInput({
   const isRunning = useIsRunning(sessionId)
   const perSessionMcpEnabled = useSetting(SETTINGS_KEYS.FEATURES_PER_SESSION_MCP, 'false').value === 'true'
   const stopGeneration = useSessionStore((state) => state.stopGeneration)
+  const pauseGeneration = useSessionStore((state) => state.pauseGeneration)
+  const resumeGeneration = useSessionStore((state) => state.resumeGeneration)
+  const pauseState = useScopedPaneState(
+    sessionId,
+    (pane) => pane.session?.pauseState ?? 'none',
+    (state) => state.currentSession?.pauseState ?? 'none',
+    'none',
+  )
+  const pauseTooltip =
+    pauseState === 'pending'
+      ? t({ en: 'Cancel pausing', fr: 'Annuler la mise en pause' })
+      : pauseState === 'paused'
+        ? t({ en: 'Paused', fr: 'En pause' })
+        : pauseState === 'resuming'
+          ? t({ en: 'Resuming…', fr: 'Reprise en cours…' })
+          : t({ en: 'Pause', fr: 'Mettre en pause' })
+  const handlePauseResume = () => {
+    if (!sessionId) return
+    if (pauseState === 'none') {
+      pauseGeneration(sessionId)
+    } else {
+      // pending → cancel the pause (no interruption), paused → resume
+      resumeGeneration(sessionId)
+    }
+  }
   const cancelQueued = useSessionStore((state) => state.cancelQueued)
   const queuedMessages = useQueuedMessages(sessionId)
   const restoredInput = useScopedPaneState(
@@ -419,7 +446,15 @@ export function ChatInput({
         const missingRequired = (wf?.parameters ?? []).filter((p) => p.required && !(p.id in slashResult.params))
         if (missingRequired.length > 0) {
           const names = missingRequired.map((p) => p.label || p.id).join(', ')
-          setErrorMessage(`Missing required parameter${missingRequired.length > 1 ? 's' : ''}: ${names}`)
+          setErrorMessage(
+            t(
+              {
+                en: { one: 'Missing required parameter: {{names}}', other: 'Missing required parameters: {{names}}' },
+                fr: { one: 'Paramètre requis manquant : {{names}}', other: 'Paramètres requis manquants : {{names}}' },
+              },
+              { count: missingRequired.length, names },
+            ),
+          )
           sendingRef.current = false
           return
         }
@@ -555,10 +590,10 @@ export function ChatInput({
           type="button"
           onClick={onOpenMessageSearch}
           className="text-sm text-text-muted hover:text-text-primary flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-bg-tertiary transition-colors"
-          aria-label="Browse history"
+          aria-label={t({ en: 'Browse history', fr: 'Historique' })}
         >
           <SearchIcon />
-          Browse history
+          {t({ en: 'Browse history', fr: 'Historique' })}
         </button>
       </div>
 
@@ -627,7 +662,7 @@ export function ChatInput({
               onKeyDown={handleKeyDown}
               onSelect={handleSelect}
               onKeyUp={handleKeyUp}
-              placeholder="What would you like to build?"
+              placeholder={t({ en: 'What would you like to build?', fr: 'Que souhaitez-vous construire ?' })}
               data-testid="chat-input-textarea"
               className="w-full bg-transparent text-sm placeholder:text-text-muted resize-none overflow-y-auto focus:outline-none"
               style={{ minHeight: `${COMPOSER_MIN_HEIGHT}px`, maxHeight: `${COMPOSER_MAX_HEIGHT}px` }}
@@ -662,22 +697,47 @@ export function ChatInput({
                     className="absolute left-3 top-[26px] text-sm text-text-muted/40 pointer-events-none select-none"
                     aria-hidden
                   >
-                    {nextParam}=?
+                    {`${nextParam}=?`}
                   </span>
                 )
               })()}
           </div>
           <div className="flex items-center self-center gap-1.5">
             {isRunning && (
-              <button
-                type="button"
-                onClick={() => sessionId && stopGeneration(sessionId)}
-                data-testid="chat-stop-button"
-                className="flex items-center gap-1 px-4 py-1.5 rounded bg-accent-error/20 text-sm text-accent-error font-medium hover:bg-accent-error/30 transition-colors whitespace-nowrap"
-              >
-                <StopIcon />
-                Abort
-              </button>
+              <div className="flex items-center self-center">
+                <button
+                  type="button"
+                  onClick={handlePauseResume}
+                  disabled={!sessionId || pauseState === 'resuming'}
+                  data-testid="chat-pause-button"
+                  title={pauseTooltip}
+                  aria-label={pauseTooltip}
+                  className={`group flex items-center justify-center px-3 py-2 rounded-l bg-accent-warning/20 text-accent-warning hover:bg-accent-warning/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                    pauseState === 'pending' ? 'animate-pause-pulse' : ''
+                  }`}
+                >
+                  {pauseState === 'paused' || pauseState === 'resuming' ? (
+                    <PlayIcon className="w-4 h-4" />
+                  ) : pauseState === 'pending' ? (
+                    <>
+                      <PauseIcon className="w-4 h-4 group-hover:hidden" />
+                      <XCloseIcon className="hidden w-4 h-4 group-hover:block" />
+                    </>
+                  ) : (
+                    <PauseIcon className="w-4 h-4" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sessionId && stopGeneration(sessionId)}
+                  data-testid="chat-stop-button"
+                  title={t({ en: 'Stop', fr: 'Stopper' })}
+                  aria-label={t({ en: 'Stop', fr: 'Stopper' })}
+                  className="flex items-center justify-center px-3 py-2 rounded-r bg-accent-error/20 text-accent-error hover:bg-accent-error/30 transition-colors border-l border-black/10 dark:border-white/10"
+                >
+                  <StopIcon />
+                </button>
+              </div>
             )}
             <div className="flex items-center">
               <button
@@ -687,7 +747,7 @@ export function ChatInput({
                 data-testid="chat-send-button"
                 className="px-4 py-1.5 rounded-l bg-accent-primary/20 text-sm text-accent-primary font-medium hover:bg-accent-primary/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
-                Send
+                {t({ en: 'Send', fr: 'Envoyer' })}
               </button>
               <MoreMenu
                 onSendCommand={onSendCommand}

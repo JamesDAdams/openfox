@@ -327,6 +327,25 @@ export function updateSessionMessageCount(id: string, delta: number): void {
   }
 }
 
+/**
+ * Set the cached message count directly (used on session import, where the
+ * delta-based update would not produce the imported count).
+ */
+export function setSessionMessageCount(id: string, count: number): void {
+  try {
+    const db = getDatabase()
+    const now = new Date().toISOString()
+
+    db.prepare(
+      `
+      UPDATE sessions SET message_count = ?, updated_at = ? WHERE id = ?
+    `,
+    ).run(count, now, id)
+  } catch {
+    // Database not initialized (test scenarios) - silently skip
+  }
+}
+
 export function getSessionMessageCount(id: string): number {
   try {
     const db = getDatabase()

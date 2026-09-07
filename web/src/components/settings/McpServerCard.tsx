@@ -3,6 +3,7 @@ import { Toggle } from '../shared/Toggle'
 import { ChevronDownIcon } from '../shared/icons'
 import { formatTokens } from '../../lib/mcp-utils'
 import type { McpServerInfo } from '../../lib/resources'
+import { useT } from '../../hooks/useT'
 
 interface McpServerCardTool {
   name: string
@@ -38,6 +39,7 @@ export function McpServerCard({
   actions,
   authPanel,
 }: McpServerCardProps) {
+  const t = useT()
   const [expandedDescs, setExpandedDescs] = useState<Set<string>>(new Set())
   const name = server.name
   return (
@@ -47,8 +49,12 @@ export function McpServerCard({
           <span className={`text-sm ${statusColor}`}>{statusDot}</span>
           <span className="text-sm font-medium text-text-primary">{name}</span>
           <span className="text-xs text-text-muted">{server.config.transport}</span>
-          <span className="text-xs text-text-muted">({tools.length} tools)</span>
-          <span className="text-xs text-text-muted">{formatTokens(server.estimatedTokens)} tokens</span>
+          <span className="text-xs text-text-muted">
+            {t({ en: '({{count}} tools)', fr: '({{count}} outils)' }, { count: tools.length })}
+          </span>
+          <span className="text-xs text-text-muted">
+            {t({ en: '{{tokens}} tokens', fr: '{{tokens}} tokens' }, { tokens: formatTokens(server.estimatedTokens) })}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <Toggle enabled={serverToggleEnabled} onClick={onServerToggle} />
@@ -67,7 +73,9 @@ export function McpServerCard({
           {server.config.url && <div className="text-xs text-text-muted font-mono">{server.config.url}</div>}
           {authPanel}
           {tools.length === 0 ? (
-            <div className="text-xs text-text-muted">No tools available</div>
+            <div className="text-xs text-text-muted">
+              {t({ en: 'No tools available', fr: 'Aucun outil disponible' })}
+            </div>
           ) : (
             <div className="space-y-1">
               {tools.map((tool) => (

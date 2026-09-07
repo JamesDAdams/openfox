@@ -884,6 +884,121 @@ describe('ProviderModal - small context window warning', () => {
     await renderModal([{ id: 'test-model', contextWindow: 32768 }])
     expect(document.body.querySelector('[data-small-context]')).toBeNull()
   })
+
+  it('preserves and updates model pricing in ProviderModal', async () => {
+    const initialModels = [
+      {
+        id: 'model-pricing-test',
+        contextWindow: 128000,
+        selected: true,
+        pricing: {
+          input: 0.15,
+          output: 0.6,
+          cacheRead: 0.075,
+          cacheWrite: 0.3,
+        },
+      },
+    ]
+
+    await new Promise<void>((resolve) => {
+      root.render(
+        <ProviderModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={onSaveMock as (provider: ProviderFormData) => void}
+          editProvider={{
+            id: 'test-provider',
+            name: 'Test Provider',
+            url: 'http://localhost:8000/v1',
+            backend: 'openai',
+            models: initialModels as never,
+          }}
+          initialStep={2}
+          editModelId="model-pricing-test"
+        />,
+      )
+      setTimeout(resolve, 200)
+    })
+
+    const inputPricingInput = document.body.querySelector('[data-testid="pricing-input"]') as HTMLInputElement | null
+    const outputPricingInput = document.body.querySelector('[data-testid="pricing-output"]') as HTMLInputElement | null
+    const discountPricingInput = document.body.querySelector(
+      '[data-testid="pricing-discount"]',
+    ) as HTMLInputElement | null
+    expect(inputPricingInput?.value).toBe('0.15')
+    expect(outputPricingInput?.value).toBe('0.6')
+
+    // Modify the input pricing field and discount field
+    if (inputPricingInput) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      nativeInputValueSetter?.call(inputPricingInput, '0.20')
+      inputPricingInput.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    if (discountPricingInput) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      nativeInputValueSetter?.call(discountPricingInput, '60')
+      discountPricingInput.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+
+    const saveButton = document.body.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
+    saveButton?.click()
+
+    const savedData: ProviderFormData = onSaveMock.mock.calls[0]![0]!
+    const savedModel = savedData.models.find((m) => m.id === 'model-pricing-test')
+    expect(savedModel?.pricing).toEqual({
+      input: 0.2,
+      output: 0.6,
+      cacheRead: 0.075,
+      cacheWrite: 0.3,
+      discount: 60,
+    })
+  })
+
+  it('renders discount badge and pricing summary in the available models checklist in ProviderModal', async () => {
+    const modelsWithPricing = [
+      {
+        id: 'discounted-model',
+        contextWindow: 1050000,
+        selected: false,
+        pricing: {
+          input: 0.08,
+          output: 0.25,
+          discount: 60,
+        },
+      },
+      {
+        id: 'second-model',
+        contextWindow: 128000,
+        selected: true,
+      },
+    ]
+
+    await new Promise<void>((resolve) => {
+      root.render(
+        <ProviderModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={onSaveMock as (provider: ProviderFormData) => void}
+          editProvider={{
+            id: 'test-provider',
+            name: 'Test Provider',
+            url: 'http://localhost:8000/v1',
+            backend: 'openai',
+            models: modelsWithPricing as never,
+          }}
+          initialStep={2}
+        />,
+      )
+      setTimeout(resolve, 200)
+    })
+
+    const badge = document.body.querySelector('[data-pricing-discount-badge]')
+    expect(badge).not.toBeNull()
+    expect(badge?.textContent).toBe('60% off')
+
+    // 60% off $0.08 = $0.032, 60% off $0.25 = $0.1
+    expect(document.body.textContent).toContain('in $0.032 / out $0.1')
+  })
 })
 
 describe('ProviderModal - model mode merge', () => {

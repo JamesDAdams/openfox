@@ -1,4 +1,6 @@
 import { ScrollArea } from '../shared/ScrollArea'
+import { getLocale } from '@shared/i18n/index.js'
+import { useT } from '../../hooks/useT'
 import { Fragment, useRef, useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
 import { DualSparkline } from '../shared/Sparkline'
@@ -52,7 +54,7 @@ function formatRate(value: number): string {
 function formatTimestamp(ts: string): string {
   try {
     const date = new Date(ts)
-    return date.toLocaleTimeString('en-US', { hour12: false })
+    return date.toLocaleTimeString(getLocale(), { hour12: false })
   } catch {
     return ts
   }
@@ -110,6 +112,7 @@ function createExportData(stats: ModelSessionStats) {
 }
 
 export function StatsModal({ isOpen, onClose, stats }: StatsModalProps) {
+  const t = useT()
   const contentRef = useRef<HTMLDivElement>(null)
   const [expandedResponses, setExpandedResponses] = useState<Record<string, boolean>>({})
   const [selectedModelKey, setSelectedModelKey] = useState(() => stats.modelGroups[0]?.key ?? '')
@@ -174,7 +177,12 @@ export function StatsModal({ isOpen, onClose, stats }: StatsModalProps) {
   }, [handleCopyJson])
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Session Stats" size="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t({ en: 'Session Stats', fr: 'Statistiques de la session' })}
+      size="lg"
+    >
       <div ref={contentRef} className="space-y-6">
         <section>
           <div className="flex flex-wrap gap-2">
@@ -198,28 +206,34 @@ export function StatsModal({ isOpen, onClose, stats }: StatsModalProps) {
         {/* Summary Section */}
         {currentStats && (
           <section>
-            <h3 className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wide">Summary</h3>
+            <h3 className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wide">
+              {t({ en: 'Summary', fr: 'Résumé' })}
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <StatCard label="AI Time" value={formatTime(currentStats.aiTime)} />
-              <StatCard label="Total Time" value={formatTime(currentStats.totalTime)} />
-              <StatCard label="Tool Time" value={formatTime(currentStats.toolTime)} />
-              <StatCard label="Responses" value={currentStats.responseCount.toString()} />
-              <StatCard label="LLM Calls" value={currentStats.llmCallCount.toString()} />
+              <StatCard label={t({ en: 'AI Time', fr: 'Temps IA' })} value={formatTime(currentStats.aiTime)} />
+              <StatCard label={t({ en: 'Total Time', fr: 'Temps total' })} value={formatTime(currentStats.totalTime)} />
+              <StatCard label={t({ en: 'Tool Time', fr: 'Temps outils' })} value={formatTime(currentStats.toolTime)} />
+              <StatCard label={t({ en: 'Responses', fr: 'Réponses' })} value={currentStats.responseCount.toString()} />
+              <StatCard label={t({ en: 'LLM Calls', fr: 'Appels LLM' })} value={currentStats.llmCallCount.toString()} />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
               <StatCard
-                label="Prefill Tokens"
+                label={t({ en: 'Prefill Tokens', fr: 'Jetons de préremplissage' })}
                 value={formatTokens(currentStats.prefillTokens)}
                 subValue={`@ ${formatSpeed(currentStats.avgPrefillSpeed)} tok/s`}
               />
               <StatCard
-                label="Gen Tokens"
+                label={t({ en: 'Gen Tokens', fr: 'Jetons générés' })}
                 value={formatTokens(currentStats.generationTokens)}
                 subValue={`@ ${formatSpeed(currentStats.avgGenerationSpeed)} tok/s`}
               />
-              <StatCard label="Avg PP Speed" value={`${formatSpeed(currentStats.avgPrefillSpeed)}`} subValue="tok/s" />
               <StatCard
-                label="Avg TG Speed"
+                label={t({ en: 'Avg PP Speed', fr: 'Vitesse PP moyenne' })}
+                value={`${formatSpeed(currentStats.avgPrefillSpeed)}`}
+                subValue="tok/s"
+              />
+              <StatCard
+                label={t({ en: 'Avg TG Speed', fr: 'Vitesse TG moyenne' })}
                 value={`${formatSpeed(currentStats.avgGenerationSpeed)}`}
                 subValue="tok/s"
               />
@@ -232,20 +246,20 @@ export function StatsModal({ isOpen, onClose, stats }: StatsModalProps) {
           <section>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
-                Performance Progression
+                {t({ en: 'Performance Progression', fr: 'Progression des performances' })}
               </h3>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleCopyJson}
                   className="px-2 py-1 text-xs text-text-muted hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
                 >
-                  Copy JSON
+                  {t({ en: 'Copy JSON', fr: 'Copier le JSON' })}
                 </button>
                 <button
                   onClick={handleExportPng}
                   className="px-2 py-1 text-xs text-text-muted hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
                 >
-                  Save PNG
+                  {t({ en: 'Save PNG', fr: 'Enregistrer le PNG' })}
                 </button>
               </div>
             </div>
@@ -265,7 +279,10 @@ export function StatsModal({ isOpen, onClose, stats }: StatsModalProps) {
         {currentStats && (
           <section>
             <h3 className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wide">
-              Response Log ({currentStats.responseCount} responses)
+              {t(
+                { en: 'Response Log ({{count}} responses)', fr: 'Journal des réponses ({{count}} réponses)' },
+                { count: currentStats.responseCount },
+              )}
             </h3>
             <ScrollArea className="bg-bg-tertiary/30 rounded">
               <table className="w-full table-fixed border-separate border-spacing-0 text-xs">
@@ -282,12 +299,12 @@ export function StatsModal({ isOpen, onClose, stats }: StatsModalProps) {
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wide text-text-muted/80">
                     <th className="px-3 py-2 text-center font-medium">#</th>
-                    <th className="px-2 py-2 text-center font-medium">At</th>
-                    <th className="px-2 py-2 text-center font-medium">Time</th>
-                    <th className="px-2 py-2 text-center font-medium">Context</th>
+                    <th className="px-2 py-2 text-center font-medium">{t({ en: 'At', fr: 'À' })}</th>
+                    <th className="px-2 py-2 text-center font-medium">{t({ en: 'Time', fr: 'Durée' })}</th>
+                    <th className="px-2 py-2 text-center font-medium">{t({ en: 'Context', fr: 'Contexte' })}</th>
                     <th className="px-2 py-2 text-center font-medium">PP t/s</th>
                     <th className="px-2 py-2 text-center font-medium">TG t/s</th>
-                    <th className="px-2 py-2 text-center font-medium">Calls</th>
+                    <th className="px-2 py-2 text-center font-medium">{t({ en: 'Calls', fr: 'Appels' })}</th>
                     <th className="px-2 py-2" />
                   </tr>
                 </thead>
@@ -394,7 +411,7 @@ function CallDataPointRow({ dataPoint, index }: { dataPoint: CallStatsDataPoint;
     <>
       <tr className={`${index % 2 === 0 ? 'bg-bg-tertiary/10' : 'bg-bg-tertiary/5'}`}>
         <td className="px-3 py-2 pl-6 text-center text-text-muted align-middle border-l border-border/60">
-          c{dataPoint.callIndex}
+          {`c${dataPoint.callIndex}`}
         </td>
         <td className="px-2 py-2 text-center text-text-muted font-mono align-middle whitespace-nowrap">
           {formatTimestamp(dataPoint.timestamp)}
@@ -420,10 +437,10 @@ function CallDataPointRow({ dataPoint, index }: { dataPoint: CallStatsDataPoint;
         <tr className={`${index % 2 === 0 ? 'bg-bg-tertiary/5' : 'bg-bg-tertiary/[2.5%]'}`}>
           <td colSpan={8} className="px-6 py-1.5 border-l border-border/60">
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-text-muted">
-              {dataPoint.temperature !== undefined && <span>temp: {dataPoint.temperature.toFixed(2)}</span>}
-              {dataPoint.topP !== undefined && <span>topP: {dataPoint.topP.toFixed(2)}</span>}
-              {dataPoint.topK !== undefined && <span>topK: {dataPoint.topK}</span>}
-              {dataPoint.maxTokens !== undefined && <span>maxTok: {dataPoint.maxTokens}</span>}
+              {dataPoint.temperature !== undefined && <span>{`temp: ${dataPoint.temperature.toFixed(2)}`}</span>}
+              {dataPoint.topP !== undefined && <span>{`topP: ${dataPoint.topP.toFixed(2)}`}</span>}
+              {dataPoint.topK !== undefined && <span>{`topK: ${dataPoint.topK}`}</span>}
+              {dataPoint.maxTokens !== undefined && <span>{`maxTok: ${dataPoint.maxTokens}`}</span>}
             </div>
           </td>
         </tr>

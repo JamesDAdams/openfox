@@ -28,6 +28,7 @@ import { getToolRegistryForAgent } from '../tools/index.js'
 import { computeSessionStats } from '../../shared/stats.js'
 import { formatGitDiffFiles } from '../git/diff.js'
 import { executeShellCommand } from './shell.js'
+import { serverT } from '../i18n.js'
 import { logger } from '../utils/logger.js'
 import { LLMError } from '../utils/errors.js'
 
@@ -747,9 +748,10 @@ export async function executeWorkflow(
 
         // Emit a message showing the shell command being run
         const shellMsgId = crypto.randomUUID()
+        const runningContent = serverT({ en: 'Running: `{{command}}`', fr: 'Exécution : `{{command}}`' }, { command })
         eventStore.append(
           sessionId,
-          createMessageStartEvent(shellMsgId, 'user', `Running: \`${command}\``, {
+          createMessageStartEvent(shellMsgId, 'user', runningContent, {
             ...(currentWindowMessageOptions ?? {}),
             isSystemGenerated: true,
             messageKind: 'auto-prompt',
@@ -761,7 +763,7 @@ export async function executeWorkflow(
             createChatMessageMessage({
               id: shellMsgId,
               role: 'user',
-              content: `Running: \`${command}\``,
+              content: runningContent,
               timestamp: new Date().toISOString(),
               isSystemGenerated: true,
               messageKind: 'auto-prompt',
@@ -782,8 +784,14 @@ export async function executeWorkflow(
 
         // Append output as message content
         const outputContent = output
-          ? `Exit code: ${result.exitCode}\n\`\`\`\n${output.slice(0, 10000)}\n\`\`\``
-          : `Exit code: ${result.exitCode}`
+          ? serverT(
+              {
+                en: 'Exit code: {{code}}\n```\n{{output}}\n```',
+                fr: 'Code de sortie : {{code}}\n```\n{{output}}\n```',
+              },
+              { code: result.exitCode, output: output.slice(0, 10000) },
+            )
+          : serverT({ en: 'Exit code: {{code}}', fr: 'Code de sortie : {{code}}' }, { code: result.exitCode })
         eventStore.append(sessionId, { type: 'message.done', data: { messageId: shellMsgId } })
 
         const outputMsgId = crypto.randomUUID()

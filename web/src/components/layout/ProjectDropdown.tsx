@@ -1,8 +1,9 @@
 import { useMemo, useState, useCallback } from 'react'
 import { useLocation } from 'wouter'
 import { useProjectStore } from '../../stores/project'
+import { useT } from '../../hooks/useT'
 import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
-import { ChevronDownIcon, CheckIcon, StarIcon, StarFilledIcon, PlusMdIcon, FolderIcon } from '../shared/icons'
+import { ChevronDownIcon, CheckIcon, StarIcon, StarFilledIcon, PlusMdIcon, FolderIcon, HomeIcon } from '../shared/icons'
 import { CreateProjectModal } from '../CreateProjectModal.js'
 import { DirectoryBrowser } from '../shared/DirectoryBrowser.js'
 import { useWorkdir } from '../../hooks/useWorkdir.js'
@@ -14,6 +15,7 @@ interface ProjectDropdownProps {
 }
 
 export function ProjectDropdown({ projects, currentProject }: ProjectDropdownProps) {
+  const t = useT()
   const [, navigate] = useLocation()
   const setCurrentProjectId = useProjectStore((state) => state.setCurrentProjectId)
   const toggleStar = useProjectStore((state) => state.toggleStar)
@@ -54,7 +56,11 @@ export function ProjectDropdown({ projects, currentProject }: ProjectDropdownPro
             toggleStar(proj.id, !proj.isStarred)
           }}
           className="flex-shrink-0 p-1 hover:bg-bg-tertiary rounded transition-colors"
-          title={proj.isStarred ? 'Unstar project' : 'Star project'}
+          title={
+            proj.isStarred
+              ? t({ en: 'Unstar project', fr: 'Retirer des favoris' })
+              : t({ en: 'Star project', fr: 'Ajouter aux favoris' })
+          }
         >
           {proj.isStarred ? (
             <StarFilledIcon className="w-3.5 h-3.5 text-yellow-500" />
@@ -76,8 +82,17 @@ export function ProjectDropdown({ projects, currentProject }: ProjectDropdownPro
     {
       label: (
         <div className="flex items-center gap-2">
+          <HomeIcon className="w-4 h-4" />
+          <span>{t({ en: 'Home', fr: 'Accueil' })}</span>
+        </div>
+      ),
+      href: '/',
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
           <FolderIcon className="w-4 h-4" />
-          <span>Open Project</span>
+          <span>{t({ en: 'Open Project', fr: 'Ouvrir un projet' })}</span>
         </div>
       ),
       onClick: () => setShowBrowser(true),
@@ -86,7 +101,7 @@ export function ProjectDropdown({ projects, currentProject }: ProjectDropdownPro
       label: (
         <div className="flex items-center gap-2 text-accent-primary">
           <PlusMdIcon className="w-4 h-4" />
-          <span>New Project</span>
+          <span>{t({ en: 'New Project', fr: 'Nouveau projet' })}</span>
         </div>
       ),
       onClick: () => setShowCreateModal(true),
@@ -100,11 +115,17 @@ export function ProjectDropdown({ projects, currentProject }: ProjectDropdownPro
         footerItems={footerItems}
         trigger={
           <button
-            className={`text-text-secondary hover:text-text-primary text-sm truncate flex items-center gap-1 ${currentProject ? 'hover:underline' : ''}`}
-            title={currentProject?.name ?? 'Select project'}
+            className={`text-text-secondary hover:text-text-primary text-sm min-w-0 flex items-center gap-1 ${currentProject ? 'hover:underline' : ''}`}
+            title={currentProject?.name ?? t({ en: 'Select project', fr: 'Sélectionner un projet' })}
           >
-            {currentProject?.name ?? <span className="text-text-muted">Select project...</span>}
-            <ChevronDownIcon />
+            {currentProject ? (
+              <span className="truncate max-w-[120px]">{currentProject.name}</span>
+            ) : (
+              <span className="text-text-muted truncate max-w-[120px]">
+                {t({ en: 'Select project...', fr: 'Sélectionner un projet…' })}
+              </span>
+            )}
+            <ChevronDownIcon className="w-3 h-3 flex-shrink-0" />
           </button>
         }
         minWidth="250px"

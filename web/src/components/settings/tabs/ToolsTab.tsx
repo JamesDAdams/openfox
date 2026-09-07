@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { authFetch } from '../../../lib/api'
+import { useT } from '../../../hooks/useT'
 import { Button } from '../../shared/Button'
 import { Toggle } from '../../shared/Toggle'
 import { Input } from '../../shared/Input'
@@ -44,10 +45,11 @@ interface McpServerFormFieldsProps {
 }
 
 function McpServerFormFields({ formData, onChange }: McpServerFormFieldsProps) {
+  const t = useT()
   return (
     <>
       <div>
-        <label className="block text-xs text-text-secondary mb-1">Transport</label>
+        <label className="block text-xs text-text-secondary mb-1">{t({ en: 'Transport', fr: 'Transport' })}</label>
         <div className="flex gap-1">
           <button
             onClick={() => onChange({ ...formData, transport: 'stdio' })}
@@ -75,20 +77,23 @@ function McpServerFormFields({ formData, onChange }: McpServerFormFieldsProps) {
       {formData.transport === 'stdio' ? (
         <>
           <FormField
-            label="Command"
+            label={t({ en: 'Command', fr: 'Commande' })}
             value={formData.command}
             onChange={(v) => onChange({ ...formData, command: v })}
             placeholder="e.g. npx"
           />
           <FormField
-            label="Arguments"
+            label={t({ en: 'Arguments', fr: 'Arguments' })}
             value={formData.args}
             onChange={(v) => onChange({ ...formData, args: v })}
-            placeholder="space-separated args"
+            placeholder={t({ en: 'space-separated args', fr: 'arguments séparés par des espaces' })}
           />
           <div>
             <label className="block text-xs text-text-secondary mb-1">
-              Environment variables <span className="text-text-muted">(KEY=VALUE, one per line)</span>
+              {t({ en: 'Environment variables', fr: 'Variables d’environnement' })}{' '}
+              <span className="text-text-muted">
+                ({t({ en: 'KEY=VALUE, one per line', fr: 'KEY=VALEUR, une par ligne' })})
+              </span>
             </label>
             <textarea
               value={formData.env}
@@ -109,7 +114,10 @@ function McpServerFormFields({ formData, onChange }: McpServerFormFieldsProps) {
           />
           <div>
             <label className="block text-xs text-text-secondary mb-1">
-              Headers <span className="text-text-muted">(KEY=VALUE, one per line)</span>
+              {t({ en: 'Headers', fr: 'En-têtes' })}{' '}
+              <span className="text-text-muted">
+                ({t({ en: 'KEY=VALUE, one per line', fr: 'KEY=VALEUR, une par ligne' })})
+              </span>
             </label>
             <textarea
               value={formData.headers}
@@ -127,20 +135,22 @@ function McpServerFormFields({ formData, onChange }: McpServerFormFieldsProps) {
               className="mt-0.5"
             />
             <span className="text-xs text-text-secondary">
-              Authorize with OAuth
+              {t({ en: 'Authorize with OAuth', fr: 'Autoriser avec OAuth' })}
               <span className="block text-text-muted">
-                For servers that require a sign in rather than a static credential. Expand the server afterwards to
-                authorize.
+                {t({
+                  en: 'For servers that require a sign in rather than a static credential. Expand the server afterwards to authorize.',
+                  fr: 'Pour les serveurs qui exigent une connexion plutôt qu’un identifiant statique. Développez ensuite le serveur pour autoriser.',
+                })}
               </span>
             </span>
           </label>
         </>
       )}
       <FormField
-        label="Timeout (seconds)"
+        label={t({ en: 'Timeout (seconds)', fr: 'Délai d’expiration (secondes)' })}
         value={formData.timeout}
         onChange={(v) => onChange({ ...formData, timeout: v })}
-        placeholder="optional, e.g. 30"
+        placeholder={t({ en: 'optional, e.g. 30', fr: 'facultatif, ex. 30' })}
       />
     </>
   )
@@ -155,6 +165,7 @@ const MCP_OAUTH_BUTTON_CLASS =
   'px-2 py-1 rounded text-xs font-medium text-text-muted hover:text-text-primary hover:bg-bg-primary transition-colors disabled:opacity-50'
 
 function McpOAuthPanel({ serverName, onChanged }: McpOAuthPanelProps) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const [redirectUri, setRedirectUri] = useState('')
   const [pasted, setPasted] = useState('')
@@ -191,7 +202,7 @@ function McpOAuthPanel({ serverName, onChanged }: McpOAuthPanelProps) {
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error ?? 'Request failed')
+    if (!res.ok) throw new Error(data.error ?? t({ en: 'Request failed', fr: 'Échec de la requête' }))
     return data
   }
 
@@ -217,7 +228,10 @@ function McpOAuthPanel({ serverName, onChanged }: McpOAuthPanelProps) {
   const handleForget = () =>
     call(async () => {
       const res = await authFetch(endpoint, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Could not clear the stored credentials')
+      if (!res.ok)
+        throw new Error(
+          t({ en: 'Could not clear the stored credentials', fr: 'Impossible d’effacer les identifiants enregistrés' }),
+        )
       onChanged()
     })
 
@@ -225,28 +239,30 @@ function McpOAuthPanel({ serverName, onChanged }: McpOAuthPanelProps) {
     <div className="space-y-1.5 py-1">
       <div className="flex items-center gap-1">
         <button onClick={handleStart} disabled={busy} className={MCP_OAUTH_BUTTON_CLASS}>
-          Authorize
+          {t({ en: 'Authorize', fr: 'Autoriser' })}
         </button>
         <button onClick={handleForget} disabled={busy} className={MCP_OAUTH_BUTTON_CLASS}>
-          Forget credentials
+          {t({ en: 'Forget credentials', fr: 'Oublier les identifiants' })}
         </button>
       </div>
       {redirectUri && (
         <div className="space-y-1">
           <div className="text-xs text-text-muted">
-            A tab opened for you to sign in. If it ends up on a page that will not load, copy the whole address from it
-            and paste it below.
+            {t({
+              en: 'A tab opened for you to sign in. If it ends up on a page that will not load, copy the whole address from it and paste it below.',
+              fr: 'Un onglet s’est ouvert pour vous connecter. S’il aboutit sur une page qui ne charge pas, copiez l’adresse complète depuis cet onglet et collez-la ci-dessous.',
+            })}
           </div>
           <div className="text-xs text-text-muted font-mono break-all">{redirectUri}</div>
           <div className="flex items-center gap-1">
             <input
               value={pasted}
               onChange={(e) => setPasted(e.target.value)}
-              placeholder="paste the callback URL"
+              placeholder={t({ en: 'paste the callback URL', fr: 'collez l’URL de rappel' })}
               className="flex-1 px-2 py-1 bg-bg-tertiary border border-border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-accent-primary"
             />
             <button onClick={handleComplete} disabled={busy || !pasted} className={MCP_OAUTH_BUTTON_CLASS}>
-              Finish
+              {t({ en: 'Finish', fr: 'Terminer' })}
             </button>
           </div>
         </div>
@@ -318,10 +334,11 @@ function McpFormActions({
   onCancel: () => void
   onSave: () => void
 }) {
+  const t = useT()
   return (
     <div className="flex justify-end gap-2 pt-2 border-t border-border">
       <Button variant="secondary" onClick={onCancel} disabled={saving}>
-        Cancel
+        {t({ en: 'Cancel', fr: 'Annuler' })}
       </Button>
       <Button variant="primary" onClick={onSave} disabled={saving}>
         {saving ? savingLabel : saveLabel}
@@ -331,6 +348,7 @@ function McpFormActions({
 }
 
 export function ToolsTab() {
+  const t = useT()
   const searchEngineSetting = useSetting(SETTINGS_KEYS.SEARCH_ENGINE).value
   const tavilyKeySetting = useSetting(SETTINGS_KEYS.SEARCH_TAVILY_API_KEY).value
   const searxngUrlSetting = useSetting(SETTINGS_KEYS.SEARCH_SEARXNG_URL).value
@@ -445,7 +463,7 @@ export function ToolsTab() {
       const normalized: McpServerState[] = (data ?? []).map((s) => ({
         name: s.name,
         status: s.status as McpServerState['status'],
-        tools: s.tools.map((t) => ({ ...t, inputSchema: t.inputSchema ?? {} })),
+        tools: s.tools.map((tool) => ({ ...tool, inputSchema: tool.inputSchema ?? {} })),
         estimatedTokens: s.estimatedTokens,
         config: { ...s.config, transport: s.config.transport ?? 'stdio' },
       }))
@@ -480,12 +498,14 @@ export function ToolsTab() {
   }
 
   function validateTransportFields(): string | null {
-    if (formData.transport === 'stdio' && !formData.command) return 'Command is required for stdio transport'
-    if (formData.transport === 'http' && !formData.url) return 'URL is required for HTTP transport'
+    if (formData.transport === 'stdio' && !formData.command)
+      return t({ en: 'Command is required for stdio transport', fr: 'La commande est requise pour le transport stdio' })
+    if (formData.transport === 'http' && !formData.url)
+      return t({ en: 'URL is required for HTTP transport', fr: 'L’URL est requise pour le transport HTTP' })
     if (formData.timeout) {
       const parsed = parseFloat(formData.timeout)
       if (isNaN(parsed) || parsed <= 0) {
-        return 'Timeout must be a positive number'
+        return t({ en: 'Timeout must be a positive number', fr: 'Le délai d’expiration doit être un nombre positif' })
       }
     }
     return null
@@ -528,7 +548,7 @@ export function ToolsTab() {
   const handleAdd = async () => {
     setFormError('')
     if (!formData.name) {
-      setFormError('Name is required')
+      setFormError(t({ en: 'Name is required', fr: 'Le nom est requis' }))
       return
     }
     const transportError = validateTransportFields()
@@ -546,7 +566,7 @@ export function ToolsTab() {
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error ?? 'Failed to add server')
+        throw new Error(data.error ?? t({ en: 'Failed to add server', fr: 'Échec de l’ajout du serveur' }))
       }
       setShowAddForm(false)
       setFormData(defaultFormData)
@@ -599,7 +619,7 @@ export function ToolsTab() {
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error ?? 'Failed to update server')
+        throw new Error(data.error ?? t({ en: 'Failed to update server', fr: 'Échec de la mise à jour du serveur' }))
       }
       setEditingServer(null)
       setFormData(defaultFormData)
@@ -616,7 +636,10 @@ export function ToolsTab() {
       const res = await authFetch(`/api/mcp/servers/${encodeURIComponent(name)}`, { method: 'DELETE' })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error((data as { error?: string }).error ?? 'Failed to remove server')
+        throw new Error(
+          (data as { error?: string }).error ??
+            t({ en: 'Failed to remove server', fr: 'Échec de la suppression du serveur' }),
+        )
       }
       clearConfirm()
       setMcpError('')
@@ -638,7 +661,10 @@ export function ToolsTab() {
       )
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error((data as { error?: string }).error ?? 'Failed to toggle tool')
+        throw new Error(
+          (data as { error?: string }).error ??
+            t({ en: 'Failed to toggle tool', fr: 'Échec de l’activation/désactivation de l’outil' }),
+        )
       }
       setMcpError('')
       await loadServers()
@@ -656,7 +682,10 @@ export function ToolsTab() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error((data as { error?: string }).error ?? 'Failed to toggle server')
+        throw new Error(
+          (data as { error?: string }).error ??
+            t({ en: 'Failed to toggle server', fr: 'Échec de l’activation/désactivation du serveur' }),
+        )
       }
       setMcpError('')
       await loadServers()
@@ -669,11 +698,20 @@ export function ToolsTab() {
     <div className="space-y-8">
       {/* ── Search Engine Section ── */}
       <div>
-        <h3 className="text-sm font-medium text-text-primary mb-3">Search Engine</h3>
-        <p className="text-sm text-text-muted mb-3">Configure a web search engine for the web_search tool.</p>
+        <h3 className="text-sm font-medium text-text-primary mb-3">
+          {t({ en: 'Search Engine', fr: 'Moteur de recherche' })}
+        </h3>
+        <p className="text-sm text-text-muted mb-3">
+          {t({
+            en: 'Configure a web search engine for the web_search tool.',
+            fr: 'Configurez un moteur de recherche web pour l’outil web_search.',
+          })}
+        </p>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-text-primary mb-1">Engine</label>
+            <label className="block text-xs font-medium text-text-primary mb-1">
+              {t({ en: 'Engine', fr: 'Moteur' })}
+            </label>
             <div className="flex gap-2">
               {(['', 'tavily', 'searxng'] as const).map((engine) => (
                 <button
@@ -685,14 +723,16 @@ export function ToolsTab() {
                       : 'border-border text-text-muted hover:text-text-primary'
                   }`}
                 >
-                  {engine || 'Off'}
+                  {engine || t({ en: 'Off', fr: 'Désactivé' })}
                 </button>
               ))}
             </div>
           </div>
           {searchEngine === 'tavily' && (
             <div>
-              <label className="block text-xs font-medium text-text-primary mb-1">Tavily API Key</label>
+              <label className="block text-xs font-medium text-text-primary mb-1">
+                {t({ en: 'Tavily API Key', fr: 'Clé API Tavily' })}
+              </label>
               <div className="flex gap-2 items-center">
                 <Input
                   type="password"
@@ -711,7 +751,7 @@ export function ToolsTab() {
               </div>
               {tavilyTestError && <p className="text-xs text-red-500 mt-1">{tavilyTestError}</p>}
               <p className="text-xs text-text-muted mt-1">
-                Get a free API key at{' '}
+                {t({ en: 'Get a free API key at', fr: 'Obtenez une clé API gratuite sur' })}{' '}
                 <a
                   href="https://app.tavily.com"
                   target="_blank"
@@ -726,7 +766,9 @@ export function ToolsTab() {
           {searchEngine === 'searxng' && (
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-text-primary mb-1">SearXNG URL</label>
+                <label className="block text-xs font-medium text-text-primary mb-1">
+                  {t({ en: 'SearXNG URL', fr: 'URL SearXNG' })}
+                </label>
                 <Input
                   type="url"
                   value={searxngUrl}
@@ -737,13 +779,14 @@ export function ToolsTab() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-primary mb-1">
-                  API Key <span className="text-text-muted">(optional)</span>
+                  {t({ en: 'API Key', fr: 'Clé API' })}{' '}
+                  <span className="text-text-muted">({t({ en: 'optional', fr: 'facultatif' })})</span>
                 </label>
                 <Input
                   type="password"
                   value={searxngKey}
                   onChange={(e) => setSearxngKey(e.target.value)}
-                  placeholder="Optional API key"
+                  placeholder={t({ en: 'Optional API key', fr: 'Clé API facultative' })}
                   className="w-full"
                 />
               </div>
@@ -766,10 +809,12 @@ export function ToolsTab() {
 
           {/* ── Shell Section (Windows) ── */}
           <div>
-            <h3 className="text-sm font-medium text-text-primary mb-3">Shell</h3>
+            <h3 className="text-sm font-medium text-text-primary mb-3">{t({ en: 'Shell', fr: 'Shell' })}</h3>
             <p className="text-sm text-text-muted mb-3">
-              Shell used to run agent commands and integrated terminals. Git Bash gives the agent a Unix-like toolset
-              (grep, sed, ls…) and usually works better than cmd.exe.
+              {t({
+                en: 'Shell used to run agent commands and integrated terminals. Git Bash gives the agent a Unix-like toolset (grep, sed, ls…) and usually works better than cmd.exe.',
+                fr: 'Shell utilisé pour exécuter les commandes de l’agent et les terminaux intégrés. Git Bash offre à l’agent un environnement de type Unix (grep, sed, ls…) et fonctionne généralement mieux que cmd.exe.',
+              })}
             </p>
             <div className="flex gap-2">
               {shells.map((shell) => (
@@ -777,7 +822,11 @@ export function ToolsTab() {
                   key={shell.id}
                   onClick={() => void setSetting(SETTINGS_KEYS.TOOLS_SHELL, shell.id)}
                   disabled={!shell.available}
-                  title={shell.available ? undefined : 'Not found on this machine'}
+                  title={
+                    shell.available
+                      ? undefined
+                      : t({ en: 'Not found on this machine', fr: 'Introuvable sur cette machine' })
+                  }
                   className={`px-3 py-1.5 rounded text-sm border transition-colors ${
                     currentShell === shell.id
                       ? 'bg-accent-primary/10 border-accent-primary text-accent-primary'
@@ -787,12 +836,15 @@ export function ToolsTab() {
                   }`}
                 >
                   {shell.label}
-                  {!shell.available && ' (not found)'}
+                  {!shell.available && t({ en: ' (not found)', fr: ' (introuvable)' })}
                 </button>
               ))}
             </div>
             <p className="text-xs text-text-muted mt-2">
-              Applies to new commands and newly opened terminals. Running terminals keep their current shell.
+              {t({
+                en: 'Applies to new commands and newly opened terminals. Running terminals keep their current shell.',
+                fr: 'S’applique aux nouvelles commandes et aux terminaux récemment ouverts. Les terminaux en cours conservent leur shell actuel.',
+              })}
             </p>
           </div>
         </>
@@ -802,9 +854,14 @@ export function ToolsTab() {
 
       {/* ── Token Optimization Section ── */}
       <div>
-        <h3 className="text-sm font-medium text-text-primary mb-3">Token Optimization</h3>
+        <h3 className="text-sm font-medium text-text-primary mb-3">
+          {t({ en: 'Token Optimization', fr: 'Optimisation des jetons' })}
+        </h3>
         <p className="text-sm text-text-muted mb-3">
-          Reduce token consumption by filtering command output through RTK. See the{' '}
+          {t({
+            en: 'Reduce token consumption by filtering command output through RTK. See the',
+            fr: 'Réduisez la consommation de jetons en filtrant la sortie des commandes via RTK. Voir le',
+          })}{' '}
           <a
             href="https://github.com/rtk-ai/rtk"
             target="_blank"
@@ -813,15 +870,25 @@ export function ToolsTab() {
           >
             README
           </a>{' '}
-          for installation.
+          {t({ en: 'for installation.', fr: 'pour l’installation.' })}
         </p>
         <div className="flex items-center justify-between py-2">
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-text-primary">Enable RTK auto-rewrite</span>
-              {rtkStatus === 'checking' && <span className="text-xs text-text-muted animate-pulse">checking…</span>}
-              {rtkStatus === 'available' && <span className="text-xs text-accent-success">● installed</span>}
-              {rtkStatus === 'unavailable' && <span className="text-xs text-accent-error">○ not found</span>}
+              <span className="text-sm text-text-primary">
+                {t({ en: 'Enable RTK auto-rewrite', fr: 'Activer la réécriture automatique RTK' })}
+              </span>
+              {rtkStatus === 'checking' && (
+                <span className="text-xs text-text-muted animate-pulse">
+                  {t({ en: 'checking…', fr: 'vérification…' })}
+                </span>
+              )}
+              {rtkStatus === 'available' && (
+                <span className="text-xs text-accent-success">{t({ en: '● installed', fr: '● installé' })}</span>
+              )}
+              {rtkStatus === 'unavailable' && (
+                <span className="text-xs text-accent-error">{t({ en: '○ not found', fr: '○ introuvable' })}</span>
+              )}
             </div>
           </div>
           <Toggle
@@ -831,8 +898,10 @@ export function ToolsTab() {
         </div>
         {shells.length > 0 && useRtkSetting === 'true' && currentShell !== 'gitbash' && (
           <p className="text-xs text-accent-warning mt-1">
-            RTK only rewrites Unix-style commands — with this shell it will rarely apply and can break some commands.
-            Git Bash is recommended.
+            {t({
+              en: 'RTK only rewrites Unix-style commands — with this shell it will rarely apply and can break some commands. Git Bash is recommended.',
+              fr: 'RTK ne réécrit que les commandes de type Unix — avec ce shell, il s’appliquera rarement et peut casser certaines commandes. Git Bash est recommandé.',
+            })}
           </p>
         )}
       </div>
@@ -841,14 +910,20 @@ export function ToolsTab() {
 
       {/* ── Agent Confirmations Section ── */}
       <div>
-        <h3 className="text-sm font-medium text-text-primary mb-3">Agent Confirmations</h3>
+        <h3 className="text-sm font-medium text-text-primary mb-3">
+          {t({ en: 'Agent Confirmations', fr: 'Confirmations de l’agent' })}
+        </h3>
         <p className="text-sm text-text-muted mb-3">
-          Require confirmation for workspace changes and git mutations. When disabled, the agent proceeds without
-          interruption.
+          {t({
+            en: 'Require confirmation for workspace changes and git mutations. When disabled, the agent proceeds without interruption.',
+            fr: 'Exigez une confirmation pour les modifications de l’espace de travail et les mutations git. Lorsque désactivé, l’agent continue sans interruption.',
+          })}
         </p>
         <div className="flex items-center justify-between py-2">
           <div className="flex-1">
-            <span className="text-sm text-text-primary">Confirm on workspace &amp; git actions</span>
+            <span className="text-sm text-text-primary">
+              {t({ en: 'Confirm on workspace & git actions', fr: 'Confirmer les actions workspace et git' })}
+            </span>
           </div>
           <Toggle
             enabled={confirmWorkspaceSetting === 'true'}
@@ -871,15 +946,23 @@ export function ToolsTab() {
             MCP Servers
           </h3>
           <Button variant="primary" size="sm" onClick={() => setShowAddForm(true)}>
-            + Add Server
+            {t({ en: '+ Add Server', fr: '+ Ajouter un serveur' })}
           </Button>
         </div>
         <p className="text-sm text-text-muted mb-3">
-          MCP servers provide external tools that extend OpenFox's capabilities.
+          {t({
+            en: "MCP servers provide external tools that extend OpenFox's capabilities.",
+            fr: 'Les serveurs MCP fournissent des outils externes qui étendent les capacités d’OpenFox.',
+          })}
         </p>
         <div className="flex items-center justify-between py-2">
           <div className="flex-1">
-            <span className="text-sm text-text-primary">Show per-conversation MCP toggle in chat bar</span>
+            <span className="text-sm text-text-primary">
+              {t({
+                en: 'Show per-conversation MCP toggle in chat bar',
+                fr: 'Afficher l’interrupteur MCP par conversation dans la barre de chat',
+              })}
+            </span>
           </div>
           <Toggle
             enabled={perSessionMcpSetting === 'true'}
@@ -896,8 +979,8 @@ export function ToolsTab() {
         <CRUDListView
           loading={loading}
           hasItems={servers.length > 0}
-          loadingLabel="Loading MCP servers..."
-          emptyLabel="No MCP servers configured."
+          loadingLabel={t({ en: 'Loading MCP servers...', fr: 'Chargement des serveurs MCP…' })}
+          emptyLabel={t({ en: 'No MCP servers configured.', fr: 'Aucun serveur MCP configuré.' })}
         >
           {servers.map((server) => {
             const actions = expandedServers.has(server.name) ? (
@@ -910,7 +993,7 @@ export function ToolsTab() {
                     }}
                     className="px-2 py-1 rounded text-xs font-medium hover:opacity-90 transition-colors bg-accent-error/20 text-accent-error hover:bg-accent-error/30"
                   >
-                    Delete
+                    {t({ en: 'Delete', fr: 'Supprimer' })}
                   </button>
                   <button
                     onClick={(e) => {
@@ -919,7 +1002,7 @@ export function ToolsTab() {
                     }}
                     className="px-2 py-1 rounded text-xs text-text-muted hover:bg-bg-primary transition-colors"
                   >
-                    Cancel
+                    {t({ en: 'Cancel', fr: 'Annuler' })}
                   </button>
                 </>
               ) : (
@@ -931,7 +1014,7 @@ export function ToolsTab() {
                     }}
                     className="px-2 py-1 rounded text-xs font-medium text-text-muted hover:text-text-primary hover:bg-bg-primary transition-colors"
                   >
-                    Edit
+                    {t({ en: 'Edit', fr: 'Modifier' })}
                   </button>
                   <button
                     onClick={(e) => {
@@ -940,7 +1023,7 @@ export function ToolsTab() {
                     }}
                     className="px-2 py-1 rounded text-xs font-medium text-accent-error/80 hover:text-accent-error hover:bg-accent-error/10 transition-colors"
                   >
-                    Remove
+                    {t({ en: 'Remove', fr: 'Supprimer' })}
                   </button>
                 </>
               )
@@ -963,7 +1046,7 @@ export function ToolsTab() {
                 onServerToggle={() => handleToggleServer(server.name, !server.config.disabled)}
                 tools={server.tools}
                 onToolToggle={(toolName) =>
-                  handleToggleTool(server.name, toolName, !server.tools.find((t) => t.name === toolName)?.enabled)
+                  handleToggleTool(server.name, toolName, !server.tools.find((tool) => tool.name === toolName)?.enabled)
                 }
                 statusDot={mcpStatusDot(server.status)}
                 statusColor={mcpStatusColor(server.status)}
@@ -988,12 +1071,12 @@ export function ToolsTab() {
               setShowAddForm(false)
               setFormError('')
             }}
-            title="Add MCP Server"
+            title={t({ en: 'Add MCP Server', fr: 'Ajouter un serveur MCP' })}
             size="sm"
           >
             <div className="space-y-3">
               <FormField
-                label="Name"
+                label={t({ en: 'Name', fr: 'Nom' })}
                 value={formData.name}
                 onChange={(v) => setFormData({ ...formData, name: v })}
                 placeholder="e.g. filesystem"
@@ -1004,8 +1087,8 @@ export function ToolsTab() {
               {formError && <ErrorBanner message={formError} />}
               <McpFormActions
                 saving={saving}
-                saveLabel="Add"
-                savingLabel="Adding..."
+                saveLabel={t({ en: 'Add', fr: 'Ajouter' })}
+                savingLabel={t({ en: 'Adding...', fr: 'Ajout…' })}
                 onCancel={() => {
                   setShowAddForm(false)
                   setFormError('')
@@ -1025,7 +1108,10 @@ export function ToolsTab() {
               setEditingServer(null)
               setFormError('')
             }}
-            title={`Edit MCP Server: ${editingServer}`}
+            title={t(
+              { en: 'Edit MCP Server: {{name}}', fr: 'Modifier le serveur MCP : {{name}}' },
+              { name: editingServer },
+            )}
             size="sm"
           >
             <div className="space-y-3">
@@ -1034,8 +1120,8 @@ export function ToolsTab() {
               {formError && <ErrorBanner message={formError} />}
               <McpFormActions
                 saving={saving}
-                saveLabel="Save"
-                savingLabel="Saving..."
+                saveLabel={t({ en: 'Save', fr: 'Enregistrer' })}
+                savingLabel={t({ en: 'Saving...', fr: 'Enregistrement…' })}
                 onCancel={() => {
                   setEditingServer(null)
                   setFormError('')

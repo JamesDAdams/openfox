@@ -188,23 +188,23 @@ vi.mock('../../hooks/useKeybindings', () => ({
   useChordBinding: vi.fn(),
 }))
 
-const mockSettings: Record<string, string> = {}
-const mockSetSetting = vi.fn().mockImplementation((key: string, value: string) => {
-  mockSettings[key] = value
-  return Promise.resolve()
+const { mockSettings, mockSetSetting } = vi.hoisted(() => {
+  const mockSettings: Record<string, string> = {}
+  const mockSetSetting = vi.fn().mockImplementation((key: string, value: string) => {
+    mockSettings[key] = value
+    return Promise.resolve()
+  })
+  return { mockSettings, mockSetSetting }
 })
 
 vi.mock('../../hooks/useSetting', () => ({
   useSetting: (key: string, fallback = '') => ({ value: mockSettings[key] ?? fallback, loading: false }),
 }))
 
-vi.mock('../../lib/resources', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../lib/resources')>()
-  return {
-    ...actual,
-    setSetting: (...args: [string, string]) => mockSetSetting(...args),
-  }
-})
+vi.mock('../../lib/resources', async (importOriginal) => ({
+  ...(await importOriginal()),
+  setSetting: mockSetSetting,
+}))
 
 import { ProviderSelector } from './ProviderSelector'
 import { SETTINGS_KEYS } from '../../lib/resources'

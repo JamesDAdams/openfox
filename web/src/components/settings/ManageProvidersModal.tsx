@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { Modal } from '../shared/Modal'
 import { PlusLgIcon } from '../shared/icons'
 import { ConnectLLMStep, type ConnectLLMStepHandle } from '../onboarding/steps/ConnectLLMStep'
+import { useT } from '../../hooks/useT'
 
 interface ManageProvidersModalProps {
   isOpen: boolean
@@ -10,12 +11,13 @@ interface ManageProvidersModalProps {
 
 export function ManageProvidersModal({ isOpen, onClose }: ManageProvidersModalProps) {
   const stepRef = useRef<ConnectLLMStepHandle>(null)
+  const t = useT()
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Manage Providers"
+      title={t({ en: 'Manage Providers', fr: 'Gérer les fournisseurs' })}
       size="lg"
       footer={
         <div className="flex items-center justify-between gap-2">
@@ -25,14 +27,14 @@ export function ManageProvidersModal({ isOpen, onClose }: ManageProvidersModalPr
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-border text-sm text-text-secondary hover:text-text-primary hover:border-text-muted transition-colors"
           >
             <PlusLgIcon className="w-4 h-4" />
-            Add Provider
+            {t({ en: 'Add Provider', fr: 'Ajouter un fournisseur' })}
           </button>
           <button
             type="button"
             onClick={() => stepRef.current?.submit()}
             className="px-5 py-2 bg-accent-primary text-text-primary rounded-lg text-sm font-medium hover:bg-accent-primary/90 transition-colors"
           >
-            Done
+            {t({ en: 'Done', fr: 'Terminé' })}
           </button>
         </div>
       }
