@@ -73,14 +73,23 @@ export function calculateTotalSessionCost(
 export type PriceCurrency = 'usd' | 'eur' | 'tokens'
 
 export function formatPriceValue(value: number, currency: PriceCurrency = 'usd', perMillion = true): string {
-  const suffix = perMillion ? (currency === 'tokens' ? ' tk / 1M' : ' / 1M') : currency === 'tokens' ? ' tk' : ''
-  switch (currency) {
+  const safeCurrency = currency || 'usd'
+  const suffix = perMillion
+    ? safeCurrency === 'tokens'
+      ? ' tk / 1M'
+      : ' / 1M'
+    : safeCurrency === 'tokens'
+      ? ' tk'
+      : ''
+  switch (safeCurrency) {
     case 'usd':
       return `$${value}${suffix}`
     case 'eur':
       return `${value} €${suffix}`
     case 'tokens':
       return `${value}${suffix}`
+    default:
+      return `$${value}${suffix}`
   }
 }
 

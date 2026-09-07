@@ -6,6 +6,7 @@ import type { Backend } from '../../stores/config'
 import type { ModelConfig as SharedModelConfig, ModelPricing } from '@shared/types.js'
 import { ChevronDownIcon, EyeIcon, ReloadIcon, SettingsIcon } from './icons'
 import { formatDiscountBadge, formatPricingSummary } from '../settings/model-list'
+import { useDisplaySettings } from '../../hooks/useDisplaySettings'
 import { QueryParamsInput } from './QueryParamsInput'
 import { formatTokens } from '../../lib/format-stats'
 import { getLocale } from '@shared/i18n/index.js'
@@ -874,6 +875,7 @@ export function ProviderModal({
   editModelId,
 }: ProviderModalProps) {
   const t = useT()
+  const displaySettings = useDisplaySettings()
   const [formStep, setFormStep] = useState(initialStep)
   const [formName, setFormName] = useState('')
   const [formUrl, setFormUrl] = useState('')
@@ -2351,7 +2353,7 @@ export function ProviderModal({
                             </div>
                             {(() => {
                               const pricing = modelConfigs[model.id]?.pricing ?? model.pricing
-                              const summary = formatPricingSummary(pricing)
+                              const summary = formatPricingSummary(pricing, displaySettings.modelPriceCurrency)
                               return summary ? (
                                 <span className="text-xs font-mono text-text-secondary flex-shrink-0">{summary}</span>
                               ) : null
