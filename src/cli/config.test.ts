@@ -309,6 +309,7 @@ describe('config', () => {
                   output: 10,
                   cacheRead: 1.25,
                   cacheWrite: 3.75,
+                  discount: 60,
                 },
               },
             ],
@@ -331,6 +332,7 @@ describe('config', () => {
         output: 10,
         cacheRead: 1.25,
         cacheWrite: 3.75,
+        discount: 60,
       })
 
       await saveGlobalConfig('production', loaded)
@@ -340,6 +342,7 @@ describe('config', () => {
         output: 10,
         cacheRead: 1.25,
         cacheWrite: 3.75,
+        discount: 60,
       })
     })
   })

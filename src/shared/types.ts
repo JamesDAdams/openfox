@@ -667,6 +667,10 @@ export interface ModelPricing {
   cacheRead?: number
   /** Cost per 1M cache write tokens */
   cacheWrite?: number
+  /** Discount percentage (e.g. 60 or "60% off") */
+  discount?: number | string
+  /** Currency / pricing unit for this model's rates (e.g. 'usd' | 'eur' | 'tokens') */
+  currency?: 'usd' | 'eur' | 'tokens'
 }
 
 /** Model configuration with context window */

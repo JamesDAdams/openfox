@@ -38,6 +38,8 @@ const modelPricingSchema = z
     output: z.number().optional(),
     cacheRead: z.number().optional(),
     cacheWrite: z.number().optional(),
+    discount: z.union([z.number(), z.string()]).optional(),
+    currency: z.enum(['usd', 'eur', 'tokens']).optional(),
   })
   .optional()
 

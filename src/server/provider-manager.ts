@@ -130,10 +130,12 @@ function mergeModelsWithUserOverrides(
     const existingUserModel = normalizedUserIdMap.get(normalizeModelId(backendModel.id))
     if (existingUserModel) {
       const mergedPricing = existingUserModel.pricing ?? backendModel.pricing
+      const mergedSupportsVision = existingUserModel.supportsVision ?? backendModel.supportsVision
       return enrichWithProfileDefaults({
         ...backendModel,
         ...existingUserModel,
         ...(mergedPricing !== undefined ? { pricing: mergedPricing } : {}),
+        ...(mergedSupportsVision !== undefined ? { supportsVision: mergedSupportsVision } : {}),
         id: backendModel.id,
       })
     }

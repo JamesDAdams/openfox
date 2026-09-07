@@ -5,6 +5,7 @@ import { authFetch } from '../../lib/api'
 import type { Backend } from '../../stores/config'
 import type { ModelConfig as SharedModelConfig, ModelPricing } from '@shared/types.js'
 import { ChevronDownIcon, EyeIcon, ReloadIcon, SettingsIcon } from './icons'
+import { formatDiscountBadge, formatPricingSummary } from '../settings/model-list'
 import { QueryParamsInput } from './QueryParamsInput'
 import { formatTokens } from '../../lib/format-stats'
 import { getLocale } from '@shared/i18n/index.js'
@@ -649,6 +650,63 @@ function ModelConfigPanel({
               />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Discount</label>
+              <input
+                type="text"
+                data-testid="pricing-discount"
+                value={modelConfigs[model.id]?.pricing?.discount ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  const trimmed = raw.trim()
+                  const num = Number(trimmed)
+                  const val = raw === '' ? undefined : !isNaN(num) && trimmed !== '' ? num : raw
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, discount: val }
+                  if (val === undefined) delete nextPricing.discount
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                onBlur={(e) => {
+                  const raw = e.target.value.trim()
+                  if (raw !== e.target.value) {
+                    const num = Number(raw)
+                    const val = raw === '' ? undefined : !isNaN(num) && raw !== '' ? num : raw
+                    const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                    const nextPricing = { ...currentPricing, discount: val }
+                    if (val === undefined) delete nextPricing.discount
+                    onUpdateConfig(model.id, {
+                      pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                    })
+                  }
+                }}
+                placeholder="e.g. 60 or 60% off"
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Currency / Unit</label>
+              <select
+                data-testid="pricing-currency"
+                value={modelConfigs[model.id]?.pricing?.currency ?? 'usd'}
+                onChange={(e) => {
+                  const val = e.target.value as 'usd' | 'eur' | 'tokens'
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, currency: val }
+                  onUpdateConfig(model.id, {
+                    pricing: nextPricing,
+                  })
+                }}
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary cursor-pointer"
+              >
+                <option value="usd">Dollar ($)</option>
+                <option value="eur">Euro (€)</option>
+                <option value="tokens">Tokens / Credits (tk)</option>
+              </select>
+            </div>
+          </div>
         </div>
       </details>
     </div>
@@ -897,6 +955,7 @@ export function ProviderModal({
       ...current,
       [model.id]: {
         contextWindow: model.contextWindow,
+        supportsVision: model.supportsVision,
         pricing: model.pricing,
         ...current[model.id],
       },
@@ -2258,14 +2317,35 @@ export function ProviderModal({
                               onChange={() => {}}
                               className="w-4 h-4 rounded border-border accent-accent-primary pointer-events-none"
                             />
-                            <span className="text-sm text-text-primary flex-1 truncate">
-                              {model.name ?? model.id.split('/').pop()}
-                              {model.modes && model.modes.length > 0 && (
-                                <span className="text-text-muted font-normal ml-1">
-                                  ({model.modes.map((m) => m.level).join(', ')})
+                            <div className="flex-1 min-w-0 flex items-center gap-1.5 truncate">
+                              <span className="text-sm text-text-primary truncate">
+                                {model.name ?? model.id.split('/').pop()}
+                                {model.modes && model.modes.length > 0 && (
+                                  <span className="text-text-muted font-normal ml-1">
+                                    ({model.modes.map((m) => m.level).join(', ')})
+                                  </span>
+                                )}
+                              </span>
+                              {(modelConfigs[model.id]?.pricing?.discount ?? model.pricing?.discount) !== undefined && (
+                                <span
+                                  data-pricing-discount-badge
+                                  className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium leading-none rounded bg-accent-primary/15 text-accent-primary border border-accent-primary/30 shrink-0"
+                                >
+                                  {formatDiscountBadge(
+                                    (modelConfigs[model.id]?.pricing?.discount ?? model.pricing?.discount)!,
+                                  )}
                                 </span>
                               )}
-                            </span>
+                            </div>
+                            {(() => {
+                              const pricing = modelConfigs[model.id]?.pricing ?? model.pricing
+                              const summary = formatPricingSummary(pricing)
+                              return summary ? (
+                                <span className="text-xs font-mono text-text-secondary flex-shrink-0">
+                                  {summary}
+                                </span>
+                              ) : null
+                            })()}
                             <span className="text-xs text-text-muted flex flex-shrink-0 items-center gap-1">
                               {(modelConfigs[model.id]?.supportsVision ?? model.supportsVision) && (
                                 <span

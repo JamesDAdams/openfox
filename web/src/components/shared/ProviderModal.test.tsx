@@ -922,14 +922,20 @@ describe('ProviderModal - small context window warning', () => {
 
     const inputPricingInput = document.body.querySelector('[data-testid="pricing-input"]') as HTMLInputElement | null
     const outputPricingInput = document.body.querySelector('[data-testid="pricing-output"]') as HTMLInputElement | null
+    const discountPricingInput = document.body.querySelector('[data-testid="pricing-discount"]') as HTMLInputElement | null
     expect(inputPricingInput?.value).toBe('0.15')
     expect(outputPricingInput?.value).toBe('0.6')
 
-    // Modify the input pricing field
+    // Modify the input pricing field and discount field
     if (inputPricingInput) {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
       nativeInputValueSetter?.call(inputPricingInput, '0.20')
       inputPricingInput.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    if (discountPricingInput) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      nativeInputValueSetter?.call(discountPricingInput, '60')
+      discountPricingInput.dispatchEvent(new Event('input', { bubbles: true }))
     }
 
     const saveButton = document.body.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
@@ -942,7 +948,54 @@ describe('ProviderModal - small context window warning', () => {
       output: 0.6,
       cacheRead: 0.075,
       cacheWrite: 0.3,
+      discount: 60,
     })
+  })
+
+  it('renders discount badge and pricing summary in the available models checklist in ProviderModal', async () => {
+    const modelsWithPricing = [
+      {
+        id: 'discounted-model',
+        contextWindow: 1050000,
+        selected: false,
+        pricing: {
+          input: 0.08,
+          output: 0.25,
+          discount: 60,
+        },
+      },
+      {
+        id: 'second-model',
+        contextWindow: 128000,
+        selected: true,
+      },
+    ]
+
+    await new Promise<void>((resolve) => {
+      root.render(
+        <ProviderModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={onSaveMock as (provider: ProviderFormData) => void}
+          editProvider={{
+            id: 'test-provider',
+            name: 'Test Provider',
+            url: 'http://localhost:8000/v1',
+            backend: 'openai',
+            models: modelsWithPricing as never,
+          }}
+          initialStep={2}
+        />,
+      )
+      setTimeout(resolve, 200)
+    })
+
+    const badge = document.body.querySelector('[data-pricing-discount-badge]')
+    expect(badge).not.toBeNull()
+    expect(badge?.textContent).toBe('60% off')
+
+    // 60% off $0.08 = $0.032, 60% off $0.25 = $0.1
+    expect(document.body.textContent).toContain('$0.032 / $0.1')
   })
 })
 
