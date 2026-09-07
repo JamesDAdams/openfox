@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import {
   CheckIcon,
   EditSmallIcon,
@@ -10,6 +11,7 @@ import {
   WarningIcon,
 } from '../shared/icons'
 import type { Provider } from '../../stores/config'
+import type { ModelPricing } from '@shared/types.js'
 import { isSmallContext } from '../../lib/context-warning'
 import { useT } from '../../hooks/useT'
 
@@ -17,6 +19,35 @@ export function formatContextWindow(context: number): string {
   if (context >= 1000000) return `${(context / 1000000).toFixed(1)}M`
   if (context >= 1000) return `${(context / 1000).toFixed(0)}K`
   return `${context}`
+}
+
+export function formatPricingSummary(pricing?: ModelPricing): string | null {
+  if (!pricing) return null
+  const hasInput = pricing.input !== undefined
+  const hasOutput = pricing.output !== undefined
+  if (hasInput && hasOutput) {
+    return `$${pricing.input} / $${pricing.output}`
+  }
+  if (hasInput) {
+    return `$${pricing.input} in`
+  }
+  if (hasOutput) {
+    return `$${pricing.output} out`
+  }
+  if (pricing.cacheRead !== undefined) {
+    return `$${pricing.cacheRead} cache`
+  }
+  return null
+}
+
+export function formatPricingTooltip(pricing?: ModelPricing): string | undefined {
+  if (!pricing) return undefined
+  const lines: string[] = []
+  if (pricing.input !== undefined) lines.push(`Input: $${pricing.input} / 1M tokens`)
+  if (pricing.output !== undefined) lines.push(`Output: $${pricing.output} / 1M tokens`)
+  if (pricing.cacheRead !== undefined) lines.push(`Cache read: $${pricing.cacheRead} / 1M tokens`)
+  if (pricing.cacheWrite !== undefined) lines.push(`Cache write: $${pricing.cacheWrite} / 1M tokens`)
+  return lines.length > 0 ? lines.join('\n') : undefined
 }
 
 export interface ModelWithConfig {
@@ -29,6 +60,7 @@ export interface ModelWithConfig {
   reasoningEffortOverride?: string
   thinkingLevel?: string
   thinkingEnabled?: boolean
+  pricing?: ModelPricing
 }
 
 export function modelMatchesQuery(model: { name?: string; id: string }, query: string): boolean {
@@ -60,6 +92,7 @@ export function getVisibleModels(provider: Provider): ModelWithConfig[] {
       ...(m.reasoningEffortOverride ? { reasoningEffortOverride: m.reasoningEffortOverride } : {}),
       ...(m.thinkingLevel ? { thinkingLevel: m.thinkingLevel } : {}),
       ...(m.thinkingEnabled !== undefined ? { thinkingEnabled: m.thinkingEnabled } : {}),
+      ...(m.pricing ? { pricing: m.pricing } : {}),
     }
   })
 }
@@ -109,9 +142,42 @@ export function ModelEntryRow({
 }: ModelEntryRowProps) {
   const t = useT()
   const showEfforts = (reasoningEfforts?.length ?? 0) > 0 && !!onSelectEffort
+  const [showPopover, setShowPopover] = useState(false)
+  const [popoverCoords, setPopoverCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+  const rowRef = useRef<HTMLDivElement>(null)
+
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    if (modelConfig.pricing) {
+      // Find the dropdown container to place the popover to its right,
+      // or fall back to the row rect.
+      const dropdown = (e.currentTarget as HTMLElement).closest('[data-dropdown-container]') as HTMLElement | null
+      const targetRect = dropdown ? dropdown.getBoundingClientRect() : (rowRef.current?.getBoundingClientRect() ?? null)
+      const rowRect = rowRef.current?.getBoundingClientRect()
+      if (targetRect && rowRect) {
+        // If placing to the right overflows the viewport, place it to the left of the dropdown
+        const spaceOnRight = window.innerWidth - targetRect.right
+        const popoverWidth = 200 // estimated popover width
+        const left =
+          spaceOnRight > popoverWidth ? targetRect.right + 8 : Math.max(8, targetRect.left - popoverWidth - 8)
+        setPopoverCoords({
+          top: rowRect.top,
+          left,
+        })
+        setShowPopover(true)
+      }
+    }
+  }
+
+  const handleMouseLeave = () => {
+    setShowPopover(false)
+  }
+
   return (
     <div
-      className={`${highlighted ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'} ${disabled ? 'opacity-50 cursor-wait' : ''}`}
+      ref={rowRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={`relative ${highlighted ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'} ${disabled ? 'opacity-50 cursor-wait' : ''}`}
     >
       <div
         className={`flex items-center px-4 py-1.5 text-sm transition-colors group ${
@@ -239,6 +305,47 @@ export function ModelEntryRow({
           })}
         </div>
       )}
+      {showPopover &&
+        modelConfig.pricing &&
+        createPortal(
+          <div
+            data-pricing-popover
+            className="fixed z-[9999] px-3 py-2 bg-bg-secondary border border-border rounded-lg shadow-xl text-xs space-y-1 pointer-events-none whitespace-nowrap"
+            style={{
+              top: `${popoverCoords.top}px`,
+              left: `${popoverCoords.left}px`,
+            }}
+          >
+            <div className="font-medium text-text-primary pb-0.5 border-b border-border/50">
+              {modelConfig.name ?? modelConfig.id}
+            </div>
+            {modelConfig.pricing.input !== undefined && (
+              <div className="text-text-secondary flex justify-between gap-3">
+                <span>Input:</span>
+                <span className="font-mono text-text-primary">${modelConfig.pricing.input} / 1M</span>
+              </div>
+            )}
+            {modelConfig.pricing.output !== undefined && (
+              <div className="text-text-secondary flex justify-between gap-3">
+                <span>Output:</span>
+                <span className="font-mono text-text-primary">${modelConfig.pricing.output} / 1M</span>
+              </div>
+            )}
+            {modelConfig.pricing.cacheRead !== undefined && (
+              <div className="text-text-secondary flex justify-between gap-3">
+                <span>Cache read:</span>
+                <span className="font-mono text-text-primary">${modelConfig.pricing.cacheRead} / 1M</span>
+              </div>
+            )}
+            {modelConfig.pricing.cacheWrite !== undefined && (
+              <div className="text-text-secondary flex justify-between gap-3">
+                <span>Cache write:</span>
+                <span className="font-mono text-text-primary">${modelConfig.pricing.cacheWrite} / 1M</span>
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

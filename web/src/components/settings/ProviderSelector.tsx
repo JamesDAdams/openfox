@@ -751,6 +751,7 @@ export function ProviderSelector() {
 
       {isOpen && (
         <div
+          data-dropdown-container
           className={`absolute bottom-full right-0 mb-1 min-w-72 max-w-[100vw] bg-bg-secondary border border-border rounded-lg shadow-lg z-50 flex flex-col ${
             isAllScreenHigh ? 'h-[calc(100vh-6.5rem)] max-h-[calc(100vh-6.5rem)]' : 'max-h-[80vh]'
           }`}

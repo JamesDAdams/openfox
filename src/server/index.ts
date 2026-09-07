@@ -2006,6 +2006,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       ...(m.reasoningEffortOverride !== undefined && { reasoningEffortOverride: m.reasoningEffortOverride }),
       ...(m.modes !== undefined && { modes: m.modes }),
       ...(m.supportsVision !== undefined && { supportsVision: m.supportsVision }),
+      ...(m.pricing !== undefined && { pricing: m.pricing }),
       ...(m.thinkingEnabled !== undefined && { thinkingEnabled: m.thinkingEnabled }),
       ...(m.thinkingLevel !== undefined && { thinkingLevel: m.thinkingLevel }),
       ...(m.nonThinkingEnabled !== undefined && { nonThinkingEnabled: m.nonThinkingEnabled }),
@@ -2186,6 +2187,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
             defaultTopP: profile.topP,
             defaultTopK: profile.topK,
             defaultMaxTokens: profile.defaultMaxTokens,
+            ...(m.pricing ? { pricing: m.pricing } : {}),
             ...(catalog ? { reasoningEfforts: catalog.reasoningEfforts } : {}),
           }
         }),

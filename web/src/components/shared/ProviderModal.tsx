@@ -3,7 +3,7 @@ import { Modal } from './Modal'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { authFetch } from '../../lib/api'
 import type { Backend } from '../../stores/config'
-import type { ModelConfig as SharedModelConfig } from '@shared/types.js'
+import type { ModelConfig as SharedModelConfig, ModelPricing } from '@shared/types.js'
 import { ChevronDownIcon, EyeIcon, ReloadIcon, SettingsIcon } from './icons'
 import { QueryParamsInput } from './QueryParamsInput'
 import { formatTokens } from '../../lib/format-stats'
@@ -89,6 +89,7 @@ interface ModelConfig {
   defaultTopK?: number
   defaultMaxTokens?: number
   compactionThreshold?: number
+  pricing?: ModelPricing
 }
 
 export interface ProviderFormData {
@@ -557,6 +558,98 @@ function ModelConfigPanel({
             onChange={(threshold) => onUpdateConfig(model.id, { compactionThreshold: threshold })}
           />
         </div>
+
+        <div className="border-t border-border pt-3 mt-3">
+          <p className="text-xs text-text-muted mb-2">API Price (/ 1M tokens)</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Input price</label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                data-testid="pricing-input"
+                value={modelConfigs[model.id]?.pricing?.input ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? parseFloat(e.target.value) : undefined
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, input: val }
+                  if (val === undefined) delete nextPricing.input
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                placeholder="e.g. 0.15"
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Output price</label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                data-testid="pricing-output"
+                value={modelConfigs[model.id]?.pricing?.output ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? parseFloat(e.target.value) : undefined
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, output: val }
+                  if (val === undefined) delete nextPricing.output
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                placeholder="e.g. 0.60"
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Cache read price</label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                data-testid="pricing-cache-read"
+                value={modelConfigs[model.id]?.pricing?.cacheRead ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? parseFloat(e.target.value) : undefined
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, cacheRead: val }
+                  if (val === undefined) delete nextPricing.cacheRead
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                placeholder="e.g. 0.075"
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-0.5">Cache write price</label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                data-testid="pricing-cache-write"
+                value={modelConfigs[model.id]?.pricing?.cacheWrite ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? parseFloat(e.target.value) : undefined
+                  const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                  const nextPricing = { ...currentPricing, cacheWrite: val }
+                  if (val === undefined) delete nextPricing.cacheWrite
+                  onUpdateConfig(model.id, {
+                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                  })
+                }}
+                placeholder="e.g. 0.30"
+                className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+              />
+            </div>
+          </div>
+        </div>
       </details>
     </div>
   )
@@ -804,6 +897,7 @@ export function ProviderModal({
       ...current,
       [model.id]: {
         contextWindow: model.contextWindow,
+        pricing: model.pricing,
         ...current[model.id],
       },
     }))
@@ -974,6 +1068,7 @@ export function ProviderModal({
             topK: m.topK,
             maxTokens: m.maxTokens,
             compactionThreshold: m.compactionThreshold,
+            pricing: m.pricing ? { ...m.pricing } : undefined,
           }
           if (m.selected) selected.add(m.id)
         }
@@ -1011,7 +1106,7 @@ export function ProviderModal({
     ) {
       fetchModels(formUrl)
     }
-  }, [formStep, providerAuthState])
+  }, [formStep, providerAuthState, formTransportAdapter])
 
   useEffect(() => {
     if (!isOpen || !formAuthAdapter || !editProvider?.id) return
@@ -1175,6 +1270,7 @@ export function ProviderModal({
                 defaultTopP: (m as { defaultTopP?: number }).defaultTopP,
                 defaultTopK: (m as { defaultTopK?: number }).defaultTopK,
                 defaultMaxTokens: (m as { defaultMaxTokens?: number }).defaultMaxTokens,
+                pricing: m.pricing ? { ...m.pricing } : undefined,
               }
             }
             return next
@@ -1393,6 +1489,7 @@ export function ProviderModal({
         defaultTopP: modelConfigs[m.id]?.defaultTopP,
         defaultTopK: modelConfigs[m.id]?.defaultTopK,
         compactionThreshold: modelConfigs[m.id]?.compactionThreshold,
+        pricing: modelConfigs[m.id]?.pricing ?? m.pricing,
       })),
     })
     draftProviderSaved.current = true

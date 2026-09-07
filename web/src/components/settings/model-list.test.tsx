@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
+import { fireEvent } from '@testing-library/react'
 import { ModelEntryRow, getVisibleModels, type ModelWithConfig } from './model-list'
 import type { Provider } from '../../stores/config'
 
@@ -109,6 +110,63 @@ describe('ModelEntryRow mode chips', () => {
       const high = Array.from(chipRow?.querySelectorAll('button') ?? []).find((b) => b.textContent?.trim() === 'high')
       act(() => high?.click())
       expect(onSelectEffort).toHaveBeenCalledWith('provider-1', 'gemini-3.6-flash', 'high')
+    } finally {
+      cleanup(rendered)
+    }
+  })
+})
+
+describe('ModelEntryRow pricing display', () => {
+  it('shows pricing popover on mouse enter when pricing metadata is present on modelConfig', () => {
+    const rendered = renderRow({
+      id: 'gpt-4o',
+      contextWindow: 128000,
+      source: 'backend',
+      pricing: {
+        input: 2.5,
+        output: 10,
+        cacheRead: 1.25,
+        cacheWrite: 3.75,
+      },
+    })
+    try {
+      expect(document.body.querySelector('[data-pricing-popover]')).toBeNull()
+      const row = rendered.container.firstElementChild as HTMLElement
+      act(() => {
+        fireEvent.mouseEnter(row)
+      })
+      const popover = document.body.querySelector('[data-pricing-popover]')
+      expect(popover).not.toBeNull()
+      expect(popover?.textContent).toContain('Input:')
+      expect(popover?.textContent).toContain('$2.5 / 1M')
+      expect(popover?.textContent).toContain('Output:')
+      expect(popover?.textContent).toContain('$10 / 1M')
+      expect(popover?.textContent).toContain('Cache read:')
+      expect(popover?.textContent).toContain('$1.25 / 1M')
+      expect(popover?.textContent).toContain('Cache write:')
+      expect(popover?.textContent).toContain('$3.75 / 1M')
+
+      act(() => {
+        fireEvent.mouseLeave(row)
+      })
+      expect(document.body.querySelector('[data-pricing-popover]')).toBeNull()
+    } finally {
+      cleanup(rendered)
+    }
+  })
+
+  it('does not show pricing popover when pricing is undefined', () => {
+    const rendered = renderRow({
+      id: 'plain-model',
+      contextWindow: 128000,
+      source: 'backend',
+    })
+    try {
+      const row = rendered.container.firstElementChild as HTMLElement
+      act(() => {
+        fireEvent.mouseEnter(row)
+      })
+      expect(document.body.querySelector('[data-pricing-popover]')).toBeNull()
     } finally {
       cleanup(rendered)
     }

@@ -1321,6 +1321,31 @@ describe('ProviderManager - Model Selection', () => {
       expect(stored.reasoningEffortOverride).toBe('deep')
     })
 
+    it('preserves and exposes model pricing', () => {
+      const manager = buildManager([
+        providerWith([
+          {
+            id: 'gpt-4o',
+            contextWindow: 128000,
+            source: 'user' as const,
+            pricing: {
+              input: 2.5,
+              output: 10,
+              cacheRead: 1.25,
+              cacheWrite: 3.75,
+            },
+          },
+        ]),
+      ])
+      const model = manager.getProviders()[0]!.models[0]!
+      expect(model.pricing).toEqual({
+        input: 2.5,
+        output: 10,
+        cacheRead: 1.25,
+        cacheWrite: 3.75,
+      })
+    })
+
     it('catalog enrichment never overrides a stored preset list or override', () => {
       const manager = buildManager([
         providerWith([

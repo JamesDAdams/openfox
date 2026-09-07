@@ -129,7 +129,13 @@ function mergeModelsWithUserOverrides(
   const updatedModels = filteredBackendModels.map((backendModel) => {
     const existingUserModel = normalizedUserIdMap.get(normalizeModelId(backendModel.id))
     if (existingUserModel) {
-      return enrichWithProfileDefaults({ ...backendModel, ...existingUserModel, id: backendModel.id })
+      const mergedPricing = existingUserModel.pricing ?? backendModel.pricing
+      return enrichWithProfileDefaults({
+        ...backendModel,
+        ...existingUserModel,
+        ...(mergedPricing !== undefined ? { pricing: mergedPricing } : {}),
+        id: backendModel.id,
+      })
     }
     return enrichWithProfileDefaults(backendModel)
   })
@@ -779,6 +785,18 @@ export function createProviderManager(config: Config, options: ProviderManagerOp
       const provider = providers.find((p) => p.id === providerId)
       if (!provider) {
         return []
+      }
+
+      // If transport adapter is available, fetch fresh models to merge dynamic pricing & capabilities
+      if (resolveTransportAdapter(provider)) {
+        try {
+          const freshModels = await fetchProviderModels(provider)
+          if (freshModels.length > 0) {
+            return mergeModelsWithUserOverrides(freshModels, provider.models ?? [], false)
+          }
+        } catch {
+          // Fallback to stored models on fetch failure
+        }
       }
 
       // Return stored models with context info

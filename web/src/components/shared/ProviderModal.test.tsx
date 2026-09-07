@@ -884,6 +884,66 @@ describe('ProviderModal - small context window warning', () => {
     await renderModal([{ id: 'test-model', contextWindow: 32768 }])
     expect(document.body.querySelector('[data-small-context]')).toBeNull()
   })
+
+  it('preserves and updates model pricing in ProviderModal', async () => {
+    const initialModels = [
+      {
+        id: 'model-pricing-test',
+        contextWindow: 128000,
+        selected: true,
+        pricing: {
+          input: 0.15,
+          output: 0.6,
+          cacheRead: 0.075,
+          cacheWrite: 0.3,
+        },
+      },
+    ]
+
+    await new Promise<void>((resolve) => {
+      root.render(
+        <ProviderModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={onSaveMock as (provider: ProviderFormData) => void}
+          editProvider={{
+            id: 'test-provider',
+            name: 'Test Provider',
+            url: 'http://localhost:8000/v1',
+            backend: 'openai',
+            models: initialModels as never,
+          }}
+          initialStep={2}
+          editModelId="model-pricing-test"
+        />,
+      )
+      setTimeout(resolve, 200)
+    })
+
+    const inputPricingInput = document.body.querySelector('[data-testid="pricing-input"]') as HTMLInputElement | null
+    const outputPricingInput = document.body.querySelector('[data-testid="pricing-output"]') as HTMLInputElement | null
+    expect(inputPricingInput?.value).toBe('0.15')
+    expect(outputPricingInput?.value).toBe('0.6')
+
+    // Modify the input pricing field
+    if (inputPricingInput) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      nativeInputValueSetter?.call(inputPricingInput, '0.20')
+      inputPricingInput.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+
+    const saveButton = document.body.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
+    saveButton?.click()
+
+    const savedData: ProviderFormData = onSaveMock.mock.calls[0]![0]!
+    const savedModel = savedData.models.find((m) => m.id === 'model-pricing-test')
+    expect(savedModel?.pricing).toEqual({
+      input: 0.2,
+      output: 0.6,
+      cacheRead: 0.075,
+      cacheWrite: 0.3,
+    })
+  })
 })
 
 describe('ProviderModal - model mode merge', () => {
