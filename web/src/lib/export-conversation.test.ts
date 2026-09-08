@@ -1,6 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { sanitizeFilename, formatConversationMarkdown, downloadFile, exportConversation } from './export-conversation'
+import {
+  sanitizeFilename,
+  formatConversationMarkdown,
+  formatSubAgentConversationMarkdown,
+  exportSubAgentConversation,
+  downloadFile,
+  exportConversation,
+} from './export-conversation'
 import type { Message, Session } from '@shared/types.js'
 
 describe('export-conversation', () => {
@@ -97,6 +104,62 @@ describe('export-conversation', () => {
       expect(md).toContain('#### 🛠️ Tool: `read_file`')
       expect(md).toContain('Error: File not found')
     })
+
+    it('formats sub-agent conversation markdown with header, thinking, tool calls', () => {
+      const session: Partial<Session> = {
+        id: 'sess-123',
+        projectId: 'proj-abc',
+        workdir: '/dev/app',
+        metadata: {
+          title: 'Fix issue with login',
+          totalTokensUsed: 100,
+          totalToolCalls: 2,
+          iterationCount: 1,
+        },
+      }
+
+      const subAgentMessages: Message[] = [
+        {
+          id: 'm1',
+          role: 'assistant',
+          subAgentId: 'explorer-1',
+          subAgentType: 'explorer',
+          thinkingContent: 'Let me list files in directory.',
+          content: 'Here are the files found in src.',
+          timestamp: '2026-09-01T10:05:00.000Z',
+          toolCalls: [
+            {
+              id: 'tc1',
+              name: 'run_command',
+              arguments: { command: 'ls -la' },
+              result: {
+                success: true,
+                output: 'total 0\n-rw-r--r-- index.ts',
+                durationMs: 10,
+                truncated: false,
+              },
+            },
+          ],
+        },
+      ]
+
+      const md = formatSubAgentConversationMarkdown(session, {
+        subAgentType: 'explorer',
+        subAgentId: 'explorer-1',
+        subAgentName: 'Explorer Agent',
+        messages: subAgentMessages,
+      })
+
+      expect(md).toContain('# Sub-Agent: Explorer Agent')
+      expect(md).toContain('- **Sub-Agent ID:** `explorer-1`')
+      expect(md).toContain('- **Sub-Agent Type:** `explorer`')
+      expect(md).toContain('- **Session Title:** Fix issue with login')
+      expect(md).toContain('### 🤖 Explorer Agent')
+      expect(md).toContain('> **Thinking:**\n> Let me list files in directory.')
+      expect(md).toContain('Here are the files found in src.')
+      expect(md).toContain('#### 🛠️ Tool: `run_command`')
+      expect(md).toContain('"command": "ls -la"')
+    })
   })
 
   describe('downloadFile & exportConversation', () => {
@@ -151,6 +214,30 @@ describe('export-conversation', () => {
         expect.stringContaining('/api/sessions/s1?full=true'),
         expect.anything(),
       )
+      expect(clickMock).toHaveBeenCalled()
+    })
+
+    it('exports sub-agent conversation directly without network fetch', () => {
+      const mockSession = { id: 's1', metadata: { title: 'Test Session' } } as unknown as Session
+      const mockMessages = [
+        {
+          id: 'm1',
+          role: 'assistant',
+          subAgentId: 'sub-1',
+          subAgentType: 'verifier',
+          content: 'Verification passed',
+        },
+      ] as Message[]
+
+      exportSubAgentConversation({
+        session: mockSession,
+        subAgentType: 'verifier',
+        subAgentId: 'sub-1',
+        subAgentName: 'Verifier Agent',
+        messages: mockMessages,
+      })
+
+      expect(createObjectURLMock).toHaveBeenCalled()
       expect(clickMock).toHaveBeenCalled()
     })
   })
