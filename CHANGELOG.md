@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.0.140 - 2026-09-08
+
+### Features
+
+- **Authenticated Ollama proxies** — Ollama behind OpenWebUI or any Bearer-auth proxy now works when an API key is configured
+
+### Enhancements
+
+- **Refined mobile interface** — composer expands full-height with the keyboard, send/stop become icon pills, and the footer rebalances (agent + danger on top, MCP + model below)
+- **Model names truncate on narrow screens** — no more overflowing the composer
+
+### Bug Fixes
+
+- **MCP dropdown stays in view** — opens as a centered modal on touch and left-aligns on narrow windows instead of overflowing
+- **iOS no longer auto-zooms into the composer** — input fields keep a comfortable size on focus
+- **opencode.ai providers work reliably** — chain-of-thought is no longer echoed into assistant history (fixing HTTP 400 on multi-turn thinking requests), and stable x-opencode-session headers restore prompt caching
+
 ## 2.0.139 - 2026-09-06
 
 ### Features
