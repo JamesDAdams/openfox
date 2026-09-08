@@ -925,13 +925,10 @@ describe('ProviderModal - small context window warning', () => {
     const discountPricingInput = document.body.querySelector(
       '[data-testid="pricing-discount"]',
     ) as HTMLInputElement | null
-    const lastUpdatedAtInput = document.body.querySelector(
-      '[data-testid="pricing-last-updated-at"]',
-    ) as HTMLInputElement | null
     expect(inputPricingInput?.value).toBe('0.15')
     expect(outputPricingInput?.value).toBe('0.6')
 
-    // Modify the input pricing field and discount field and lastUpdatedAt field
+    // Modify the input pricing field and discount field
     if (inputPricingInput) {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
       nativeInputValueSetter?.call(inputPricingInput, '0.20')
@@ -942,28 +939,21 @@ describe('ProviderModal - small context window warning', () => {
       nativeInputValueSetter?.call(discountPricingInput, '60')
       discountPricingInput.dispatchEvent(new Event('input', { bubbles: true }))
     }
-    if (lastUpdatedAtInput) {
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
-      nativeInputValueSetter?.call(lastUpdatedAtInput, '2026-09-08')
-      lastUpdatedAtInput.dispatchEvent(new Event('input', { bubbles: true }))
-    }
 
     const saveButton = document.body.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
     saveButton?.click()
 
     const savedData: ProviderFormData = onSaveMock.mock.calls[0]![0]!
     const savedModel = savedData.models.find((m) => m.id === 'model-pricing-test')
-    expect(savedModel?.pricing).toEqual({
-      input: 0.2,
-      output: 0.6,
-      cacheRead: 0.075,
-      cacheWrite: 0.3,
-      discount: 60,
-      lastUpdatedAt: '2026-09-08',
-    })
+    expect(savedModel?.pricing?.input).toBe(0.2)
+    expect(savedModel?.pricing?.output).toBe(0.6)
+    expect(savedModel?.pricing?.cacheRead).toBe(0.075)
+    expect(savedModel?.pricing?.cacheWrite).toBe(0.3)
+    expect(savedModel?.pricing?.discount).toBe(60)
+    expect(typeof savedModel?.pricing?.lastUpdatedAt).toBe('string')
   })
 
-  it('automatically sets lastUpdatedAt when pricing or discount is updated without explicit date', async () => {
+  it('automatically sets lastUpdatedAt when pricing or discount is updated', async () => {
     const onSaveMock = vi.fn()
     const modelsWithPricing = [
       {

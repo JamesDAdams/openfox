@@ -1,4 +1,4 @@
-import type { Provider, Config, LlmBackend, ModelConfig, ModelPricing } from '../shared/types.js'
+import type { Provider, Config, LlmBackend, ModelConfig } from '../shared/types.js'
 import type { ProviderRegistry } from './providers/plugins/registry.js'
 import { createTransportLLMClient } from './providers/adapters/transport-client.js'
 import { createLLMClient, clearModelCache, getModelProfile, type LLMClientWithModel } from './llm/index.js'
@@ -104,14 +104,6 @@ function enrichWithCatalogDefaults(model: ModelConfig): ModelConfig {
   }
 }
 
-function autoStampPricing(pricing?: ModelPricing): ModelPricing | undefined {
-  if (!pricing) return undefined
-  if (!pricing.lastUpdatedAt) {
-    return { ...pricing, lastUpdatedAt: new Date().toISOString() }
-  }
-  return pricing
-}
-
 function mergeModelsWithUserOverrides(
   backendModels: ModelConfig[],
   userModels: ModelConfig[],
@@ -136,10 +128,8 @@ function mergeModelsWithUserOverrides(
 
   const updatedModels = filteredBackendModels.map((backendModel) => {
     const existingUserModel = normalizedUserIdMap.get(normalizeModelId(backendModel.id))
-    const stampedBackendPricing = autoStampPricing(backendModel.pricing)
     if (existingUserModel) {
-      const mergedPricing =
-        existingUserModel.pricing !== undefined ? autoStampPricing(existingUserModel.pricing) : stampedBackendPricing
+      const mergedPricing = existingUserModel.pricing ?? backendModel.pricing
       const mergedSupportsVision = existingUserModel.supportsVision ?? backendModel.supportsVision
       return enrichWithProfileDefaults({
         ...backendModel,
@@ -149,23 +139,14 @@ function mergeModelsWithUserOverrides(
         id: backendModel.id,
       })
     }
-    return enrichWithProfileDefaults({
-      ...backendModel,
-      ...(stampedBackendPricing !== undefined ? { pricing: stampedBackendPricing } : {}),
-    })
+    return enrichWithProfileDefaults(backendModel)
   })
 
   if (preserveMissingUserModels) {
     const normalizedBackendIds = new Set(filteredBackendModels.map((m) => normalizeModelId(m.id)))
     for (const userModel of userModels) {
       if (!normalizedBackendIds.has(normalizeModelId(userModel.id))) {
-        const stampedPricing = autoStampPricing(userModel.pricing)
-        updatedModels.push(
-          enrichWithProfileDefaults({
-            ...userModel,
-            ...(stampedPricing !== undefined ? { pricing: stampedPricing } : {}),
-          }),
-        )
+        updatedModels.push(enrichWithProfileDefaults(userModel))
       }
     }
   }
@@ -568,15 +549,30 @@ export function createProviderManager(config: Config, options: ProviderManagerOp
 
   async function fetchProviderModels(provider: Provider): Promise<ModelConfig[]> {
     const transport = options.adapters?.getTransport(resolveTransportAdapter(provider))
+    let models: ModelConfig[]
     if (transport) {
-      return transport.listModels({
+      models = await transport.listModels({
         providerId: provider.id,
         ...(provider.credentialRef && { credentialRef: provider.credentialRef }),
       })
+    } else {
+      const backend = resolveBackend(provider)
+      models = await fetchModelsWithContext(provider.url, provider.apiKey, backend)
     }
 
-    const backend = resolveBackend(provider)
-    return fetchModelsWithContext(provider.url, provider.apiKey, backend)
+    const now = new Date().toISOString()
+    return models.map((m) => {
+      if (m.pricing) {
+        return {
+          ...m,
+          pricing: {
+            ...m.pricing,
+            lastUpdatedAt: m.pricing.lastUpdatedAt ?? now,
+          },
+        }
+      }
+      return m
+    })
   }
 
   // Initialize the LLM client with the active provider's config (URL, model, apiKey, etc.)

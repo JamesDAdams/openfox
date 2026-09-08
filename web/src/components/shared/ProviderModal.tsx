@@ -560,11 +560,17 @@ function ModelConfigPanel({
             onChange={(threshold) => onUpdateConfig(model.id, { compactionThreshold: threshold })}
           />
         </div>
+      </details>
 
-        <div className="border-t border-border pt-3 mt-3">
-          <p className="text-xs text-text-muted mb-2">
-            {t({ en: 'API Price (/ 1M tokens)', fr: 'Tarif API (/ 1M jetons)' })}
-          </p>
+      <details className="group mt-2">
+        <summary className="text-xs text-text-muted cursor-pointer hover:text-text-secondary list-none flex items-center gap-1 select-none">
+          <ChevronDownIcon className="w-3 h-3 transition-transform group-open:rotate-180" />
+          {t({
+            en: 'API Price & Discount (/ 1M tokens)',
+            fr: 'Tarifs API et remises (/ 1M jetons)',
+          })}
+        </summary>
+        <div className="mt-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-text-secondary block mb-0.5">
@@ -667,7 +673,9 @@ function ModelConfigPanel({
           </div>
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div>
-              <label className="text-xs text-text-secondary block mb-0.5">{t({ en: 'Discount', fr: 'Remise' })}</label>
+              <label className="text-xs text-text-secondary block mb-0.5">
+                {t({ en: 'Discount (%)', fr: 'Remise (%)' })}
+              </label>
               <input
                 type="text"
                 data-testid="pricing-discount"
@@ -725,27 +733,6 @@ function ModelConfigPanel({
                 <option value="tokens">{t({ en: 'Tokens / Credits (tk)', fr: 'Jetons / Crédits (tk)' })}</option>
               </select>
             </div>
-          </div>
-          <div className="mt-2">
-            <label className="text-xs text-text-secondary block mb-0.5">
-              {t({ en: 'Last pricing check date', fr: 'Date de dernière vérification du prix' })}
-            </label>
-            <input
-              type="text"
-              data-testid="pricing-last-updated-at"
-              value={modelConfigs[model.id]?.pricing?.lastUpdatedAt ?? ''}
-              onChange={(e) => {
-                const val = e.target.value ? e.target.value : undefined
-                const currentPricing = modelConfigs[model.id]?.pricing ?? {}
-                const nextPricing = { ...currentPricing, lastUpdatedAt: val }
-                if (val === undefined) delete nextPricing.lastUpdatedAt
-                onUpdateConfig(model.id, {
-                  pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
-                })
-              }}
-              placeholder={t({ en: 'e.g. 2026-09-08 or ISO date', fr: 'ex. 2026-09-08 ou date ISO' })}
-              className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
-            />
           </div>
         </div>
       </details>
@@ -2075,6 +2062,25 @@ export function ProviderModal({
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  data-testid={`model-configure-${model.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setExpandedModelId(expandedModelId === model.id ? null : model.id)
+                                  }}
+                                  className="p-1 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+                                  title={t({
+                                    en: 'Configure model parameters',
+                                    fr: 'Configurer les paramètres du modèle',
+                                  })}
+                                  aria-label={t({
+                                    en: `Configure ${model.name ?? model.id}`,
+                                    fr: `Configurer ${model.name ?? model.id}`,
+                                  })}
+                                >
+                                  <SettingsIcon className="w-4 h-4" />
+                                </button>
                                 {autoConfigState.progress[model.id] === 'probing' ? (
                                   <span className="w-3 h-3 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
                                 ) : autoConfigState.progress[model.id] === 'done' ? (

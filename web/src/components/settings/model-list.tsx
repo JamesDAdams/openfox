@@ -16,6 +16,7 @@ import type { Provider } from '../../stores/config'
 import type { ModelPricing } from '@shared/types.js'
 import { formatPriceValue, type PriceCurrency } from '@shared/stats-view.js'
 import { isSmallContext } from '../../lib/context-warning'
+import { formatRelativePricingDate } from '../../lib/format-date'
 import { useT } from '../../hooks/useT'
 
 export function formatContextWindow(context: number): string {
@@ -260,7 +261,7 @@ export function formatPricingTooltip(pricing?: ModelPricing, currency: PriceCurr
     }
   }
   if (pricing.lastUpdatedAt) {
-    lines.push(`Last updated: ${pricing.lastUpdatedAt}`)
+    lines.push(`Last updated: ${formatRelativePricingDate(pricing.lastUpdatedAt)}`)
   }
   return lines.length > 0 ? lines.join('\n') : undefined
 }
@@ -768,7 +769,7 @@ export function ModelEntryRow({
             {modelConfig.pricing.lastUpdatedAt && (
               <div className="text-text-muted text-[10px] pt-1 border-t border-border/40 flex justify-between gap-3">
                 <span>{t({ en: 'Updated:', fr: 'Mis à jour :' })}</span>
-                <span>{modelConfig.pricing.lastUpdatedAt}</span>
+                <span>{formatRelativePricingDate(modelConfig.pricing.lastUpdatedAt)}</span>
               </div>
             )}
           </div>,
