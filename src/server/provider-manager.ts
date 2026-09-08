@@ -1,4 +1,4 @@
-import type { Provider, Config, LlmBackend, ModelConfig } from '../shared/types.js'
+import type { Provider, Config, LlmBackend, ModelConfig, ModelPricing } from '../shared/types.js'
 import type { ProviderRegistry } from './providers/plugins/registry.js'
 import { createTransportLLMClient } from './providers/adapters/transport-client.js'
 import { createLLMClient, clearModelCache, getModelProfile, type LLMClientWithModel } from './llm/index.js'
@@ -104,6 +104,14 @@ function enrichWithCatalogDefaults(model: ModelConfig): ModelConfig {
   }
 }
 
+function autoStampPricing(pricing?: ModelPricing): ModelPricing | undefined {
+  if (!pricing) return undefined
+  if (!pricing.lastUpdatedAt) {
+    return { ...pricing, lastUpdatedAt: new Date().toISOString() }
+  }
+  return pricing
+}
+
 function mergeModelsWithUserOverrides(
   backendModels: ModelConfig[],
   userModels: ModelConfig[],
@@ -128,8 +136,10 @@ function mergeModelsWithUserOverrides(
 
   const updatedModels = filteredBackendModels.map((backendModel) => {
     const existingUserModel = normalizedUserIdMap.get(normalizeModelId(backendModel.id))
+    const stampedBackendPricing = autoStampPricing(backendModel.pricing)
     if (existingUserModel) {
-      const mergedPricing = existingUserModel.pricing ?? backendModel.pricing
+      const mergedPricing =
+        existingUserModel.pricing !== undefined ? autoStampPricing(existingUserModel.pricing) : stampedBackendPricing
       const mergedSupportsVision = existingUserModel.supportsVision ?? backendModel.supportsVision
       return enrichWithProfileDefaults({
         ...backendModel,
@@ -139,14 +149,23 @@ function mergeModelsWithUserOverrides(
         id: backendModel.id,
       })
     }
-    return enrichWithProfileDefaults(backendModel)
+    return enrichWithProfileDefaults({
+      ...backendModel,
+      ...(stampedBackendPricing !== undefined ? { pricing: stampedBackendPricing } : {}),
+    })
   })
 
   if (preserveMissingUserModels) {
     const normalizedBackendIds = new Set(filteredBackendModels.map((m) => normalizeModelId(m.id)))
     for (const userModel of userModels) {
       if (!normalizedBackendIds.has(normalizeModelId(userModel.id))) {
-        updatedModels.push(enrichWithProfileDefaults(userModel))
+        const stampedPricing = autoStampPricing(userModel.pricing)
+        updatedModels.push(
+          enrichWithProfileDefaults({
+            ...userModel,
+            ...(stampedPricing !== undefined ? { pricing: stampedPricing } : {}),
+          }),
+        )
       }
     }
   }

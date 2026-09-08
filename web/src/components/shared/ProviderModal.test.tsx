@@ -925,10 +925,13 @@ describe('ProviderModal - small context window warning', () => {
     const discountPricingInput = document.body.querySelector(
       '[data-testid="pricing-discount"]',
     ) as HTMLInputElement | null
+    const lastUpdatedAtInput = document.body.querySelector(
+      '[data-testid="pricing-last-updated-at"]',
+    ) as HTMLInputElement | null
     expect(inputPricingInput?.value).toBe('0.15')
     expect(outputPricingInput?.value).toBe('0.6')
 
-    // Modify the input pricing field and discount field
+    // Modify the input pricing field and discount field and lastUpdatedAt field
     if (inputPricingInput) {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
       nativeInputValueSetter?.call(inputPricingInput, '0.20')
@@ -938,6 +941,11 @@ describe('ProviderModal - small context window warning', () => {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
       nativeInputValueSetter?.call(discountPricingInput, '60')
       discountPricingInput.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    if (lastUpdatedAtInput) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      nativeInputValueSetter?.call(lastUpdatedAtInput, '2026-09-08')
+      lastUpdatedAtInput.dispatchEvent(new Event('input', { bubbles: true }))
     }
 
     const saveButton = document.body.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
@@ -951,7 +959,62 @@ describe('ProviderModal - small context window warning', () => {
       cacheRead: 0.075,
       cacheWrite: 0.3,
       discount: 60,
+      lastUpdatedAt: '2026-09-08',
     })
+  })
+
+  it('automatically sets lastUpdatedAt when pricing or discount is updated without explicit date', async () => {
+    const onSaveMock = vi.fn()
+    const modelsWithPricing = [
+      {
+        id: 'auto-date-model',
+        contextWindow: 128000,
+        selected: true,
+        pricing: {
+          input: 0.15,
+          output: 0.6,
+        },
+      },
+    ]
+
+    await new Promise<void>((resolve) => {
+      root.render(
+        <ProviderModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={onSaveMock as (provider: ProviderFormData) => void}
+          editProvider={{
+            id: 'test-provider',
+            name: 'Test Provider',
+            url: 'http://localhost:8000/v1',
+            backend: 'openai',
+            models: modelsWithPricing as never,
+          }}
+          initialStep={2}
+          editModelId="auto-date-model"
+        />,
+      )
+      setTimeout(resolve, 200)
+    })
+
+    const discountPricingInput = document.body.querySelector(
+      '[data-testid="pricing-discount"]',
+    ) as HTMLInputElement | null
+
+    if (discountPricingInput) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      nativeInputValueSetter?.call(discountPricingInput, '40')
+      discountPricingInput.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+
+    const saveButton = document.body.querySelector('[data-testid="provider-modal-save"]') as HTMLButtonElement | null
+    saveButton?.click()
+
+    const savedData: ProviderFormData = onSaveMock.mock.calls[0]![0]!
+    const savedModel = savedData.models.find((m) => m.id === 'auto-date-model')
+    expect(savedModel?.pricing?.discount).toBe(40)
+    expect(typeof savedModel?.pricing?.lastUpdatedAt).toBe('string')
+    expect(savedModel?.pricing?.lastUpdatedAt?.length).toBeGreaterThan(0)
   })
 
   it('renders discount badge and pricing summary in the available models checklist in ProviderModal', async () => {

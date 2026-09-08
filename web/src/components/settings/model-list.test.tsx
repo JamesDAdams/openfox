@@ -149,6 +149,7 @@ describe('ModelEntryRow pricing display', () => {
         cacheRead: 1.25,
         cacheWrite: 3.75,
         discount: '40% off',
+        lastUpdatedAt: '2026-09-08',
       },
     })
     try {
@@ -172,6 +173,8 @@ describe('ModelEntryRow pricing display', () => {
       expect(popover?.textContent).toContain('Cache write:')
       expect(popover?.textContent).toContain('$3.75')
       expect(popover?.textContent).toContain('$2.25 / 1M')
+      expect(popover?.textContent).toContain('Updated:')
+      expect(popover?.textContent).toContain('2026-09-08')
 
       act(() => {
         fireEvent.mouseLeave(row)

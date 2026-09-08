@@ -259,6 +259,9 @@ export function formatPricingTooltip(pricing?: ModelPricing, currency: PriceCurr
       lines.push(`Cache write: ${formatPriceValue(pricing.cacheWrite, currency)}`)
     }
   }
+  if (pricing.lastUpdatedAt) {
+    lines.push(`Last updated: ${pricing.lastUpdatedAt}`)
+  }
   return lines.length > 0 ? lines.join('\n') : undefined
 }
 
@@ -760,6 +763,12 @@ export function ModelEntryRow({
                     </span>
                   )}
                 </span>
+              </div>
+            )}
+            {modelConfig.pricing.lastUpdatedAt && (
+              <div className="text-text-muted text-[10px] pt-1 border-t border-border/40 flex justify-between gap-3">
+                <span>{t({ en: 'Updated:', fr: 'Mis à jour :' })}</span>
+                <span>{modelConfig.pricing.lastUpdatedAt}</span>
               </div>
             )}
           </div>,

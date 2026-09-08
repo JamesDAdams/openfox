@@ -579,10 +579,11 @@ function ModelConfigPanel({
                 onChange={(e) => {
                   const val = e.target.value ? parseFloat(e.target.value) : undefined
                   const currentPricing = modelConfigs[model.id]?.pricing ?? {}
-                  const nextPricing = { ...currentPricing, input: val }
+                  const nextPricing = { ...currentPricing, input: val, lastUpdatedAt: new Date().toISOString() }
                   if (val === undefined) delete nextPricing.input
+                  const { lastUpdatedAt: _, ...rest } = nextPricing
                   onUpdateConfig(model.id, {
-                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                    pricing: Object.values(rest).some((v) => v !== undefined) ? nextPricing : undefined,
                   })
                 }}
                 placeholder={t({ en: 'e.g. 0.15', fr: 'ex. 0.15' })}
@@ -602,10 +603,11 @@ function ModelConfigPanel({
                 onChange={(e) => {
                   const val = e.target.value ? parseFloat(e.target.value) : undefined
                   const currentPricing = modelConfigs[model.id]?.pricing ?? {}
-                  const nextPricing = { ...currentPricing, output: val }
+                  const nextPricing = { ...currentPricing, output: val, lastUpdatedAt: new Date().toISOString() }
                   if (val === undefined) delete nextPricing.output
+                  const { lastUpdatedAt: _, ...rest } = nextPricing
                   onUpdateConfig(model.id, {
-                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                    pricing: Object.values(rest).some((v) => v !== undefined) ? nextPricing : undefined,
                   })
                 }}
                 placeholder={t({ en: 'e.g. 0.60', fr: 'ex. 0.60' })}
@@ -627,10 +629,11 @@ function ModelConfigPanel({
                 onChange={(e) => {
                   const val = e.target.value ? parseFloat(e.target.value) : undefined
                   const currentPricing = modelConfigs[model.id]?.pricing ?? {}
-                  const nextPricing = { ...currentPricing, cacheRead: val }
+                  const nextPricing = { ...currentPricing, cacheRead: val, lastUpdatedAt: new Date().toISOString() }
                   if (val === undefined) delete nextPricing.cacheRead
+                  const { lastUpdatedAt: _, ...rest } = nextPricing
                   onUpdateConfig(model.id, {
-                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                    pricing: Object.values(rest).some((v) => v !== undefined) ? nextPricing : undefined,
                   })
                 }}
                 placeholder={t({ en: 'e.g. 0.075', fr: 'ex. 0.075' })}
@@ -650,10 +653,11 @@ function ModelConfigPanel({
                 onChange={(e) => {
                   const val = e.target.value ? parseFloat(e.target.value) : undefined
                   const currentPricing = modelConfigs[model.id]?.pricing ?? {}
-                  const nextPricing = { ...currentPricing, cacheWrite: val }
+                  const nextPricing = { ...currentPricing, cacheWrite: val, lastUpdatedAt: new Date().toISOString() }
                   if (val === undefined) delete nextPricing.cacheWrite
+                  const { lastUpdatedAt: _, ...rest } = nextPricing
                   onUpdateConfig(model.id, {
-                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                    pricing: Object.values(rest).some((v) => v !== undefined) ? nextPricing : undefined,
                   })
                 }}
                 placeholder={t({ en: 'e.g. 0.30', fr: 'ex. 0.30' })}
@@ -674,10 +678,11 @@ function ModelConfigPanel({
                   const num = Number(trimmed)
                   const val = raw === '' ? undefined : !isNaN(num) && trimmed !== '' ? num : raw
                   const currentPricing = modelConfigs[model.id]?.pricing ?? {}
-                  const nextPricing = { ...currentPricing, discount: val }
+                  const nextPricing = { ...currentPricing, discount: val, lastUpdatedAt: new Date().toISOString() }
                   if (val === undefined) delete nextPricing.discount
+                  const { lastUpdatedAt: _, ...rest } = nextPricing
                   onUpdateConfig(model.id, {
-                    pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                    pricing: Object.values(rest).some((v) => v !== undefined) ? nextPricing : undefined,
                   })
                 }}
                 onBlur={(e) => {
@@ -686,10 +691,11 @@ function ModelConfigPanel({
                     const num = Number(raw)
                     const val = raw === '' ? undefined : !isNaN(num) && raw !== '' ? num : raw
                     const currentPricing = modelConfigs[model.id]?.pricing ?? {}
-                    const nextPricing = { ...currentPricing, discount: val }
+                    const nextPricing = { ...currentPricing, discount: val, lastUpdatedAt: new Date().toISOString() }
                     if (val === undefined) delete nextPricing.discount
+                    const { lastUpdatedAt: _, ...rest } = nextPricing
                     onUpdateConfig(model.id, {
-                      pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                      pricing: Object.values(rest).some((v) => v !== undefined) ? nextPricing : undefined,
                     })
                   }
                 }}
@@ -707,7 +713,7 @@ function ModelConfigPanel({
                 onChange={(e) => {
                   const val = e.target.value as 'usd' | 'eur' | 'tokens'
                   const currentPricing = modelConfigs[model.id]?.pricing ?? {}
-                  const nextPricing = { ...currentPricing, currency: val }
+                  const nextPricing = { ...currentPricing, currency: val, lastUpdatedAt: new Date().toISOString() }
                   onUpdateConfig(model.id, {
                     pricing: nextPricing,
                   })
@@ -719,6 +725,27 @@ function ModelConfigPanel({
                 <option value="tokens">{t({ en: 'Tokens / Credits (tk)', fr: 'Jetons / Crédits (tk)' })}</option>
               </select>
             </div>
+          </div>
+          <div className="mt-2">
+            <label className="text-xs text-text-secondary block mb-0.5">
+              {t({ en: 'Last pricing check date', fr: 'Date de dernière vérification du prix' })}
+            </label>
+            <input
+              type="text"
+              data-testid="pricing-last-updated-at"
+              value={modelConfigs[model.id]?.pricing?.lastUpdatedAt ?? ''}
+              onChange={(e) => {
+                const val = e.target.value ? e.target.value : undefined
+                const currentPricing = modelConfigs[model.id]?.pricing ?? {}
+                const nextPricing = { ...currentPricing, lastUpdatedAt: val }
+                if (val === undefined) delete nextPricing.lastUpdatedAt
+                onUpdateConfig(model.id, {
+                  pricing: Object.keys(nextPricing).length > 0 ? nextPricing : undefined,
+                })
+              }}
+              placeholder={t({ en: 'e.g. 2026-09-08 or ISO date', fr: 'ex. 2026-09-08 ou date ISO' })}
+              className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
+            />
           </div>
         </div>
       </details>

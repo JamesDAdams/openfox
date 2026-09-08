@@ -671,6 +671,8 @@ export interface ModelPricing {
   discount?: number | string
   /** Currency / pricing unit for this model's rates (e.g. 'usd' | 'eur' | 'tokens') */
   currency?: 'usd' | 'eur' | 'tokens'
+  /** ISO timestamp when pricing and discount were last checked/updated */
+  lastUpdatedAt?: string
 }
 
 /** Model configuration with context window */

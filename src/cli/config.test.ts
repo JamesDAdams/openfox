@@ -310,6 +310,7 @@ describe('config', () => {
                   cacheRead: 1.25,
                   cacheWrite: 3.75,
                   discount: 60,
+                  lastUpdatedAt: '2026-09-08T12:00:00.000Z',
                 },
               },
             ],
@@ -333,6 +334,7 @@ describe('config', () => {
         cacheRead: 1.25,
         cacheWrite: 3.75,
         discount: 60,
+        lastUpdatedAt: '2026-09-08T12:00:00.000Z',
       })
 
       await saveGlobalConfig('production', loaded)
@@ -343,6 +345,7 @@ describe('config', () => {
         cacheRead: 1.25,
         cacheWrite: 3.75,
         discount: 60,
+        lastUpdatedAt: '2026-09-08T12:00:00.000Z',
       })
     })
   })

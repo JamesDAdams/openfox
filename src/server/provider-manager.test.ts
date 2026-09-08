@@ -1333,6 +1333,8 @@ describe('ProviderManager - Model Selection', () => {
               output: 10,
               cacheRead: 1.25,
               cacheWrite: 3.75,
+              discount: 50,
+              lastUpdatedAt: '2026-09-08T10:00:00.000Z',
             },
           },
         ]),
@@ -1343,6 +1345,8 @@ describe('ProviderManager - Model Selection', () => {
         output: 10,
         cacheRead: 1.25,
         cacheWrite: 3.75,
+        discount: 50,
+        lastUpdatedAt: '2026-09-08T10:00:00.000Z',
       })
     })
 
