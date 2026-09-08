@@ -249,13 +249,17 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   // OAuth credentials live next to the config they belong to, never inside it.
   setMcpOAuthStorePath(config.globalConfigPath ? join(dirname(config.globalConfigPath), 'mcp-auth.json') : undefined)
   const mcpServers = (config.mcpServers ?? {}) as Record<string, import('./mcp/types.js').McpServerConfig>
-  Promise.all(
-    Object.entries(mcpServers).map(([name, serverConfig]) =>
-      mcpManager.addServer(name, serverConfig).catch((err) => {
-        logger.warn('Failed to connect MCP server on startup', { name, error: String(err) })
-      }),
-    ),
-  ).then(async () => {
+  // Connect configured MCP servers only once the HTTP server is listening:
+  // a self-referencing server (OpenFox as its own MCP client) would otherwise
+  // race the listen and land in an error state. Invoked from start() below.
+  async function connectMcpServers(): Promise<void> {
+    await Promise.all(
+      Object.entries(mcpServers).map(([name, serverConfig]) =>
+        mcpManager.addServer(name, serverConfig).catch((err) => {
+          logger.warn('Failed to connect MCP server on startup', { name, error: String(err) })
+        }),
+      ),
+    )
     const mcpTools = createMcpTools(mcpManager)
     if (mcpTools.length > 0) {
       setMcpTools(mcpTools)
@@ -264,7 +268,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
     const { signalMcpReady } = await import('./ws/server.js')
     signalMcpReady()
-  })
+  }
 
   const app = express()
 
@@ -3753,6 +3757,16 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
           const actualPort = typeof addr === 'object' && addr ? addr.port : listenPort
           setMcpOAuthServerPort(actualPort)
           mcpActualPort = actualPort
+          // The /mcp endpoint is only reachable once we're listening, so start
+          // MCP client connections now — a self-referencing server (OpenFox as
+          // its own MCP client) would otherwise race the listen and fail.
+          // The very first requests may arrive before MCP tools register;
+          // connectMcpServers settles shortly after, then signals MCP readiness.
+          connectMcpServers().catch((err) => {
+            logger.error('MCP server startup connection failed', {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          })
           const client = getLLMClient()
           logger.info(`OpenFox server running at http://${host}:${actualPort}`)
           logger.info(`WebSocket available at ws://${host}:${actualPort}/ws`)
