@@ -1852,6 +1852,26 @@ describe('path-security', () => {
         ),
       ).toBe(false)
     })
+
+    it('detects --no-verify after a quoted commit message containing a semicolon', () => {
+      expect(
+        extractGitNoVerify(
+          'git add src/server/db/sessions.ts && git commit -m "feat(web): flat recent-sessions homepage with starred-first projects index - Homepage shows up to 20 most recent sessions across all projects, ordered by last activity, always visible, with real links (open in new tab) and running/waiting/blocked status dots. - listHomeSessions returns the 20 most recent sessions flat (drops the 5-per-project cap) and pins running/waiting/blocked sessions so active work never drops off the list. - Projects section below keeps Tasks/+ New Session/delete actions; cards contain no sessions, ordered starred first then alphabetical (star icon for starred projects)." --no-verify 2>&1 | tail -5',
+        ),
+      ).toBe(true)
+    })
+
+    it('detects --no-verify when shell separators appear inside the quoted message', () => {
+      expect(extractGitNoVerify('git commit -m "a; b | c && d" --no-verify')).toBe(true)
+    })
+
+    it('does not flag --no-verify used as a quoted message value', () => {
+      expect(extractGitNoVerify('git commit -m "--no-verify"')).toBe(false)
+    })
+
+    it('still flags --no-verify after an unterminated quoted message', () => {
+      expect(extractGitNoVerify('git commit -m "msg --no-verify')).toBe(true)
+    })
   })
 
   // ===========================================================================
