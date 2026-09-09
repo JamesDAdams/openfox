@@ -3582,8 +3582,12 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   const wss = wssExports.wss
 
   // Point the tasks service at the live WebSocket broadcaster now that it exists.
-  deferTasksBroadcast = (projectId, payload) =>
-    wssExports.broadcastForProject(projectId, '', { type: 'tasks.update', payload })
+  // Broadcast to ALL clients (not just the project's active session): a task
+  // board can be open in a window with no session loaded (homepage) or in
+  // another project's session — those windows must see live updates too. The
+  // payload carries projectId; clients write through into their per-project
+  // board cache, so unaffected boards are untouched.
+  deferTasksBroadcast = (_projectId, payload) => wssExports.broadcastAll({ type: 'tasks.update', payload })
 
   // Point the tasks service at the workflow launcher. Task-seeded workflows run
   // through the same shared launcher as runner.launch (src/server/runner/launch.ts).
