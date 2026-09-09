@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.141 - 2026-09-09
+
+### Enhancements
+
+- **Homepage lists your 20 most recent sessions** — flat across all projects, sorted by last activity, with live status dots and links that open in a new tab; running sessions stay pinned so active work never drops off.
+- **Projects section decluttered** — cards now sort starred-first and hold no sessions; tasks and new-session actions stay one click away.
+- **Send and pause stay reachable on mobile** — the send, pause, and stop buttons now show while the agent is running instead of hiding.
+
+### Bug Fixes
+
+- **Git --no-verify confirmation can no longer be skipped** — a semicolon, pipe, or `&&` inside a quoted commit message used to orphan the flag and silently bypass the confirmation; detection is now quote-aware.
+- **Live task-board sync reaches every window** — task updates are now broadcast to all windows, so boards without an active session no longer go stale.
+- **MCP servers connect once the HTTP server is listening** — OpenFox's self-referencing MCP entry no longer races startup and lands in a permanent error state.
+
 ## 2.0.140 - 2026-09-08
 
 ### Features
