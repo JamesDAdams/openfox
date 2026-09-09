@@ -545,6 +545,11 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     launchWorkflow: (sessionId, launch) => deferTasksLaunchWorkflow(sessionId, launch),
   })
   setTasksService(tasksService)
+  // Periodic tick for scheduled tasks: runs once at boot (catch-up for tasks
+  // missed while OpenFox was off) then every 30s. Stopped in close().
+  const { createTaskScheduler } = await import('./tasks/scheduler.js')
+  const taskScheduler = createTaskScheduler({ run: () => tasksService.runScheduled() })
+  taskScheduler.start()
   const tasksRouter = express.Router()
   registerTaskRoutes(tasksRouter, tasksService)
   app.use('/api', tasksRouter)
@@ -3790,6 +3795,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         void (async () => {
           await devServerManager.stopAll()
           await mcpManager.disconnectAll()
+          taskScheduler.stop()
           const { stopAllInspectProxies } = await import('./dev-server/inspect-proxy.js')
           stopAllInspectProxies()
           const { cleanupAllProcesses } = await import('./tools/background-process/store.js')
