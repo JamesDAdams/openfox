@@ -120,6 +120,7 @@ export function ChatInput({
 
   const isRunning = useIsRunning(sessionId)
   const perSessionMcpEnabled = useSetting(SETTINGS_KEYS.FEATURES_PER_SESSION_MCP, 'false').value === 'true'
+  const fullscreenComposer = useSetting(SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER, 'false').value === 'true'
   const stopGeneration = useSessionStore((state) => state.stopGeneration)
   const pauseGeneration = useSessionStore((state) => state.pauseGeneration)
   const resumeGeneration = useSessionStore((state) => state.resumeGeneration)
@@ -261,11 +262,11 @@ export function ChatInput({
     resizeTextarea()
   }, [input, resizeTextarea])
 
-  // Mobile full-height composer: while the textarea is focused on a touch
-  // device and the keyboard is up, pin it to the remaining pane height so it
-  // fills the screen instead of auto-growing endlessly (scrolls internally).
+  // Mobile full-height composer (opt-in): while the textarea is focused on a
+  // touch device and the keyboard is up, pin it to the remaining pane height so
+  // it fills the screen instead of auto-growing endlessly (scrolls internally).
   const expandedHeight =
-    isTouch && isFocused && viewport.keyboardVisible
+    isTouch && isFocused && viewport.keyboardVisible && fullscreenComposer
       ? Math.max(COMPOSER_MIN_HEIGHT, viewport.height - COMPOSER_EXPANDED_RESERVE)
       : null
 
@@ -601,7 +602,14 @@ export function ChatInput({
     cursorPosRef.current = e.currentTarget.selectionStart
   }, [])
 
-  const moreMenu = (
+  // While the composer is pinned full-screen, pressing an action button must not
+  // blur the textarea: the collapse would swallow the tap (first press only
+  // minimizes, the second one actually sends).
+  const keepComposerFocus = (e: React.MouseEvent) => {
+    if (expandedHeight !== null) e.preventDefault()
+  }
+
+  const moreMenu = ({ mobile = false }: { mobile?: boolean } = {}) => (
     <MoreMenu
       onSendCommand={onSendCommand}
       onSelectWorkflow={onSelectWorkflow}
@@ -611,6 +619,7 @@ export function ChatInput({
       onAttach={handleAttachClick}
       textareaContent={input}
       attachments={attachments.length > 0 ? attachments : undefined}
+      {...(mobile ? { onTriggerMouseDown: keepComposerFocus } : {})}
     />
   )
 
@@ -620,7 +629,7 @@ export function ChatInput({
       onClick={handleSend}
       disabled={!input.trim() && attachments.length === 0}
       data-testid={mobile ? 'chat-send-button-touch' : 'chat-send-button'}
-      {...(mobile ? { 'aria-label': t({ en: 'Send', fr: 'Envoyer' }) } : {})}
+      {...(mobile ? { 'aria-label': t({ en: 'Send', fr: 'Envoyer' }), onMouseDown: keepComposerFocus } : {})}
       className={`rounded-l bg-accent-primary/20 text-sm text-accent-primary font-medium hover:bg-accent-primary/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors ${
         mobile ? 'flex items-center justify-center px-4 py-2' : 'px-4 py-1.5'
       }`}
@@ -637,6 +646,7 @@ export function ChatInput({
       data-testid={mobile ? 'chat-pause-button-touch' : 'chat-pause-button'}
       title={pauseTooltip}
       aria-label={pauseTooltip}
+      {...(mobile ? { onMouseDown: keepComposerFocus } : {})}
       className={`group flex items-center justify-center px-3 py-2 rounded-l bg-accent-warning/20 text-accent-warning hover:bg-accent-warning/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
         pauseState === 'pending' ? 'animate-pause-pulse' : ''
       }`}
@@ -661,6 +671,7 @@ export function ChatInput({
       data-testid={mobile ? 'chat-stop-button-touch' : 'chat-stop-button'}
       title={t({ en: 'Stop', fr: 'Stopper' })}
       aria-label={t({ en: 'Stop', fr: 'Stopper' })}
+      {...(mobile ? { onMouseDown: keepComposerFocus } : {})}
       className={`flex items-center justify-center bg-accent-error/20 text-accent-error hover:bg-accent-error/30 transition-colors ${
         mobile
           ? 'px-3 py-2 rounded-r border-l border-black/10 dark:border-white/10'
@@ -812,7 +823,7 @@ export function ChatInput({
             )}
             <div className="flex items-center">
               {sendButton()}
-              {moreMenu}
+              {moreMenu()}
             </div>
           </div>
           <div className="flex @md:hidden items-center self-center gap-1.5">
@@ -824,7 +835,7 @@ export function ChatInput({
             )}
             <div className="flex items-center">
               {sendButton({ mobile: true })}
-              {moreMenu}
+              {moreMenu({ mobile: true })}
             </div>
           </div>
         </div>

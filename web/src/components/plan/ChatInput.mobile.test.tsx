@@ -3,10 +3,12 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatInput } from './ChatInput'
+import { SETTINGS_KEYS } from '../../lib/resources'
 
-const { currentSessionMock, runningRef } = vi.hoisted(() => ({
+const { currentSessionMock, runningRef, sendMessageMock } = vi.hoisted(() => ({
   currentSessionMock: { id: 's1', workdir: '/tmp', projectId: 'p1', messageCount: 0 },
   runningRef: { value: false },
+  sendMessageMock: vi.fn(),
 }))
 
 let viewportState = { offsetTop: 0, height: 800, keyboardVisible: false }
@@ -40,7 +42,7 @@ vi.mock('../../stores/session', () => ({
 }))
 
 vi.mock('../../hooks/useScrolledSend', () => ({
-  useScrolledSend: () => ({ sendMessage: vi.fn(), launchWorkflow: vi.fn() }),
+  useScrolledSend: () => ({ sendMessage: sendMessageMock, launchWorkflow: vi.fn() }),
 }))
 
 vi.mock('../../hooks/useEffortGateContext', () => ({
@@ -169,6 +171,7 @@ describe('ChatInput mobile composer', () => {
   })
 
   it('pins the textarea to the visual viewport height when focused with the keyboard open', () => {
+    settingOverrides[SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER] = 'true'
     const { rerender } = renderChat('hello')
     const textarea = screen.getByTestId<HTMLTextAreaElement>('chat-input-textarea')
     expect(textarea.style.maxHeight).toBe('200px')
@@ -182,6 +185,7 @@ describe('ChatInput mobile composer', () => {
   })
 
   it('does not expand while focused without a keyboard', () => {
+    settingOverrides[SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER] = 'true'
     const { rerender } = renderChat('hello')
     const textarea = screen.getByTestId<HTMLTextAreaElement>('chat-input-textarea')
     fireEvent.focus(textarea)
@@ -229,6 +233,7 @@ describe('ChatInput mobile composer', () => {
   })
 
   it('restores auto-grown height when the keyboard closes', () => {
+    settingOverrides[SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER] = 'true'
     const { rerender } = renderChat('hello')
     const textarea = screen.getByTestId<HTMLTextAreaElement>('chat-input-textarea')
     fireEvent.focus(textarea)
@@ -243,5 +248,67 @@ describe('ChatInput mobile composer', () => {
     })
     expect(textarea.style.height).toBe('60px')
     expect(textarea.style.maxHeight).toBe('200px')
+  })
+
+  it('keeps the textarea auto-sized by default even with the keyboard open (fullscreen is opt-in)', () => {
+    const { rerender } = renderChat('hello')
+    const textarea = screen.getByTestId<HTMLTextAreaElement>('chat-input-textarea')
+    fireEvent.focus(textarea)
+    viewportState = { offsetTop: 0, height: 420, keyboardVisible: true }
+    rerender(<ChatInput {...chatProps('hello')} />)
+
+    expect(textarea.style.height).toBe('60px')
+    expect(textarea.style.maxHeight).toBe('200px')
+  })
+
+  it('does not blur the textarea when the send button is pressed while expanded (single tap sends)', () => {
+    settingOverrides[SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER] = 'true'
+    const { rerender } = renderChat('hello')
+    const textarea = screen.getByTestId<HTMLTextAreaElement>('chat-input-textarea')
+    fireEvent.focus(textarea)
+    viewportState = { offsetTop: 0, height: 420, keyboardVisible: true }
+    rerender(<ChatInput {...chatProps('hello')} />)
+    const expanded = `${420 - 96}px`
+    expect(textarea.style.height).toBe(expanded)
+
+    const send = screen.getByTestId('chat-send-button-touch')
+    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    const preventDefaultSpy = vi.spyOn(mouseDown, 'preventDefault')
+    fireEvent(send, mouseDown)
+    expect(preventDefaultSpy).toHaveBeenCalled()
+    expect(textarea.style.height).toBe(expanded)
+
+    fireEvent.click(send)
+    expect(sendMessageMock).toHaveBeenCalledWith('hello', [])
+  })
+
+  it('keeps the default mousedown behavior on the send button outside the expanded composer', () => {
+    renderChat('hello')
+    const send = screen.getByTestId('chat-send-button-touch')
+    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    const preventDefaultSpy = vi.spyOn(mouseDown, 'preventDefault')
+    fireEvent(send, mouseDown)
+    expect(preventDefaultSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not blur the textarea when the more menu trigger is pressed while expanded', () => {
+    settingOverrides[SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER] = 'true'
+    const { rerender } = renderChat('hello')
+    const textarea = screen.getByTestId<HTMLTextAreaElement>('chat-input-textarea')
+    fireEvent.focus(textarea)
+    viewportState = { offsetTop: 0, height: 420, keyboardVisible: true }
+    rerender(<ChatInput {...chatProps('hello')} />)
+    const expanded = `${420 - 96}px`
+    expect(textarea.style.height).toBe(expanded)
+
+    // Both the desktop and mobile rows render a trigger; the mobile one is last.
+    const triggers = screen.getAllByTitle('More options')
+    const mobileTrigger = triggers[triggers.length - 1] as HTMLElement
+    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    const preventDefaultSpy = vi.spyOn(mouseDown, 'preventDefault')
+    fireEvent(mobileTrigger, mouseDown)
+
+    expect(preventDefaultSpy).toHaveBeenCalled()
+    expect(textarea.style.height).toBe(expanded)
   })
 })
