@@ -725,6 +725,7 @@ export async function executeWorkflow(
           llmClient,
           toolRegistry: filteredToolRegistry,
           turnMetrics,
+          providerManager: sessionManager.getProviderManager?.(),
           statsIdentity: options.statsIdentity ?? {
             providerId: '',
             providerName: '',
