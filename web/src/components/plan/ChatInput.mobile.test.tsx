@@ -144,7 +144,7 @@ describe('ChatInput mobile composer', () => {
     expect(screen.queryByTestId('chat-stop-button-touch')).not.toBeInTheDocument()
   })
 
-  it('replaces the touch send button with the stop button while running', () => {
+  it('keeps the touch send button next to the stop button while running so messages can be queued', () => {
     runningRef.value = true
     renderChat()
     const stop = screen.getByTestId('chat-stop-button-touch')
@@ -152,7 +152,20 @@ describe('ChatInput mobile composer', () => {
     expect(stop.className).toContain('px-3')
     expect(stop.className).toContain('py-2')
     expect(stop.className).not.toContain('rounded-full')
-    expect(screen.queryByTestId('chat-send-button-touch')).not.toBeInTheDocument()
+    const send = screen.getByTestId('chat-send-button-touch')
+    expect(send).toBeInTheDocument()
+    expect(send.className).toContain('rounded-l')
+  })
+
+  it('shows the touch pause button next to the stop button while running', () => {
+    runningRef.value = true
+    renderChat()
+    const pause = screen.getByTestId('chat-pause-button-touch')
+    expect(pause).toBeInTheDocument()
+    expect(pause.className).toContain('px-3')
+    expect(pause.className).toContain('py-2')
+    expect(pause.className).not.toContain('rounded-full')
+    expect(screen.getByTestId('chat-stop-button-touch')).toBeInTheDocument()
   })
 
   it('pins the textarea to the visual viewport height when focused with the keyboard open', () => {

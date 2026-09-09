@@ -629,6 +629,31 @@ export function ChatInput({
     </button>
   )
 
+  const pauseButton = ({ mobile = false }: { mobile?: boolean } = {}) => (
+    <button
+      type="button"
+      onClick={handlePauseResume}
+      disabled={!sessionId || pauseState === 'resuming'}
+      data-testid={mobile ? 'chat-pause-button-touch' : 'chat-pause-button'}
+      title={pauseTooltip}
+      aria-label={pauseTooltip}
+      className={`group flex items-center justify-center px-3 py-2 rounded-l bg-accent-warning/20 text-accent-warning hover:bg-accent-warning/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+        pauseState === 'pending' ? 'animate-pause-pulse' : ''
+      }`}
+    >
+      {pauseState === 'paused' || pauseState === 'resuming' ? (
+        <PlayIcon className="w-4 h-4" />
+      ) : pauseState === 'pending' ? (
+        <>
+          <PauseIcon className="w-4 h-4 group-hover:hidden" />
+          <XCloseIcon className="hidden w-4 h-4 group-hover:block" />
+        </>
+      ) : (
+        <PauseIcon className="w-4 h-4" />
+      )}
+    </button>
+  )
+
   const stopButton = ({ mobile = false }: { mobile?: boolean } = {}) => (
     <button
       type="button"
@@ -637,7 +662,9 @@ export function ChatInput({
       title={t({ en: 'Stop', fr: 'Stopper' })}
       aria-label={t({ en: 'Stop', fr: 'Stopper' })}
       className={`flex items-center justify-center bg-accent-error/20 text-accent-error hover:bg-accent-error/30 transition-colors ${
-        mobile ? 'px-3 py-2 rounded-l' : 'px-3 py-2 rounded-r border-l border-black/10 dark:border-white/10'
+        mobile
+          ? 'px-3 py-2 rounded-r border-l border-black/10 dark:border-white/10'
+          : 'px-3 py-2 rounded-r border-l border-black/10 dark:border-white/10'
       }`}
     >
       <StopIcon />
@@ -779,28 +806,7 @@ export function ChatInput({
           <div className="hidden @md:flex items-center self-center gap-1.5">
             {isRunning && (
               <div className="flex items-center self-center">
-                <button
-                  type="button"
-                  onClick={handlePauseResume}
-                  disabled={!sessionId || pauseState === 'resuming'}
-                  data-testid="chat-pause-button"
-                  title={pauseTooltip}
-                  aria-label={pauseTooltip}
-                  className={`group flex items-center justify-center px-3 py-2 rounded-l bg-accent-warning/20 text-accent-warning hover:bg-accent-warning/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
-                    pauseState === 'pending' ? 'animate-pause-pulse' : ''
-                  }`}
-                >
-                  {pauseState === 'paused' || pauseState === 'resuming' ? (
-                    <PlayIcon className="w-4 h-4" />
-                  ) : pauseState === 'pending' ? (
-                    <>
-                      <PauseIcon className="w-4 h-4 group-hover:hidden" />
-                      <XCloseIcon className="hidden w-4 h-4 group-hover:block" />
-                    </>
-                  ) : (
-                    <PauseIcon className="w-4 h-4" />
-                  )}
-                </button>
+                {pauseButton()}
                 {stopButton()}
               </div>
             )}
@@ -810,9 +816,14 @@ export function ChatInput({
             </div>
           </div>
           <div className="flex @md:hidden items-center self-center gap-1.5">
-            {isRunning && stopButton({ mobile: true })}
+            {isRunning && (
+              <div className="flex items-center">
+                {pauseButton({ mobile: true })}
+                {stopButton({ mobile: true })}
+              </div>
+            )}
             <div className="flex items-center">
-              {!isRunning && sendButton({ mobile: true })}
+              {sendButton({ mobile: true })}
               {moreMenu}
             </div>
           </div>
