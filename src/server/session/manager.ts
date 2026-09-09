@@ -687,11 +687,11 @@ export class SessionManager {
   }
 
   /**
-   * Lightweight homepage list: the N most recently updated sessions per
-   * project, summaries only (no prompt extraction, no snapshot parsing).
+   * Lightweight homepage list: the 20 most recently updated sessions across
+   * all projects, summaries only (no prompt extraction, no snapshot parsing).
    */
-  listHomeSessions(sessionsPerProject = 5): SessionSummary[] {
-    return dbListHomeSessions(sessionsPerProject)
+  listHomeSessions(limit = 20): SessionSummary[] {
+    return dbListHomeSessions(limit)
   }
 
   /**

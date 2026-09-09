@@ -818,8 +818,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   })
 
   /**
-   * Lightweight homepage list. Returns only the N most recently updated
-   * sessions per project (summaries only — no recentUserPrompts, no pending
+   * Lightweight homepage list. Returns the 20 most recently updated sessions
+   * across all projects (summaries only — no recentUserPrompts, no pending
    * confirmations), so a fresh load never parses session snapshots.
    * Registered before /api/sessions/:id so 'home' is not treated as an id.
    */
@@ -874,7 +874,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     // maxTokens is no longer passed - it comes from providerManager.getCurrentModelContext() at query time
     const session = sessionManager.createSession(projectId, title, providerId ?? null, model ?? null)
 
-    wssExports.broadcastForProject(projectId, session.id, buildSessionCreatedMessage(session))
+    wssExports.broadcastAll(buildSessionCreatedMessage(session))
     res.status(201).json({ session: toClientSession(session) })
   })
 
