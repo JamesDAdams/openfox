@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.142 - 2026-09-09
+
+### Features
+
+- **Schedule tasks, one-off or recurring** — pick a date and time, or repeat daily, weekly, monthly, or yearly; due tasks fire automatically and float to the top of To Do with a countdown badge
+
+### Enhancements
+
+- **Homepage and counts stay fresh** — recent sessions, sidebar, and search reorder live as messages arrive, and message counts now include assistant messages
+
+### Bug Fixes
+
+- **Fullscreen mobile composer is now opt-in** — a Display setting (off by default) keeps the conversation visible while typing
+- **Mobile send works on the first tap** — send, pause, stop, and the more menu no longer need a double press while the keyboard is up
+- **Session message counts no longer double-count on reconnect** — re-delivered chat events are deduplicated
+
 ## 2.0.141 - 2026-09-09
 
 ### Enhancements
