@@ -100,6 +100,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
   const [formSteps, setFormSteps] = useState<WorkflowStep[]>(DEFAULT_STEPS)
   const [formStartCondition, setFormStartCondition] = useState<WorkflowCondition>({ type: 'always' })
   const [formParameters, setFormParameters] = useState<WorkflowParameter[]>([])
+  const [paramOptionsText, setParamOptionsText] = useState<Record<string, string>>({})
   const [formDestination, setFormDestination] = useState<'project' | 'user'>('user')
   const [formError, setFormError] = useState('')
   const [_saving, setSaving] = useState(false)
@@ -172,6 +173,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
     setFormSteps(workflow.steps)
     setFormStartCondition(workflow.startCondition ?? { type: 'always' })
     setFormParameters(workflow.metadata.parameters ?? [])
+    setParamOptionsText({})
     setFormError('')
     if (extra?.editingId !== undefined) setEditingId(extra.editingId)
     if (extra?.isReadOnly !== undefined) setIsReadOnly(extra.isReadOnly)
@@ -714,9 +716,11 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                           </span>
                           <input
                             type="text"
-                            value={(p.options ?? []).join(', ')}
+                            value={paramOptionsText[p.id] ?? (p.options ?? []).join(', ')}
                             onChange={(e) => {
-                              const opts = e.target.value
+                              const raw = e.target.value
+                              setParamOptionsText((prev) => ({ ...prev, [p.id]: raw }))
+                              const opts = raw
                                 .split(',')
                                 .map((s) => s.trim())
                                 .filter(Boolean)
