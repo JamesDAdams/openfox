@@ -84,6 +84,7 @@ export function computeLayout(
   entryStep: string,
   startConditionLabel: string,
   agentTypes: AgentInfo[],
+  customPositions?: Record<string, { cx: number; cy: number }>,
 ) {
   const canvasW = BACK_MARGIN + PAD + NODE_W + COL_GAP + NODE_W + PAD + BACK_MARGIN
   const centerX = canvasW / 2
@@ -101,12 +102,14 @@ export function computeLayout(
   const effectiveRightCx = leftSteps.length > 0 ? rightColCx : centerX
 
   const startCy = PAD + TERM_H / 2
-  nodes.push({ id: '$start', type: 'terminal', label: 'Start', cx: effectiveLeftCx, cy: startCy, w: TERM_W, h: TERM_H })
-  posMap.set('$start', { cx: effectiveLeftCx, cy: startCy, w: TERM_W, h: TERM_H })
+  const startPos = customPositions?.['$start'] ?? { cx: effectiveLeftCx, cy: startCy }
+  nodes.push({ id: '$start', type: 'terminal', label: 'Start', cx: startPos.cx, cy: startPos.cy, w: TERM_W, h: TERM_H })
+  posMap.set('$start', { cx: startPos.cx, cy: startPos.cy, w: TERM_W, h: TERM_H })
 
-  const addDoneNode = (cy: number) => {
-    nodes.push({ id: '$done', type: 'terminal', label: 'Done', cx: effectiveLeftCx, cy, w: TERM_W, h: TERM_H })
-    posMap.set('$done', { cx: effectiveLeftCx, cy, w: TERM_W, h: TERM_H })
+  const addDoneNode = (defaultCy: number) => {
+    const donePos = customPositions?.['$done'] ?? { cx: effectiveLeftCx, cy: defaultCy }
+    nodes.push({ id: '$done', type: 'terminal', label: 'Done', cx: donePos.cx, cy: donePos.cy, w: TERM_W, h: TERM_H })
+    posMap.set('$done', { cx: donePos.cx, cy: donePos.cy, w: TERM_W, h: TERM_H })
   }
 
   if (steps.length === 0) {
@@ -117,21 +120,22 @@ export function computeLayout(
 
   const startY = startCy + TERM_H / 2 + GAP_Y
 
-  const placeColumn = (col: WorkflowStep[], cx: number) => {
+  const placeColumn = (col: WorkflowStep[], defaultCx: number) => {
     col.forEach((step, i) => {
-      const cy = startY + i * (NODE_H + GAP_Y) + NODE_H / 2
+      const defaultCy = startY + i * (NODE_H + GAP_Y) + NODE_H / 2
+      const pos = customPositions?.[step.id] ?? { cx: defaultCx, cy: defaultCy }
       const { name: agentName, color } = resolveAgent(step, agentTypes)
       nodes.push({
         id: step.id,
         type: 'step',
         label: agentName,
         color,
-        cx,
-        cy,
+        cx: pos.cx,
+        cy: pos.cy,
         w: NODE_W,
         h: NODE_H,
       })
-      posMap.set(step.id, { cx, cy, w: NODE_W, h: NODE_H })
+      posMap.set(step.id, { cx: pos.cx, cy: pos.cy, w: NODE_W, h: NODE_H })
     })
   }
   placeColumn(leftSteps, effectiveLeftCx)
@@ -142,6 +146,19 @@ export function computeLayout(
   const bottomY = Math.max(leftBot, rightBot) + NODE_H / 2 + GAP_Y + TERM_H / 2
 
   addDoneNode(bottomY)
+
+  // Compute bounding box accommodating custom positions
+  let minX = 0
+  let maxX = canvasW
+  let minY = 0
+  let maxY = bottomY + TERM_H / 2 + PAD
+
+  for (const node of nodes) {
+    minX = Math.min(minX, node.cx - node.w / 2 - PAD)
+    maxX = Math.max(maxX, node.cx + node.w / 2 + PAD)
+    minY = Math.min(minY, node.cy - node.h / 2 - PAD)
+    maxY = Math.max(maxY, node.cy + node.h / 2 + PAD)
+  }
 
   interface RawEdge {
     from: string
@@ -234,5 +251,15 @@ export function computeLayout(
     edges.push({ ...e, fromPort: fp, toPort: tp, sameEdgeIndex: 0 })
   }
 
-  return { nodes, edges, width: canvasW, height: bottomY + TERM_H / 2 + PAD, posMap }
+  return {
+    nodes,
+    edges,
+    width: Math.max(canvasW, maxX),
+    height: Math.max(bottomY + TERM_H / 2 + PAD, maxY),
+    minX,
+    minY,
+    maxX,
+    maxY,
+    posMap,
+  }
 }

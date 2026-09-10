@@ -696,7 +696,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                 </button>
               )}
             </div>
-            <ScrollArea className="flex-1 min-h-0 p-2">
+            <div className="flex-1 min-h-0 p-2 overflow-hidden flex flex-col">
               <FlowDiagram
                 steps={formSteps}
                 entryStep={formEntryStep}
@@ -739,7 +739,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                   </button>
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </div>
 
           <div className="w-[300px] shrink-0 border border-border rounded-lg bg-bg-secondary flex flex-col overflow-hidden">
