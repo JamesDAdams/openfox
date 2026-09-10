@@ -145,7 +145,13 @@ export function computeLayout(
 
   const leftBot = leftSteps.length > 0 ? startY + (leftSteps.length - 1) * (NODE_H + GAP_Y) + NODE_H / 2 : startCy
   const rightBot = hasRight ? startY + (rightSteps.length - 1) * (NODE_H + GAP_Y) + NODE_H / 2 : startCy
-  const bottomY = Math.max(leftBot, rightBot) + NODE_H / 2 + GAP_Y + TERM_H / 2
+  let maxStepBottom = Math.max(leftBot, rightBot) + NODE_H / 2
+  for (const node of nodes) {
+    if (node.type === 'step') {
+      maxStepBottom = Math.max(maxStepBottom, node.cy + node.h / 2)
+    }
+  }
+  const bottomY = maxStepBottom + GAP_Y + TERM_H / 2
 
   addDoneNode(bottomY)
 
@@ -253,11 +259,14 @@ export function computeLayout(
     edges.push({ ...e, fromPort: fp, toPort: tp, sameEdgeIndex: 0 })
   }
 
+  const viewBox = `${minX} ${minY} ${maxX - minX} ${maxY - minY}`
+
   return {
     nodes,
     edges,
-    width: Math.max(canvasW, maxX),
-    height: Math.max(bottomY + TERM_H / 2 + PAD, maxY),
+    width: Math.max(canvasW, maxX - minX),
+    height: Math.max(bottomY + TERM_H / 2 + PAD, maxY - minY),
+    viewBox,
     minX,
     minY,
     maxX,

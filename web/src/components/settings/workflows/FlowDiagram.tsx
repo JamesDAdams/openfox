@@ -8,6 +8,7 @@ import { useT } from '../../../hooks/useT'
 interface NodeDragState {
   nodeId: string
   startPos: { cx: number; cy: number }
+  currentPos: { cx: number; cy: number }
   startMouse: { x: number; y: number }
   moved: boolean
 }
@@ -84,8 +85,10 @@ export function FlowDiagram({
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [dragHoverTarget, setDragHoverTarget] = useState<string | null>(null)
-  const [nodeDragState, setNodeDragState] = useState<NodeDragState | null>(null)
-  const [panDragState, setPanDragState] = useState<PanDragState | null>(null)
+  const [_nodeDragState, setNodeDragState] = useState<NodeDragState | null>(null)
+  const [_panDragState, setPanDragState] = useState<PanDragState | null>(null)
+  const nodeDragRef = useRef<NodeDragState | null>(null)
+  const panDragRef = useRef<PanDragState | null>(null)
 
   const { nodes, edges, width, height, posMap } = useMemo(
     () => computeLayout(steps, entryStep, startConditionLabel, agentTypes, customPositions),
@@ -95,14 +98,22 @@ export function FlowDiagram({
   const getSVGPoint = useCallback((e: React.MouseEvent | MouseEvent) => {
     const svg = svgRef.current
     const targetGroup = contentGroupRef.current ?? svg
-    if (!svg || !targetGroup) return { x: 0, y: 0 }
-    const pt = svg.createSVGPoint()
-    pt.x = e.clientX
-    pt.y = e.clientY
-    const ctm = targetGroup.getScreenCTM()?.inverse()
-    if (!ctm) return { x: 0, y: 0 }
-    const svgPt = pt.matrixTransform(ctm)
-    return { x: svgPt.x, y: svgPt.y }
+    if (!svg || !targetGroup) return { x: e.clientX ?? 0, y: e.clientY ?? 0 }
+    if (typeof svg.createSVGPoint === 'function') {
+      try {
+        const pt = svg.createSVGPoint()
+        pt.x = e.clientX ?? 0
+        pt.y = e.clientY ?? 0
+        const ctm = targetGroup.getScreenCTM()?.inverse()
+        if (ctm && typeof pt.matrixTransform === 'function') {
+          const svgPt = pt.matrixTransform(ctm)
+          return { x: svgPt.x, y: svgPt.y }
+        }
+      } catch {
+        // Test environment fallback
+      }
+    }
+    return { x: e.clientX ?? 0, y: e.clientY ?? 0 }
   }, [])
 
   const isValidTarget = useCallback(
@@ -162,58 +173,66 @@ export function FlowDiagram({
       if (isReadOnly) return
       if (dragState) return
       const pt = getSVGPoint(ev)
-      setNodeDragState({
+      const state: NodeDragState = {
         nodeId: node.id,
         startPos: { cx: node.cx, cy: node.cy },
+        currentPos: { cx: node.cx, cy: node.cy },
         startMouse: { x: pt.x, y: pt.y },
         moved: false,
-      })
+      }
+      nodeDragRef.current = state
+      setNodeDragState(state)
     },
     [dragState, getSVGPoint, isReadOnly],
   )
 
   const handleCanvasMouseDown = useCallback(
     (ev: React.MouseEvent) => {
-      if (dragState || nodeDragState) return
+      if (dragState || nodeDragRef.current) return
       if (ev.button !== 0 && ev.button !== 1) return
-      setPanDragState({
+      const state: PanDragState = {
         startClientX: ev.clientX,
         startClientY: ev.clientY,
         startPan: { ...pan },
         moved: false,
-      })
+      }
+      panDragRef.current = state
+      setPanDragState(state)
     },
-    [dragState, nodeDragState, pan],
+    [dragState, pan],
   )
 
   const handleMouseMove = useCallback(
     (ev: React.MouseEvent) => {
-      if (panDragState) {
-        const dx = ev.clientX - panDragState.startClientX
-        const dy = ev.clientY - panDragState.startClientY
+      const activePanDrag = panDragRef.current
+      if (activePanDrag) {
+        const dx = ev.clientX - activePanDrag.startClientX
+        const dy = ev.clientY - activePanDrag.startClientY
         if (Math.hypot(dx, dy) > 3) {
-          panDragState.moved = true
+          activePanDrag.moved = true
         }
         setPan({
-          x: panDragState.startPan.x + dx,
-          y: panDragState.startPan.y + dy,
+          x: activePanDrag.startPan.x + dx,
+          y: activePanDrag.startPan.y + dy,
         })
         return
       }
 
+      const activeNodeDrag = nodeDragRef.current
       const pt = getSVGPoint(ev)
 
-      if (nodeDragState) {
-        const dx = pt.x - nodeDragState.startMouse.x
-        const dy = pt.y - nodeDragState.startMouse.y
+      if (activeNodeDrag) {
+        const dx = pt.x - activeNodeDrag.startMouse.x
+        const dy = pt.y - activeNodeDrag.startMouse.y
         if (Math.hypot(dx, dy) > 3) {
-          nodeDragState.moved = true
+          activeNodeDrag.moved = true
         }
-        const newCx = Math.round(nodeDragState.startPos.cx + dx)
-        const newCy = Math.round(nodeDragState.startPos.cy + dy)
+        const newCx = Math.round(activeNodeDrag.startPos.cx + dx)
+        const newCy = Math.round(activeNodeDrag.startPos.cy + dy)
+        activeNodeDrag.currentPos = { cx: newCx, cy: newCy }
         updateCustomPositions((prev) => ({
           ...prev,
-          [nodeDragState.nodeId]: { cx: newCx, cy: newCy },
+          [activeNodeDrag.nodeId]: { cx: newCx, cy: newCy },
         }))
         return
       }
@@ -222,28 +241,32 @@ export function FlowDiagram({
         setDragState((prev) => (prev ? { ...prev, mouseX: pt.x, mouseY: pt.y } : null))
       }
     },
-    [dragState, getSVGPoint, nodeDragState, panDragState, updateCustomPositions],
+    [dragState, getSVGPoint, updateCustomPositions],
   )
 
   const handleMouseUp = useCallback(() => {
-    if (panDragState) {
-      if (!panDragState.moved) {
+    const activePanDrag = panDragRef.current
+    if (activePanDrag) {
+      if (!activePanDrag.moved) {
         onSelectNode(null)
         onSelectEdge(null)
       }
+      panDragRef.current = null
       setPanDragState(null)
       return
     }
 
-    if (nodeDragState) {
-      if (!nodeDragState.moved) {
-        onSelectNode(selectedNodeId === nodeDragState.nodeId ? null : nodeDragState.nodeId)
-      } else if (onUpdateStepPosition && !nodeDragState.nodeId.startsWith('$')) {
-        const finalPos = posMap.get(nodeDragState.nodeId)
-        if (finalPos) {
-          onUpdateStepPosition(nodeDragState.nodeId, { x: finalPos.cx, y: finalPos.cy })
-        }
+    const activeNodeDrag = nodeDragRef.current
+    if (activeNodeDrag) {
+      if (!activeNodeDrag.moved) {
+        onSelectNode(selectedNodeId === activeNodeDrag.nodeId ? null : activeNodeDrag.nodeId)
+      } else if (onUpdateStepPosition && !activeNodeDrag.nodeId.startsWith('$')) {
+        onUpdateStepPosition(activeNodeDrag.nodeId, {
+          x: activeNodeDrag.currentPos.cx,
+          y: activeNodeDrag.currentPos.cy,
+        })
       }
+      nodeDragRef.current = null
       setNodeDragState(null)
       return
     }
@@ -262,16 +285,16 @@ export function FlowDiagram({
     setDragState(null)
     setDragHoverTarget(null)
   }, [
-    dragState,
     dragHoverTarget,
+    dragState,
     isValidTarget,
-    nodeDragState,
     onCreateTransition,
-    onReconnectTo,
     onReconnectFrom,
+    onReconnectTo,
     onSelectEdge,
     onSelectNode,
-    panDragState,
+    onUpdateStepPosition,
+    posMap,
     selectedNodeId,
   ])
 
@@ -321,6 +344,27 @@ export function FlowDiagram({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isReadOnly, selectedEdgeKey, onDeleteTransition, onSelectEdge])
+
+  useEffect(() => {
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      if (panDragRef.current || nodeDragRef.current || dragState) {
+        handleMouseMove(e as unknown as React.MouseEvent)
+      }
+    }
+
+    const handleWindowMouseUp = () => {
+      if (panDragRef.current || nodeDragRef.current || dragState) {
+        handleMouseUp()
+      }
+    }
+
+    window.addEventListener('mousemove', handleWindowMouseMove)
+    window.addEventListener('mouseup', handleWindowMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove)
+      window.removeEventListener('mouseup', handleWindowMouseUp)
+    }
+  }, [dragState, handleMouseMove, handleMouseUp])
 
   const computeEdgePath = (
     e: LayoutEdge,
@@ -779,7 +823,7 @@ export function FlowDiagram({
                 </text>
                 {!isReadOnly && renderOutputPort(node)}
                 {!isReadOnly && renderInputPort(node)}
-                {isHovered && !dragState && !nodeDragState && !isReadOnly && (
+                {isHovered && !dragState && !nodeDragRef.current && !isReadOnly && (
                   <g
                     onClick={(ev) => {
                       ev.stopPropagation()

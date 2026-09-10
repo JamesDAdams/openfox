@@ -127,4 +127,46 @@ describe('FlowDiagram controls', () => {
     fireEvent.click(zoomOutBtn)
     expect(resetBtn.textContent).toBe('100%')
   })
+
+  it('calls onUpdateStepPosition when dragging a step node', () => {
+    const onUpdateStepPosition = vi.fn()
+    const { container } = render(
+      <FlowDiagram
+        steps={steps}
+        entryStep="step-1"
+        selectedNodeId={null}
+        selectedEdgeKey={null}
+        startConditionLabel="Always"
+        agentTypes={agentTypes}
+        isReadOnly={false}
+        onUpdateStepPosition={onUpdateStepPosition}
+        onSelectNode={vi.fn()}
+        onSelectEdge={vi.fn()}
+        onRemoveStep={vi.fn()}
+        onCreateTransition={vi.fn()}
+        onReconnectTo={vi.fn()}
+        onReconnectFrom={vi.fn()}
+        onDeleteTransition={vi.fn()}
+      />,
+    )
+
+    const stepNode = screen.getByText('Builder').closest('g')
+    const svg = container.querySelector('svg')
+    expect(stepNode).toBeDefined()
+    expect(svg).toBeDefined()
+
+    if (stepNode && svg) {
+      fireEvent.mouseDown(stepNode, { clientX: 100, clientY: 100 })
+      fireEvent.mouseMove(svg, { clientX: 150, clientY: 180 })
+      fireEvent.mouseUp(svg)
+
+      expect(onUpdateStepPosition).toHaveBeenCalledWith(
+        'step-1',
+        expect.objectContaining({
+          x: expect.any(Number),
+          y: expect.any(Number),
+        }),
+      )
+    }
+  })
 })
