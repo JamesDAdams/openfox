@@ -68,6 +68,10 @@ export interface AgentStep extends StepBase {
   type: 'agent'
   /** Agent definition ID (defaults to 'planner' at runtime) */
   agentId?: string
+  /** Optional model override in "providerId/model" or "providerId/model:effort" format, or separate fields */
+  model?: string
+  providerId?: string
+  reasoningEffort?: string
   /** Injected as user message on first entry. Supports template variables. */
   prompt?: string
   /**
@@ -83,6 +87,10 @@ export interface SubAgentStep extends StepBase {
   type: 'sub_agent'
   /** e.g. "verifier" or a custom sub-agent type */
   subAgentType: string
+  /** Optional model override in "providerId/model" or "providerId/model:effort" format, or separate fields */
+  model?: string
+  providerId?: string
+  reasoningEffort?: string
   /** Injected as user message on first entry. Supports template variables. */
   prompt?: string
   /** Injected when nudging the sub-agent. Supports template variables. */

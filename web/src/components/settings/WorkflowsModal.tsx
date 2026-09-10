@@ -19,6 +19,7 @@ import {
   templateVariablesResource,
   workflowResource,
   workflowDefaultResource,
+  providersResource,
 } from '../../lib/resources'
 import { ArrowRightIcon, EyeIcon } from '../shared/icons'
 import { CollapsibleSection } from '../shared/CollapsibleSection'
@@ -104,6 +105,8 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
   const [_saving, setSaving] = useState(false)
   const { data } = useResource(agentsResource, projectDir)
   const agentTypes = useMemo(() => (data ? [...data.defaults, ...data.userItems, ...data.projectItems] : []), [data])
+  const { data: providersData } = useResource(providersResource)
+  const providers = useMemo(() => providersData?.providers ?? [], [providersData])
 
   const [_confirmDeleteId] = useState<string | null>(null)
 
@@ -957,6 +960,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                   step={selectedStep}
                   isEntry={selectedStep.id === formEntryStep}
                   agentTypes={agentTypes}
+                  providers={providers}
                   transitionCount={selectedStep.transitions.length}
                   templateVariables={templateVariables}
                   onUpdate={updateStep}

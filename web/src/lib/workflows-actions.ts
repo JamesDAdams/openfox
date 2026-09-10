@@ -36,6 +36,9 @@ export interface WorkflowStep {
   transitions: Array<{ when: WorkflowCondition; goto: string; subGroup?: string }>
   agentId?: string
   subAgentType?: string
+  model?: string
+  providerId?: string
+  reasoningEffort?: string
   prompt?: string
   nudgePrompt?: string
   command?: string
