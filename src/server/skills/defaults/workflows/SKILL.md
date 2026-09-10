@@ -70,6 +70,8 @@ agent-authored workflows because the file is reviewable and committable.
         "id": "feature",
         "label": "Feature name",
         "description": "What to implement",
+        "type": "input", // optional: "input" | "textarea" | "checkbox" | "select"
+        "default": "New Feature", // optional default value
         "position": 0, // optional, ordering
         "required": true, // optional, default false
       },

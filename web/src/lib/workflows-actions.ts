@@ -1,9 +1,9 @@
 import { authFetch } from './api'
 import { saveEntity, duplicateEntity } from './entity-mutations'
 import { workflowsResource, workflowResource } from './resources'
-import type { WorkflowParameter, WorkflowScope } from '@shared/types.js'
+import type { WorkflowParameter, WorkflowParameterType, WorkflowScope } from '@shared/types.js'
 
-export type { WorkflowParameter }
+export type { WorkflowParameter, WorkflowParameterType }
 export type { WorkflowScope }
 
 export interface WorkflowCondition {
