@@ -20,6 +20,8 @@ import {
   workflowResource,
   workflowDefaultResource,
   providersResource,
+  readWorkflows,
+  revalidateWorkflows,
 } from '../../lib/resources'
 import { ArrowRightIcon, EyeIcon } from '../shared/icons'
 import { CollapsibleSection } from '../shared/CollapsibleSection'
@@ -112,11 +114,18 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
   const [_confirmDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isOpen) {
-      setSelectedNodeKey(null)
-      setSelectedEdgeKey(null)
+    if (!isOpen) return
+    setSelectedNodeKey(null)
+    setSelectedEdgeKey(null)
+    let cancelled = false
+    // The edit branch (copy-of-default vs in-place) must not be decided from a
+    // stale list, and the rows must not be stale either: revalidate first, then
+    // branch off the freshly fetched snapshot.
+    void revalidateWorkflows(projectDir).then(() => {
+      if (cancelled) return
       if (initialEditId) {
-        const isDefault = defaults.some((d) => d.id === initialEditId)
+        const freshDefaults = readWorkflows(projectDir)?.defaults ?? []
+        const isDefault = freshDefaults.some((d) => d.id === initialEditId)
         if (isDefault) {
           workflowDefaultResource.refresh(initialEditId, projectDir).then((workflow) => {
             if (!workflow) return
@@ -143,6 +152,9 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
         setEditingId(null)
         setIsReadOnly(false)
       }
+    })
+    return () => {
+      cancelled = true
     }
   }, [isOpen, initialEditId, projectDir])
 
