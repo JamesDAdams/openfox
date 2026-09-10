@@ -705,6 +705,18 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId, projectDir }: W
                 startConditionLabel={startConditionLabel}
                 agentTypes={agentTypes}
                 isReadOnly={isReadOnly}
+                onUpdateStepPosition={(stepId, position) => {
+                  setFormSteps((prev) => prev.map((s) => (s.id === stepId ? { ...s, position } : s)))
+                }}
+                onResetStepPositions={() => {
+                  setFormSteps((prev) =>
+                    prev.map((s) => {
+                      if (!s.position) return s
+                      const { position: _pos, ...rest } = s
+                      return rest
+                    }),
+                  )
+                }}
                 onSelectNode={(id) => {
                   if (id === null) {
                     selectNode(null)

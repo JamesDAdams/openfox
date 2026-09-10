@@ -29,6 +29,8 @@ interface FlowDiagramProps {
   isReadOnly: boolean
   customPositions?: Record<string, { cx: number; cy: number }>
   onCustomPositionsChange?: (positions: Record<string, { cx: number; cy: number }>) => void
+  onUpdateStepPosition?: (stepId: string, position: { x: number; y: number }) => void
+  onResetStepPositions?: () => void
   onSelectNode: (id: string | null) => void
   onSelectEdge: (key: string | null) => void
   onRemoveStep: (id: string) => void
@@ -48,6 +50,8 @@ export function FlowDiagram({
   isReadOnly,
   customPositions: externalCustomPositions,
   onCustomPositionsChange,
+  onUpdateStepPosition,
+  onResetStepPositions,
   onSelectNode,
   onSelectEdge,
   onRemoveStep,
@@ -234,6 +238,11 @@ export function FlowDiagram({
     if (nodeDragState) {
       if (!nodeDragState.moved) {
         onSelectNode(selectedNodeId === nodeDragState.nodeId ? null : nodeDragState.nodeId)
+      } else if (onUpdateStepPosition && !nodeDragState.nodeId.startsWith('$')) {
+        const finalPos = posMap.get(nodeDragState.nodeId)
+        if (finalPos) {
+          onUpdateStepPosition(nodeDragState.nodeId, { x: finalPos.cx, y: finalPos.cy })
+        }
       }
       setNodeDragState(null)
       return
@@ -287,9 +296,12 @@ export function FlowDiagram({
 
   const handleAutoLayout = useCallback(() => {
     updateCustomPositions(() => ({}))
+    if (onResetStepPositions) {
+      onResetStepPositions()
+    }
     setZoom(1)
     setPan({ x: 0, y: 0 })
-  }, [updateCustomPositions])
+  }, [onResetStepPositions, updateCustomPositions])
 
   useEffect(() => {
     if (isReadOnly) return

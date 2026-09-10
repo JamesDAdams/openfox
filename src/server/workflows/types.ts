@@ -61,6 +61,8 @@ interface StepBase {
   transitions: Transition[]
   /** Optional sub-group label for running a subset of workflow steps */
   subGroup?: string
+  /** Optional canvas position { x, y } for workflow diagram layout */
+  position?: { x: number; y: number }
 }
 
 /** Full LLM call + tool execution loop */

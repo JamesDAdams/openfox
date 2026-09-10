@@ -105,13 +105,14 @@ agent-authored workflows because the file is reviewable and committable.
 
 Every step shares these base fields:
 
-| Field         | Type           | Required | Description                                                                                        |
-| ------------- | -------------- | -------- | -------------------------------------------------------------------------------------------------- |
-| `id`          | string         | yes      | Unique within the workflow. Referenced by `entryStep`, `goto`, `{{stepOutput.id}}`.                |
-| `name`        | string         | yes      | Display name.                                                                                      |
-| `phase`       | string         | yes      | Maps to the session phase for UI: `"build"`, `"verification"`, `"waiting"`, `"blocked"`, `"done"`. |
-| `transitions` | `Transition[]` | yes      | Evaluated **in order, first match wins**. See §4.                                                  |
-| `subGroup`    | string         | no       | Groups steps for running a subset in isolation. See §7.                                            |
+| Field         | Type                       | Required | Description                                                                                        |
+| ------------- | -------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `id`          | string                     | yes      | Unique within the workflow. Referenced by `entryStep`, `goto`, `{{stepOutput.id}}`.                |
+| `name`        | string                     | yes      | Display name.                                                                                      |
+| `phase`       | string                     | yes      | Maps to the session phase for UI: `"build"`, `"verification"`, `"waiting"`, `"blocked"`, `"done"`. |
+| `transitions` | `Transition[]`             | yes      | Evaluated **in order, first match wins**. See §4.                                                  |
+| `subGroup`    | string                     | no       | Groups steps for running a subset in isolation. See §7.                                            |
+| `position`    | `{ x: number, y: number }` | no       | Optional custom canvas coordinates in the visual workflow diagram.                                 |
 
 ### 3.1 `agent` — full LLM turn with tools
 

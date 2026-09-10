@@ -45,6 +45,7 @@ export interface WorkflowStep {
   timeout?: number
   successExitCodes?: number[]
   subGroup?: string
+  position?: { x: number; y: number }
 }
 
 export interface WorkflowFull {

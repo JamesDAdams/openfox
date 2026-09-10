@@ -123,7 +123,9 @@ export function computeLayout(
   const placeColumn = (col: WorkflowStep[], defaultCx: number) => {
     col.forEach((step, i) => {
       const defaultCy = startY + i * (NODE_H + GAP_Y) + NODE_H / 2
-      const pos = customPositions?.[step.id] ?? { cx: defaultCx, cy: defaultCy }
+      const pos =
+        customPositions?.[step.id] ??
+        (step.position ? { cx: step.position.x, cy: step.position.y } : { cx: defaultCx, cy: defaultCy })
       const { name: agentName, color } = resolveAgent(step, agentTypes)
       nodes.push({
         id: step.id,
