@@ -49,7 +49,7 @@ describe('OpenProjectModal', () => {
     )
   })
 
-  it('renders search input when projects exist and filters projects by name or workdir', () => {
+  it('renders search input when projects exist and filters projects by name', () => {
     render(<OpenProjectModal isOpen={true} onClose={vi.fn()} />)
 
     expect(screen.getByText('OpenFox Project')).toBeDefined()
@@ -65,7 +65,7 @@ describe('OpenProjectModal', () => {
     expect(screen.queryByText('OpenFox Project')).toBeNull()
     expect(screen.queryByText('Backend API')).toBeNull()
 
-    // Filter by workdir
+    // Filter by another name
     fireEvent.change(searchInput, { target: { value: 'backend' } })
     expect(screen.getByText('Backend API')).toBeDefined()
     expect(screen.queryByText('OpenFox Project')).toBeNull()

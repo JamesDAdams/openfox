@@ -42,7 +42,7 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
   const filteredProjects = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return projects
-    return projects.filter((p) => p.name.toLowerCase().includes(q) || p.workdir.toLowerCase().includes(q))
+    return projects.filter((p) => p.name.toLowerCase().includes(q))
   }, [projects, searchQuery])
 
   const handleProjectClick = (projectId: string) => {

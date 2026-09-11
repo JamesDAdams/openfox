@@ -68,7 +68,7 @@ export function ProjectDropdown({ projects, currentProject }: ProjectDropdownPro
   const filteredProjects = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return sortedProjects
-    return sortedProjects.filter((p) => p.name.toLowerCase().includes(q) || p.workdir.toLowerCase().includes(q))
+    return sortedProjects.filter((p) => p.name.toLowerCase().includes(q))
   }, [sortedProjects, search])
 
   const items: DropdownMenuItem[] = useMemo(() => {
