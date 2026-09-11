@@ -53,6 +53,8 @@ import type { LLMRetryPolicy } from '../runner/types.js'
 import { DEFAULT_LLM_RETRY_POLICY } from '../runner/types.js'
 import { serverT } from '../i18n.js'
 import { isHeadroomEnabled, compressMessagesWithHeadroom } from '../headroom/index.js'
+import { getRtkSessionSavedTokens } from '../tools/rtk-savings.js'
+import { getSetting, SETTINGS_KEYS } from '../db/settings.js'
 
 function emitPartialDoneEvents(
   _sessionId: string,
@@ -215,6 +217,22 @@ export async function runTopLevelAgentLoop(
   const agentType = config.subAgentMetadata ? ('sub-agent' as const) : undefined
   // Fresh per attempt when a resolver is provided (provider switch mid-turn).
   const resolveClient = () => config.getLLMClient?.() ?? llmClient
+
+  // Session-scoped RTK savings are read back from RTK's own history after each
+  // tool batch. Best-effort: a missing DB or an unreadable file must never
+  // interrupt the turn, so failures keep the last known value.
+  const captureRtkSessionSavings = (): void => {
+    try {
+      if (getSetting(SETTINGS_KEYS.TOOLS_USE_RTK) !== 'true') return
+      const session = sessionManager.requireSession(sessionId)
+      const saved = getRtkSessionSavedTokens(sessionManager.getEffectiveWorkdir(sessionId), session.createdAt)
+      if (saved > 0) {
+        turnMetrics.setRtkTokensSaved(saved)
+      }
+    } catch {
+      // fail-open
+    }
+  }
 
   const retryLimiter: RetryLimiter = createRetryLimiter(config.maxRetriesPerTurn ?? 10)
   let truncationRetryCount = 0
@@ -396,6 +414,9 @@ export async function runTopLevelAgentLoop(
           messages: assembledRequest.messages,
           model: attemptClient.getModel(),
         })
+        if (compressedResult.compressed) {
+          turnMetrics.addHeadroomSaved(compressedResult.tokensSaved)
+        }
         llmMessages = compressedResult.messages
       }
 
@@ -694,6 +715,9 @@ ${COMPACTION_PROMPT}`,
         }
         batchContext.agentTimeout = getRuntimeConfig().agent.toolTimeout
         const batchResult = await executeTools(assistantMsgId, result.toolCalls, batchContext, append)
+        if (!config.subAgentMetadata) {
+          captureRtkSessionSavings()
+        }
         pendingToolResultTokens = estimateToolResultTokens(batchResult.toolMessages)
         if (batchResult.stepDoneCalled) {
           emitDoneAndBreak(

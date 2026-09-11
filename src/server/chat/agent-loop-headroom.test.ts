@@ -61,6 +61,8 @@ describe('runTopLevelAgentLoop with Headroom compression', () => {
     mockTurnMetrics = {
       addToolTime: vi.fn(),
       addLLMCall: vi.fn(),
+      addHeadroomSaved: vi.fn(),
+      setRtkTokensSaved: vi.fn(),
       buildStats: vi.fn().mockReturnValue({}),
     } as unknown as TurnMetrics
 
@@ -184,5 +186,50 @@ describe('runTopLevelAgentLoop with Headroom compression', () => {
         messages: [{ role: 'user', content: 'original uncompressed prompt' }],
       }),
     )
+  })
+
+  it('records the Headroom savings on the turn stats', async () => {
+    vi.spyOn(headroom, 'isHeadroomEnabled').mockReturnValue(true)
+    vi.spyOn(headroom, 'compressMessagesWithHeadroom').mockResolvedValue({
+      messages: [{ role: 'user', content: 'compressed prompt' }],
+      tokensBefore: 200,
+      tokensAfter: 50,
+      tokensSaved: 150,
+      compressionRatio: 0.25,
+      transformsApplied: [],
+      compressed: true,
+    })
+    ;(consumeStreamGenerator as any).mockResolvedValue({
+      toolCalls: [],
+      error: undefined,
+      usage: { promptTokens: 50, completionTokens: 20 },
+      timing: { ttft: 5, completionTime: 10, tps: 0, prefillTps: 0 },
+      modelParams: {},
+    })
+
+    const assembleRequestMock = vi.fn().mockResolvedValue({
+      systemPrompt: 'system prompt',
+      messages: [{ role: 'user', content: 'original uncompressed prompt' }],
+      tools: [],
+    })
+    const append = vi.fn()
+
+    await runTopLevelAgentLoop(
+      {
+        mode: 'builder',
+        append,
+        sessionManager: mockSessionManager,
+        sessionId: 'test-session',
+        llmClient: mockLLMClient,
+        statsIdentity: { providerId: 'test', providerName: 'Test', backend: 'unknown' as const, model: 'gpt-4o' },
+        assembleRequest: assembleRequestMock as any,
+        getToolRegistry: () => ({ tools: [], definitions: [], execute: vi.fn() }) as any,
+        getConversationMessages: vi.fn().mockResolvedValue([]),
+      },
+      new TurnMetrics(),
+    )
+
+    const doneEvent = append.mock.calls.map((call: any[]) => call[0]).find((event: any) => event?.type === 'chat.done')
+    expect(doneEvent?.data?.stats?.headroomTokensSaved).toBe(150)
   })
 })
