@@ -52,7 +52,21 @@ export async function installPluginFromNpm(packageName: string, pluginsDir: stri
   await execFileP('npm', ['install', '--no-audit', '--no-fund', '--prefix', pluginsDir, packageName], {
     timeout: 180000,
   })
+  await removeNpmArtifacts(pluginsDir)
   return join(pluginsDir, 'node_modules', packageName)
+}
+
+/**
+ * `npm install --prefix` drops a package.json / lockfile at the prefix root as
+ * install bookkeeping. The plugins directory is user-facing (it is scanned for
+ * plugin packages, and users can open it from the UI), so strip those files
+ * once the install is done. `node_modules/.package-lock.json` is npm-internal
+ * state that would otherwise go stale after uninstalls.
+ */
+export async function removeNpmArtifacts(pluginsDir: string): Promise<void> {
+  await rm(join(pluginsDir, 'package.json'), { force: true })
+  await rm(join(pluginsDir, 'package-lock.json'), { force: true })
+  await rm(join(pluginsDir, 'node_modules', '.package-lock.json'), { force: true })
 }
 
 export async function installPluginFromPath(sourcePath: string, pluginsDir: string): Promise<string> {

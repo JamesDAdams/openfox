@@ -153,9 +153,8 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
     handler: (context: PluginTransitionContext) => boolean | Promise<boolean>,
   ): void {
     const pluginId = this.currentPluginId ?? UNKNOWN_PLUGIN
-    const key = `${pluginId}:${name}`
-    if (!this.register('transition', key, handler)) return
     registerPluginTransitionHandler(pluginId, name, handler)
+    this.register('transition', `${pluginId}:${name}`, handler)
   }
 
   registerRpc(method: string, handler: PluginRpcHandler): void {

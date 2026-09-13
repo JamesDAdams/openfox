@@ -1,17 +1,14 @@
 import { Router } from 'express'
-import { dirname, join, resolve, normalize } from 'node:path'
+import { dirname, join, resolve, normalize, sep } from 'node:path'
 import { existsSync } from 'node:fs'
-import { readFile, readdir, rm } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Config } from '../../shared/types.js'
 import { serverT } from '../i18n.js'
 import { openFolder } from '../utils/openFolder.js'
-import { isDirectoryEntry } from '../utils/fs.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
 import { PluginHost } from '../plugins/host.js'
 import { parseGithubUrl } from '../plugins/install.js'
-import type { PluginRegistry } from '../plugins/registry.js'
-import type { PluginDiagnostic } from '../plugins/loader.js'
 
 interface Logger {
   debug: (message: string, context?: Record<string, unknown>) => void
@@ -24,11 +21,8 @@ export interface PluginRoutesOptions {
   config: Config
   logger: Logger
   host?: PluginHost
-  providerAdapters?: PluginRegistry
-  pluginDiagnostics?: PluginDiagnostic[]
 }
 
-const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
 const ID_PATTERN = /^[a-zA-Z0-9_@/.-]+$/
 
 function pluginId(req: { params: Record<string, string | string[]> }): string {
@@ -37,7 +31,7 @@ function pluginId(req: { params: Record<string, string | string[]> }): string {
 }
 
 function requireValidId(id: string, res: { status: (code: number) => { json: (body: unknown) => void } }): boolean {
-  if (!ID_PATTERN.test(id)) {
+  if (!ID_PATTERN.test(id) || id.split('/').includes('..')) {
     res.status(400).json({ error: serverT({ en: 'Invalid plugin name', fr: 'Nom de plugin invalide' }) })
     return false
   }
@@ -47,15 +41,6 @@ function requireValidId(id: string, res: { status: (code: number) => { json: (bo
 interface RouteResponse {
   json: (body: unknown) => void
   status: (code: number) => { json: (body: unknown) => void }
-}
-
-function validLegacyName(req: { params: Record<string, string | string[]> }, res: RouteResponse): string | null {
-  const name = req.params['name'] as string
-  if (!NAME_PATTERN.test(name)) {
-    res.status(400).json({ error: serverT({ en: 'Invalid plugin name', fr: 'Nom de plugin invalide' }) })
-    return null
-  }
-  return name
 }
 
 async function runForPluginId(
@@ -81,7 +66,6 @@ export function createPluginRoutes(options: PluginRoutesOptions): Router {
       configDirectory: getGlobalConfigDir(config.mode ?? 'production'),
       mode: config.mode === 'development' ? 'development' : 'production',
       logger,
-      ...(options.providerAdapters ? { registry: options.providerAdapters } : {}),
     })
 
   let registryCache: { data: unknown; ts: number } | null = null
@@ -153,43 +137,18 @@ export function createPluginRoutes(options: PluginRoutesOptions): Router {
     }
   })
 
-  router.get('/installed', async (_req, res) => {
-    const fromHost = host.getPlugins()
-    if (fromHost.length > 0) {
-      return res.json({
-        installed: fromHost.map((plugin) => ({ name: plugin.id, version: plugin.version })),
-      })
-    }
-    const pluginsDir = join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins')
-    try {
-      const entries = await readdir(pluginsDir, { withFileTypes: true })
-      const installed: { name: string; version: string | null }[] = []
-      for (const entry of entries) {
-        if (!(await isDirectoryEntry(pluginsDir, entry))) continue
-        const pkgPath = join(pluginsDir, entry.name, 'package.json')
-        let version: string | null = null
-        try {
-          const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
-          version = (pkg.version as string) ?? null
-        } catch {
-          // ignore if package.json not found or invalid
-        }
-        installed.push({ name: entry.name, version })
-      }
-      res.json({ installed })
-    } catch {
-      res.json({ installed: [] })
-    }
-  })
-
   router.get('/open-folder', async (_req, res) => {
     await openFolderRoute(join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins'), res)
   })
 
-  router.get('/:name/open-folder', async (req, res) => {
-    const name = validLegacyName(req, res)
-    if (!name) return
-    await openFolderRoute(join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins', name), res)
+  router.get('/:id/open-folder', async (req, res) => {
+    const id = pluginId(req)
+    if (!requireValidId(id, res)) return
+    const pluginsDir = join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins')
+    if (!isInsidePluginsDir(pluginsDir, id)) {
+      return res.status(400).json({ error: serverT({ en: 'Invalid plugin name', fr: 'Nom de plugin invalide' }) })
+    }
+    await openFolderRoute(join(pluginsDir, id), res)
   })
 
   router.post('/:id/enable', (req, res) => {
@@ -291,29 +250,6 @@ export function createPluginRoutes(options: PluginRoutesOptions): Router {
     }
   })
 
-  router.delete('/:name', async (req, res) => {
-    const name = validLegacyName(req, res)
-    if (!name) return
-    const targetDir = join(getGlobalConfigDir(config.mode ?? 'production'), 'plugins', name)
-    try {
-      await rm(targetDir, { recursive: true, force: true })
-      const diagnostics = options.pluginDiagnostics
-      if (diagnostics) {
-        for (let i = diagnostics.length - 1; i >= 0; i--) {
-          if (diagnostics[i]?.source === targetDir) diagnostics.splice(i, 1)
-        }
-      }
-      res.json({ success: true })
-    } catch (err) {
-      res.status(500).json({
-        error:
-          err instanceof Error
-            ? err.message
-            : serverT({ en: 'Failed to remove plugin', fr: 'Échec de la suppression du plugin' }),
-      })
-    }
-  })
-
   return router
 }
 
@@ -328,8 +264,18 @@ async function openFolderRoute(
     await openFolder(dir)
     res.json({ success: true })
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to open folder' })
+    res.status(500).json({
+      error:
+        err instanceof Error
+          ? err.message
+          : serverT({ en: 'Failed to open folder', fr: 'Échec de l’ouverture du dossier' }),
+    })
   }
+}
+
+function isInsidePluginsDir(pluginsDir: string, id: string): boolean {
+  const target = resolve(join(pluginsDir, id))
+  return target === pluginsDir || target.startsWith(`${pluginsDir}${sep}`)
 }
 
 function contentTypeFor(path: string): string {

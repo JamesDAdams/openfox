@@ -1,5 +1,5 @@
-import { rm } from 'node:fs/promises'
-import { resolve, sep } from 'node:path'
+import { readdir, rm } from 'node:fs/promises'
+import { join, resolve, sep } from 'node:path'
 import type { EventStore } from '../events/store.js'
 import type { StoredEvent } from '../events/types.js'
 import type { Tool, ToolContext } from '../tools/types.js'
@@ -33,7 +33,7 @@ import { PluginRegistry } from './registry.js'
 import { HookBus, type HookLogger } from './hooks.js'
 import { NotificationService } from './notifications.js'
 import { loadPluginFromDirectory, loadPlugins, readPluginManifest, type PluginDiagnostic } from './loader.js'
-import { installPluginFromGithub, installPluginFromNpm, installPluginFromPath } from './install.js'
+import { installPluginFromGithub, installPluginFromNpm, installPluginFromPath, removeNpmArtifacts } from './install.js'
 import { readPluginSettings, readPluginSettingsView, writePluginSettings } from './settings.js'
 import { setPluginModelMetadataProviders } from './model-metadata.js'
 import { setPluginHookEmitter } from './hook-emitter.js'
@@ -223,7 +223,27 @@ export class PluginHost {
     this.records.delete(pluginId)
     this.writeDisabled(this.readDisabled().filter((id) => id !== pluginId))
     await rm(record.diagnostic.source, { recursive: true, force: true })
+    await this.cleanupNpmArtifacts(record.diagnostic.source)
     this.applyContributions()
+  }
+
+  /**
+   * After uninstalling an npm-installed plugin, drop the install bookkeeping
+   * (`package.json`, lockfiles) once its `node_modules` is empty so the
+   * plugins directory keeps containing only plugin packages.
+   */
+  private async cleanupNpmArtifacts(source: string): Promise<void> {
+    const nodeModules = join(this.pluginsDir(), 'node_modules')
+    if (resolve(source, '..') !== resolve(nodeModules)) return
+    let entries: string[]
+    try {
+      entries = await readdir(nodeModules)
+    } catch {
+      return
+    }
+    if (entries.length > 0) return
+    await rm(nodeModules, { recursive: true, force: true })
+    await removeNpmArtifacts(this.pluginsDir())
   }
 
   async installFromGithub(githubUrl: string): Promise<PluginDiagnostic> {

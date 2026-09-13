@@ -4,7 +4,23 @@ export type TransitionHandler = (context: PluginTransitionContext) => boolean | 
 
 const handlers = new Map<string, { pluginId: string; handler: TransitionHandler }>()
 
+export class PluginTransitionConflictError extends Error {
+  constructor(name: string, ownerPluginId: string) {
+    super(`Plugin transition '${name}' is already registered by '${ownerPluginId}'`)
+  }
+}
+
+/**
+ * Register a transition handler under its bare name.
+ *
+ * A name is owned by a single plugin: registering a name already owned by
+ * ANOTHER plugin throws (surfaced as a load diagnostic and a registry
+ * conflict). Re-registering by the same plugin (enable after disable)
+ * overwrites cleanly.
+ */
 export function registerPluginTransitionHandler(pluginId: string, name: string, handler: TransitionHandler): void {
+  const existing = handlers.get(name)
+  if (existing && existing.pluginId !== pluginId) throw new PluginTransitionConflictError(name, existing.pluginId)
   handlers.set(name, { pluginId, handler })
 }
 

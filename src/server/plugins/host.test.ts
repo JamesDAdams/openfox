@@ -465,6 +465,35 @@ describe('PluginHost', () => {
     expect(listPluginModelMetadataProviders()).toHaveLength(0)
   })
 
+  it('rejects a plugin whose transition handler name collides with another plugin', async () => {
+    await writePlugin(
+      configDirectory,
+      'transition-plugin-a',
+      2,
+      `registry.registerTransitionHandler('review', () => true);`,
+    )
+    await writePlugin(
+      configDirectory,
+      'transition-plugin-b',
+      2,
+      `registry.registerTransitionHandler('review', () => false);`,
+    )
+
+    const host = makeHost(configDirectory)
+    await host.start()
+
+    const plugins = host.getPlugins()
+    const a = plugins.find((plugin) => plugin.id === 'transition-plugin-a')
+    const b = plugins.find((plugin) => plugin.id === 'transition-plugin-b')
+    expect(a?.enabled).toBe(true)
+    expect(b?.enabled).toBe(true)
+    expect(b?.loaded).toBe(false)
+    expect(b?.error).toContain("Plugin transition 'review' is already registered by 'transition-plugin-a'")
+
+    expect(listPluginTransitionHandlers()).toEqual([{ name: 'review', pluginId: 'transition-plugin-a' }])
+    await expect(runPluginTransitionHandler('review', { outcome: null })).resolves.toBe(true)
+  })
+
   it('bridges stored events to plugin hooks', async () => {
     await writePlugin(
       configDirectory,
