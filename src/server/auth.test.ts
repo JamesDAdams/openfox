@@ -267,7 +267,12 @@ describe('auth', () => {
       )
 
       const encryptedPassword = await import('node:crypto').then((c) =>
-        c.publicEncrypt({ key: publicKey, padding: 1 }, Buffer.from('correctpassword')).toString('base64'),
+        c
+          .publicEncrypt(
+            { key: publicKey, padding: c.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+            Buffer.from('correctpassword'),
+          )
+          .toString('base64'),
       )
 
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify({ strategy: 'network', encryptedPassword }))
@@ -289,7 +294,12 @@ describe('auth', () => {
       )
 
       const encryptedPassword = await import('node:crypto').then((c) =>
-        c.publicEncrypt({ key: publicKey, padding: 1 }, Buffer.from('correctpassword')).toString('base64'),
+        c
+          .publicEncrypt(
+            { key: publicKey, padding: c.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+            Buffer.from('correctpassword'),
+          )
+          .toString('base64'),
       )
 
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify({ strategy: 'network', encryptedPassword }))
@@ -323,7 +333,12 @@ describe('auth', () => {
       })
 
       const encryptedPassword = await import('node:crypto').then((c) =>
-        c.publicEncrypt({ key: publicKey, padding: 1 }, Buffer.from(password)).toString('base64'),
+        c
+          .publicEncrypt(
+            { key: publicKey, padding: c.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+            Buffer.from(password),
+          )
+          .toString('base64'),
       )
 
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify({ strategy: 'network', encryptedPassword }))
@@ -345,7 +360,12 @@ describe('auth', () => {
       )
 
       const encryptedPassword = await import('node:crypto').then((c) =>
-        c.publicEncrypt({ key: publicKey, padding: 1 }, Buffer.from('password')).toString('base64'),
+        c
+          .publicEncrypt(
+            { key: publicKey, padding: c.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+            Buffer.from('password'),
+          )
+          .toString('base64'),
       )
 
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify({ strategy: 'network', encryptedPassword }))
@@ -379,7 +399,12 @@ describe('auth', () => {
       )
 
       const encryptedPassword = await import('node:crypto').then((c) =>
-        c.publicEncrypt({ key: publicKey, padding: 1 }, Buffer.from('password')).toString('base64'),
+        c
+          .publicEncrypt(
+            { key: publicKey, padding: c.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+            Buffer.from('password'),
+          )
+          .toString('base64'),
       )
 
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify({ strategy: 'network', encryptedPassword }))

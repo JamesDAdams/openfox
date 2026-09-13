@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { join, dirname, basename } from 'node:path'
-import { createHash, privateDecrypt, createPublicKey } from 'node:crypto'
+import { createHash, privateDecrypt, createPublicKey, constants } from 'node:crypto'
 import { getRuntimeConfig } from './runtime-config.js'
 import type { Mode } from '../cli/main.js'
 
@@ -116,7 +116,10 @@ export async function verifyPassword(password: string): Promise<boolean> {
   const privateKey = await loadPrivateKey()
 
   try {
-    const decrypted = privateDecrypt({ key: privateKey, padding: 1 }, Buffer.from(encryptedPassword, 'base64'))
+    const decrypted = privateDecrypt(
+      { key: privateKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+      Buffer.from(encryptedPassword, 'base64'),
+    )
     return decrypted.toString() === password
   } catch {
     return false
@@ -150,7 +153,7 @@ export async function currentSessionToken(): Promise<string | null> {
 
   try {
     const password = privateDecrypt(
-      { key: privateKey, padding: 1 },
+      { key: privateKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
       Buffer.from(auth.encryptedPassword, 'base64'),
     ).toString()
     return await tokenFromPassword(password)
@@ -166,7 +169,11 @@ export async function isValidToken(token: string): Promise<boolean> {
 
   try {
     const decrypted = privateDecrypt(
-      { key: privateKey, padding: 1 },
+      {
+        key: privateKey,
+        padding: constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: 'sha256',
+      },
       Buffer.from(cachedAuth.encryptedPassword, 'base64'),
     )
     const storedPassword = decrypted.toString()

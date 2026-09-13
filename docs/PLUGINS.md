@@ -12,6 +12,7 @@ validated on load, and introspectable from the Plugins settings tab.
 - Working example: [`examples/hello-plugin`](../examples/hello-plugin)
 - Public contract source: [`src/plugin/index.ts`](../src/plugin/index.ts)
 - Shared descriptor types: [`src/shared/plugin.ts`](../src/shared/plugin.ts)
+- Host internals and lifecycle: [`docs/PLUGIN-ARCHITECTURE.md`](PLUGIN-ARCHITECTURE.md)
 
 ---
 
