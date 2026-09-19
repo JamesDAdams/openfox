@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
-import { act } from 'react'
+import { act, useState } from 'react'
+import { render as rtlRender, fireEvent as rtlFireEvent } from '@testing-library/react'
 import { DropdownMenu, type DropdownMenuItem } from './DropdownMenu'
 
 vi.mock('wouter', () => ({
@@ -189,4 +190,52 @@ describe('DropdownMenu', () => {
   // Keyboard navigation tests require useEffect to fire (keyboard listener + initial
   // selection are set up in effects). React.act doesn't flush effects in React 19,
   // so these can't be tested with unit tests. Covered by e2e tests instead.
+})
+
+describe('onOpenChange freshness', () => {
+  const calls: Array<{ open: boolean; count: number }> = []
+
+  function StaleParent() {
+    const [count, setCount] = useState(0)
+    return (
+      <div>
+        <DropdownMenu
+          items={ITEMS}
+          trigger={<button>Open</button>}
+          isOpen
+          onOpenChange={(open: boolean) => {
+            calls.push({ open, count })
+          }}
+        />
+        <button type="button" onClick={() => setCount((c) => c + 1)}>
+          bump
+        </button>
+      </div>
+    )
+  }
+
+  it('Escape invokes the latest onOpenChange, not the one captured at open', () => {
+    // The file's earlier raw-root tests leak open menus (createRoot is never
+    // unmounted). Their window keydown handlers also receive this Escape and
+    // close against portals that the file-wide `body.innerHTML = ''` reset has
+    // already wiped, so their no-op `body.removeChild` calls would otherwise
+    // throw. Make removeChild tolerate a child that is already gone.
+    const origRemove = document.body.removeChild.bind(document.body)
+    ;(document.body as any).removeChild = (child: any) => (document.body.contains(child) ? origRemove(child) : child)
+    try {
+      calls.length = 0
+      // Detached container: keeps the root's container out of document.body so
+      // RTL's auto-cleanup unmount doesn't fight the file-wide body reset.
+      const host = document.createElement('div')
+      const { getByText } = rtlRender(<StaleParent />, { container: host })
+      for (let i = 0; i < 3; i += 1) {
+        rtlFireEvent.click(getByText('bump'))
+      }
+      rtlFireEvent.keyDown(window, { key: 'Escape' })
+      expect(calls.length).toBeGreaterThan(0)
+      expect(calls[calls.length - 1]).toEqual({ open: false, count: 3 })
+    } finally {
+      ;(document.body as any).removeChild = origRemove
+    }
+  })
 })

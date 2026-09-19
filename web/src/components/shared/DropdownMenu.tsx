@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'wouter'
 import { ArrowLeftIcon, ChevronRightIcon } from './icons'
+import { shouldAutofocus } from '../../lib/device'
 
 export interface DropdownMenuContent {
   items: DropdownMenuItem[]
@@ -67,11 +68,22 @@ export function DropdownMenu({
   const menuRef = useRef<HTMLDivElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const selectedIndexRef = useRef(0)
+  const footerSelectionRef = useRef(false)
+  const setIsOpenRef = useRef(setIsOpen)
+  const currentItemsCountRef = useRef(0)
   const currentContent = stack.length > 0 ? stack[stack.length - 1]! : { items, footerItems }
   const currentItems = currentContent.items
   const currentFooterItems = currentContent.footerItems ?? []
   const allItems = useMemo(() => [...currentItems, ...currentFooterItems], [currentItems, currentFooterItems])
   const allItemsRef = useRef(allItems)
+
+  useEffect(() => {
+    setIsOpenRef.current = setIsOpen
+  })
+
+  useEffect(() => {
+    currentItemsCountRef.current = currentItems.length
+  }, [currentItems])
 
   useEffect(() => {
     stackRef.current = stack
@@ -134,22 +146,31 @@ export function DropdownMenu({
   useEffect(() => {
     if (!isOpen) return
 
-    setTimeout(() => {
-      menuRef.current?.focus()
+    const timer = setTimeout(() => {
+      if (menuRef.current && shouldAutofocus() && !menuRef.current.contains(document.activeElement)) {
+        menuRef.current.focus()
+      }
     }, 0)
+    return () => clearTimeout(timer)
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
 
     function handleKeyDown(e: KeyboardEvent) {
-      const currentItems = allItemsRef.current
-      const navigableItems = currentItems.filter((item) => !isHeaderItem(item))
-      const currentNavigableIndex = getNavigableIndexRef(selectedIndexRef.current, currentItems)
+      const itemsArr = allItemsRef.current
+      const mainCount = itemsArr.length - currentFooterItems.length
+      const navigableItems = itemsArr.filter((item) => !isHeaderItem(item))
+      const currentNavigableIndex = getNavigableIndexRef(selectedIndexRef.current, itemsArr)
 
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault()
           e.stopPropagation()
           if (currentNavigableIndex < navigableItems.length - 1) {
-            const nextIndex = findNextNavigableIndexRef(selectedIndexRef.current + 1, currentItems)
+            const nextIndex = findNextNavigableIndexRef(selectedIndexRef.current + 1, itemsArr)
             selectedIndexRef.current = nextIndex
+            footerSelectionRef.current = nextIndex >= mainCount
             setSelectedIndex(nextIndex)
           }
           break
@@ -157,15 +178,16 @@ export function DropdownMenu({
           e.preventDefault()
           e.stopPropagation()
           if (currentNavigableIndex > 0) {
-            const prevIndex = findPrevNavigableIndexRef(selectedIndexRef.current - 1, currentItems)
+            const prevIndex = findPrevNavigableIndexRef(selectedIndexRef.current - 1, itemsArr)
             selectedIndexRef.current = prevIndex
+            footerSelectionRef.current = prevIndex >= mainCount
             setSelectedIndex(prevIndex)
           }
           break
         case 'Enter':
           e.preventDefault()
           e.stopPropagation()
-          activateItemRef(selectedIndexRef.current, currentItems)
+          activateItemRef(selectedIndexRef.current, itemsArr)
           break
         case 'Escape':
           e.preventDefault()
@@ -173,7 +195,7 @@ export function DropdownMenu({
           if (stackRef.current.length > 0) {
             popSubmenu()
           } else {
-            setIsOpen(false)
+            setIsOpenRef.current(false)
           }
           break
       }
@@ -181,7 +203,7 @@ export function DropdownMenu({
 
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isOpen, allItems])
+  }, [isOpen])
 
   function isHeaderItem(item: DropdownMenuItem) {
     const el = item.label as React.ReactElement<{ className?: string }> | null
@@ -227,15 +249,36 @@ export function DropdownMenu({
       window.history.pushState(null, '', item.href)
       window.dispatchEvent(new PopStateEvent('popstate'))
     }
-    setIsOpen(false)
+    setIsOpenRef.current(false)
   }
 
   useEffect(() => {
-    if (isOpen) {
-      setSelectedIndex(allItems.findIndex((item) => !isHeaderItem(item)))
-      selectedIndexRef.current = allItems.findIndex((item) => !isHeaderItem(item))
+    if (!isOpen) return
+    const itemsArr = allItemsRef.current
+    const first = itemsArr.findIndex((item) => !isHeaderItem(item))
+    setSelectedIndex(first)
+    selectedIndexRef.current = first
+    footerSelectionRef.current = first >= currentItemsCountRef.current
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const itemsArr = allItemsRef.current
+    const sel = selectedIndexRef.current
+    const item = itemsArr[sel]
+    const inFooter = sel >= currentItems.length
+    if (
+      sel < 0 ||
+      !item ||
+      (sel < currentItems.length && isHeaderItem(item)) ||
+      (inFooter && !footerSelectionRef.current)
+    ) {
+      const first = itemsArr.findIndex((i) => !isHeaderItem(i))
+      setSelectedIndex(first)
+      selectedIndexRef.current = first
+      footerSelectionRef.current = first >= currentItems.length
     }
-  }, [isOpen, allItems])
+  }, [isOpen, allItems, currentItems])
 
   const handleTriggerClick = (e: React.MouseEvent) => {
     e.stopPropagation()
