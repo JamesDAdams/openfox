@@ -283,11 +283,16 @@ export interface McpServerInfo {
   status: string
   tools: McpToolInfo[]
   estimatedTokens: number
+  error?: string
   config: {
-    transport?: string
+    transport?: 'stdio' | 'http' | string
     command?: string
     args?: string[]
+    env?: Record<string, string>
     url?: string
+    headers?: Record<string, string>
+    oauth?: boolean
+    timeout?: number
     disabled?: boolean
   }
 }
@@ -832,6 +837,7 @@ export const agentDefaultResource = resource<AgentFull | null, [string]>({
 export const pluginListResource = resource<import('./plugin-actions').PluginListData, []>({
   key: () => 'plugins:list',
   fetch: fetchPluginList,
+  maxAgeMs: 0,
 })
 
 /** Plugin-emitted notifications (bell + toast source of truth). */

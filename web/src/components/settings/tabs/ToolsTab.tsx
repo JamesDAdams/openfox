@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { authFetch } from '../../../lib/api'
 import { useT } from '../../../hooks/useT'
 import { Button } from '../../shared/Button'
 import { Toggle } from '../../shared/Toggle'
 import { Input } from '../../shared/Input'
 import { mcpStatusColor, mcpStatusDot } from '../../../lib/mcp-utils'
-import { SETTINGS_KEYS, setSetting, mcpServersResource, pluginToolsResource } from '../../../lib/resources'
+import { SETTINGS_KEYS, setSetting, mcpServersResource, type McpServerInfo } from '../../../lib/resources'
 import { useSetting } from '../../../hooks/useSetting'
 import { useResource } from '../../../hooks/useResource'
 import { useTestButton } from '../../../hooks/useTestButton'
@@ -273,33 +273,6 @@ function McpOAuthPanel({ serverName, onChanged }: McpOAuthPanelProps) {
   )
 }
 
-interface McpToolInfo {
-  name: string
-  description?: string
-  inputSchema: Record<string, unknown>
-  enabled: boolean
-  estimatedTokens: number
-}
-
-interface McpServerState {
-  name: string
-  config: {
-    transport: string
-    command?: string
-    args?: string[]
-    env?: Record<string, string>
-    url?: string
-    headers?: Record<string, string>
-    oauth?: boolean
-    timeout?: number
-    disabled?: boolean
-  }
-  status: 'connected' | 'disconnected' | 'error'
-  tools: McpToolInfo[]
-  estimatedTokens: number
-  error?: string
-}
-
 function useDebouncedSave(
   value: string,
   settingsKey: string,
@@ -307,14 +280,21 @@ function useDebouncedSave(
   delay = 250,
 ): void {
   const isInitialMount = useRef(true)
+  const lastSavedValue = useRef(value)
 
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
+      lastSavedValue.current = value
+      return
+    }
+
+    if (value === lastSavedValue.current) {
       return
     }
 
     const timer = setTimeout(() => {
+      lastSavedValue.current = value
       setSetting(settingsKey, value)
     }, delay)
 
@@ -358,14 +338,12 @@ export function ToolsTab() {
   const confirmWorkspaceSetting = useSetting(SETTINGS_KEYS.CONFIRM_ON_WORKSPACE_ACTIONS).value
   const shellSetting = useSetting(SETTINGS_KEYS.TOOLS_SHELL).value
   const perSessionMcpSetting = useSetting(SETTINGS_KEYS.FEATURES_PER_SESSION_MCP).value
-  const { data: pluginToolsData } = useResource(pluginToolsResource)
-  const pluginTools = pluginToolsData?.tools ?? []
 
   // ── Search Engine state ──
-  const [searchEngine, setSearchEngine] = useState('')
-  const [tavilyKey, setTavilyKey] = useState('')
-  const [searxngUrl, setSearxngUrl] = useState('')
-  const [searxngKey, setSearxngKey] = useState('')
+  const [searchEngine, setSearchEngine] = useState(searchEngineSetting)
+  const [tavilyKey, setTavilyKey] = useState(tavilyKeySetting)
+  const [searxngUrl, setSearxngUrl] = useState(searxngUrlSetting)
+  const [searxngKey, setSearxngKey] = useState(searxngKeySetting)
 
   useDebouncedSave(tavilyKey, SETTINGS_KEYS.SEARCH_TAVILY_API_KEY, setSetting)
   useDebouncedSave(searxngUrl, SETTINGS_KEYS.SEARCH_SEARXNG_URL, setSetting)
@@ -375,13 +353,20 @@ export function ToolsTab() {
   const [searxngTestText, searxngTestError, searxngTestSuccess, testSearxng] = useTestButton()
 
   useEffect(() => {
-    if (searchEngineSetting !== '') {
-      setSearchEngine(searchEngineSetting)
-      setTavilyKey(tavilyKeySetting)
-      setSearxngUrl(searxngUrlSetting)
-      setSearxngKey(searxngKeySetting)
-    }
-  }, [searchEngineSetting, tavilyKeySetting, searxngUrlSetting, searxngKeySetting])
+    setSearchEngine(searchEngineSetting)
+  }, [searchEngineSetting])
+
+  useEffect(() => {
+    setTavilyKey(tavilyKeySetting)
+  }, [tavilyKeySetting])
+
+  useEffect(() => {
+    setSearxngUrl(searxngUrlSetting)
+  }, [searxngUrlSetting])
+
+  useEffect(() => {
+    setSearxngKey(searxngKeySetting)
+  }, [searxngKeySetting])
 
   function handleEngineChange(engine: string) {
     setSearchEngine(engine)
@@ -439,8 +424,8 @@ export function ToolsTab() {
   const currentShell = shellSetting || 'cmd'
 
   // ── MCP state ──
-  const [servers, setServers] = useState<McpServerState[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: rawServers, loading, refresh: refreshServers } = useResource(mcpServersResource)
+  const servers = rawServers ?? []
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingServer, setEditingServer] = useState<string | null>(null)
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
@@ -459,34 +444,6 @@ export function ToolsTab() {
   const [mcpError, setMcpError] = useState('')
   const [saving, setSaving] = useState(false)
   const { requestDelete, clearConfirm, isConfirming } = useConfirmDialog()
-
-  const loadServers = useCallback(async () => {
-    try {
-      const data = await mcpServersResource.refresh()
-      const normalized: McpServerState[] = (data ?? []).map((s) => ({
-        name: s.name,
-        status: s.status as McpServerState['status'],
-        tools: s.tools.map((tool) => ({ ...tool, inputSchema: tool.inputSchema ?? {} })),
-        estimatedTokens: s.estimatedTokens,
-        config: { ...s.config, transport: s.config.transport ?? 'stdio' },
-      }))
-      const sorted = normalized.sort((a: McpServerState, b: McpServerState) => a.name.localeCompare(b.name))
-      setServers(sorted)
-    } catch {
-      /* ignore */
-    }
-    setLoading(false)
-  }, [])
-
-  useEffect(() => {
-    loadServers()
-  }, [loadServers])
-
-  useEffect(() => {
-    const handler = () => loadServers()
-    window.addEventListener('mcp-servers-changed', handler)
-    return () => window.removeEventListener('mcp-servers-changed', handler)
-  }, [loadServers])
 
   const toggleExpand = (name: string) => {
     setExpandedServers((prev) => {
@@ -573,7 +530,7 @@ export function ToolsTab() {
       }
       setShowAddForm(false)
       setFormData(defaultFormData)
-      await loadServers()
+      await refreshServers()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -581,10 +538,10 @@ export function ToolsTab() {
     }
   }
 
-  const handleEdit = (server: McpServerState) => {
+  const handleEdit = (server: McpServerInfo) => {
     setFormData({
       name: server.name,
-      transport: server.config.transport as 'stdio' | 'http',
+      transport: (server.config.transport as 'stdio' | 'http') ?? 'stdio',
       command: server.config.command ?? '',
       args: server.config.args?.join(' ') ?? '',
       env: server.config.env
@@ -626,7 +583,7 @@ export function ToolsTab() {
       }
       setEditingServer(null)
       setFormData(defaultFormData)
-      await loadServers()
+      await refreshServers()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -646,13 +603,22 @@ export function ToolsTab() {
       }
       clearConfirm()
       setMcpError('')
-      await loadServers()
+      await refreshServers()
     } catch (err) {
       setMcpError(err instanceof Error ? err.message : String(err))
     }
   }
 
   const handleToggleTool = async (serverName: string, toolName: string, enabled: boolean) => {
+    const previousServers = servers
+    const optimisticServers = servers.map((s) => {
+      if (s.name !== serverName) return s
+      const tools = s.tools.map((t) => (t.name === toolName ? { ...t, enabled } : t))
+      const estimatedTokens = tools.filter((t) => t.enabled).reduce((sum, t) => sum + t.estimatedTokens, 0)
+      return { ...s, tools, estimatedTokens }
+    })
+    mcpServersResource.write(optimisticServers)
+
     try {
       const res = await authFetch(
         `/api/mcp/servers/${encodeURIComponent(serverName)}/tools/${encodeURIComponent(toolName)}`,
@@ -670,13 +636,20 @@ export function ToolsTab() {
         )
       }
       setMcpError('')
-      await loadServers()
     } catch (err) {
+      mcpServersResource.write(previousServers)
       setMcpError(err instanceof Error ? err.message : String(err))
     }
   }
 
   const handleToggleServer = async (serverName: string, newDisabled: boolean) => {
+    const previousServers = servers
+    const optimisticServers = servers.map((s) => {
+      if (s.name !== serverName) return s
+      return { ...s, config: { ...s.config, disabled: newDisabled } }
+    })
+    mcpServersResource.write(optimisticServers)
+
     try {
       const res = await authFetch(`/api/mcp/servers/${encodeURIComponent(serverName)}`, {
         method: 'PUT',
@@ -691,8 +664,8 @@ export function ToolsTab() {
         )
       }
       setMcpError('')
-      await loadServers()
     } catch (err) {
+      mcpServersResource.write(previousServers)
       setMcpError(err instanceof Error ? err.message : String(err))
     }
   }
@@ -942,46 +915,6 @@ export function ToolsTab() {
 
       <hr className="border-border" />
 
-      {/* ── Plugin Tools Section ── */}
-      {pluginTools.length > 0 ? (
-        <>
-          <div data-testid="plugin-tools-section">
-            <h3 className="text-sm font-medium text-text-primary mb-3">
-              {t({ en: 'Plugin tools', fr: 'Outils des plugins' })}
-            </h3>
-            <p className="text-sm text-text-muted mb-3">
-              {t({
-                en: 'Tools contributed by enabled plugins. Add a tool to an agent’s allowed tools to make it callable.',
-                fr: 'Outils fournis par les plugins activés. Ajoutez un outil aux outils autorisés d’un agent pour le rendre appelable.',
-              })}
-            </p>
-            <div className="flex flex-col gap-2">
-              {pluginTools.map((tool) => (
-                <div
-                  key={`${tool.pluginId}:${tool.name}`}
-                  className="flex items-center justify-between p-3 rounded border border-border bg-bg-tertiary"
-                >
-                  <div className="min-w-0 flex-1 mr-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-text-primary">{tool.name}</span>
-                      <span
-                        data-plugin-tool-owner
-                        className="text-[10px] px-1.5 py-0.5 rounded border border-border bg-bg-secondary text-text-muted"
-                      >
-                        {tool.pluginId}
-                      </span>
-                    </div>
-                    <p className="text-xs text-text-muted mt-0.5">{tool.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <hr className="border-border" />
-        </>
-      ) : null}
-
       {/* ── MCP Servers Section ── */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -1094,7 +1027,7 @@ export function ToolsTab() {
                 statusDot={mcpStatusDot(server.status)}
                 statusColor={mcpStatusColor(server.status)}
                 authPanel={
-                  server.config.oauth ? <McpOAuthPanel serverName={server.name} onChanged={loadServers} /> : null
+                  server.config.oauth ? <McpOAuthPanel serverName={server.name} onChanged={refreshServers} /> : null
                 }
                 actions={
                   <>

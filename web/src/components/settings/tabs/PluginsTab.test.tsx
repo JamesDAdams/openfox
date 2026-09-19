@@ -111,6 +111,9 @@ function makePlugin(overrides: Partial<PluginInfo> = {}): PluginInfo {
       uiActions: 1,
       uiBadges: 0,
       uiPanels: 0,
+      settingsTabs: 0,
+      uiComponents: 0,
+      uiOverrides: 0,
     },
     ...overrides,
   }

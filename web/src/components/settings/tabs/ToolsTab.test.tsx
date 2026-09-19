@@ -5,7 +5,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ToolsTab } from './ToolsTab'
-import { clearCache } from '../../../lib/resourceCache'
 
 const { mockSettings, mockSetSetting } = vi.hoisted(() => ({
   mockSettings: {} as Record<string, string>,
@@ -166,6 +165,51 @@ describe('ToolsTab MCP server toggle isolation', () => {
     expect(putCalls[0]![0] as string).toContain('server-b')
     expect(JSON.parse((putCalls[0]![1] as Record<string, string>).body as string)).toEqual({ disabled: true })
   })
+
+  it('toggling tool on server-a sends PUT to correct tools endpoint', async () => {
+    const user = userEvent.setup()
+    render(<ToolsTab />)
+    await screen.findByText('server-a')
+
+    // Expand server-a by clicking on its header
+    await user.click(screen.getByText('server-a'))
+
+    // The tool toggle should now be rendered
+    await screen.findByText('tool1')
+    const toolToggle = screen.getByRole('switch', { name: 'tool1' })
+    expect(toolToggle.getAttribute('aria-checked')).toBe('true')
+    await user.click(toolToggle)
+
+    const { authFetch } = await import('../../../lib/api')
+    const mockFn = authFetch as ReturnType<typeof vi.fn>
+    const putCalls = mockFn.mock.calls.filter(
+      (call: unknown[]) => (call[1] as Record<string, unknown>)?.method === 'PUT',
+    )
+    const toolCall = putCalls.find((call: unknown[]) => (call[0] as string).includes('/tools/tool1'))
+    expect(toolCall).toBeDefined()
+    expect(JSON.parse((toolCall![1] as Record<string, string>).body as string)).toEqual({ enabled: false })
+  })
+
+  it('optimistically updates toggle on tool click and rolls back on failure', async () => {
+    const user = userEvent.setup()
+    render(<ToolsTab />)
+    await screen.findByText('server-a')
+    await user.click(screen.getByText('server-a'))
+
+    const toolToggle = screen.getByRole('switch', { name: 'tool1' })
+    expect(toolToggle.getAttribute('aria-checked')).toBe('true')
+
+    const { authFetch } = await import('../../../lib/api')
+    const mockFn = authFetch as ReturnType<typeof vi.fn>
+    mockFn.mockImplementationOnce(async () => ({
+      ok: false,
+      json: async () => ({ error: 'Network failure' }),
+    }))
+
+    await user.click(toolToggle)
+    // After failed request, it rolls back to true
+    expect(toolToggle.getAttribute('aria-checked')).toBe('true')
+  })
 })
 
 describe('ToolsTab RTK shell hint (Windows)', () => {
@@ -197,6 +241,10 @@ describe('ToolsTab RTK shell hint (Windows)', () => {
     cleanup()
     delete mockSettings['tools.useRtk']
     delete mockSettings['tools.shell']
+    delete mockSettings['search.engine']
+    delete mockSettings['search.tavilyApiKey']
+    delete mockSettings['search.searxngUrl']
+    delete mockSettings['search.searxngApiKey']
   })
 
   it('shows the hint when RTK is enabled with cmd.exe', async () => {
@@ -244,39 +292,37 @@ describe('ToolsTab RTK shell hint (Windows)', () => {
   })
 })
 
-describe('ToolsTab plugin tools', () => {
+describe('ToolsTab Search Engine settings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    clearCache()
+    vi.useFakeTimers()
+    delete mockSettings['search.engine']
+    delete mockSettings['search.tavilyApiKey']
+    delete mockSettings['search.searxngUrl']
+    delete mockSettings['search.searxngApiKey']
   })
   afterEach(() => {
+    vi.useRealTimers()
     cleanup()
   })
 
-  it('lists plugin-contributed tools with their owning plugin', async () => {
-    const { authFetch } = await import('../../../lib/api')
-    vi.mocked(authFetch).mockImplementation((async (url: string) => ({
-      ok: true,
-      json: async () =>
-        url.includes('/api/plugins/tools')
-          ? { tools: [{ name: 'hello_plugin_greet', description: 'Says hi', pluginId: 'openfox-hello-plugin' }] }
-          : { servers: [] },
-    })) as never)
-
+  it('loads Tavily API key from settings even if search engine is not selected', async () => {
+    mockSettings['search.tavilyApiKey'] = 'tvly-saved-key-123'
+    mockSettings['search.engine'] = 'tavily'
     render(<ToolsTab />)
-    expect(await screen.findByText('hello_plugin_greet')).toBeDefined()
-    expect(screen.getByText('openfox-hello-plugin')).toBeDefined()
+    const input = screen.getByPlaceholderText('tvly-...') as HTMLInputElement
+    expect(input.value).toBe('tvly-saved-key-123')
   })
 
-  it('hides the plugin tools section when no plugin contributes tools', async () => {
-    const { authFetch } = await import('../../../lib/api')
-    vi.mocked(authFetch).mockImplementation((async (url: string) => ({
-      ok: true,
-      json: async () => (url.includes('/api/plugins/tools') ? { tools: [] } : { servers: [] }),
-    })) as never)
-
+  it('persists typed Tavily API key via debounced save', async () => {
+    mockSettings['search.engine'] = 'tavily'
+    const { fireEvent } = await import('@testing-library/react')
     render(<ToolsTab />)
-    await screen.findByTestId('mcp-servers-heading')
-    expect(screen.queryByTestId('plugin-tools-section')).toBeNull()
+    const input = screen.getByPlaceholderText('tvly-...') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'tvly-new-key-456' } })
+
+    expect(mockSetSetting).not.toHaveBeenCalledWith('search.tavilyApiKey', 'tvly-new-key-456')
+    vi.advanceTimersByTime(300)
+    expect(mockSetSetting).toHaveBeenCalledWith('search.tavilyApiKey', 'tvly-new-key-456')
   })
 })

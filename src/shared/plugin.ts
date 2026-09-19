@@ -21,6 +21,36 @@ export type PluginSlotName =
   | 'composer.actions'
   | 'session.row.badges'
   | 'session.header.badges'
+  | (string & {})
+
+export type PluginZoneId =
+  | 'header'
+  | 'header.brand'
+  | 'header.nav'
+  | 'header.actions'
+  | 'header.status'
+  | 'sidebar'
+  | 'sidebar.header'
+  | 'sidebar.project_selector'
+  | 'sidebar.nav'
+  | 'sidebar.sessions_list'
+  | 'sidebar.footer'
+  | 'session.header'
+  | 'session.header.title'
+  | 'session.header.actions'
+  | 'session.header.badges'
+  | 'session.content'
+  | 'session.messages'
+  | 'message.bubble'
+  | 'message.actions'
+  | 'composer'
+  | 'composer.toolbar'
+  | 'composer.actions'
+  | 'session.footer'
+  | 'settings.sidebar'
+  | 'settings.content'
+  | 'modal.footer'
+  | (string & {})
 
 export type PluginBadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 
@@ -43,7 +73,7 @@ export interface PluginVisibilityCondition {
 export interface PluginUiAction {
   id: string
   pluginId?: string
-  slot: 'header.actions' | 'session.header.actions' | 'message.actions' | 'composer.actions'
+  slot: PluginSlotName
   label: LocalizedString
   icon?: string
   variant?: 'default' | 'primary' | 'danger'
@@ -55,7 +85,7 @@ export interface PluginUiAction {
 export interface PluginUiBadge {
   id: string
   pluginId?: string
-  slot: 'session.row.badges' | 'session.header.badges'
+  slot: PluginSlotName
   label: LocalizedString
   tone?: PluginBadgeTone
   tooltip?: LocalizedString
@@ -70,8 +100,84 @@ export type DeclarativeNode =
   | { type: 'table'; columns: LocalizedString[]; rows: string[][] }
   | { type: 'progress'; label: LocalizedString; value: number; max: number; tone?: PluginBadgeTone }
   | { type: 'badge'; label: LocalizedString; tone?: PluginBadgeTone }
-  | { type: 'button'; label: LocalizedString; variant?: 'default' | 'primary' | 'danger'; onActivate: PluginActivation }
+  | {
+      type: 'button'
+      label: LocalizedString
+      variant?: 'default' | 'primary' | 'danger'
+      icon?: string
+      onActivate: PluginActivation
+    }
   | { type: 'divider' }
+  | {
+      type: 'stack'
+      direction?: 'row' | 'column'
+      gap?: 'none' | 'xs' | 'sm' | 'md' | 'lg'
+      align?: 'start' | 'center' | 'end' | 'stretch'
+      justify?: 'start' | 'center' | 'end' | 'between'
+      className?: string
+      children: DeclarativeNode[]
+    }
+  | {
+      type: 'card'
+      title?: LocalizedString
+      subtitle?: LocalizedString
+      tone?: PluginBadgeTone
+      children: DeclarativeNode[]
+    }
+  | {
+      type: 'callout'
+      tone?: PluginBadgeTone
+      title?: LocalizedString
+      text: LocalizedString
+      icon?: string
+    }
+  | {
+      type: 'icon'
+      icon: string
+      tone?: PluginBadgeTone
+      className?: string
+    }
+  | {
+      type: 'input'
+      id: string
+      placeholder?: LocalizedString
+      defaultValue?: string
+      label?: LocalizedString
+      inputType?: 'text' | 'number' | 'password'
+    }
+  | {
+      type: 'select'
+      id: string
+      label?: LocalizedString
+      options: { value: string; label: LocalizedString }[]
+      defaultValue?: string
+    }
+  | {
+      type: 'iframe'
+      url: string
+      height?: string | number
+      width?: string | number
+    }
+
+export interface PluginUiComponent {
+  id: string
+  pluginId?: string
+  zone: PluginZoneId
+  position?: 'before' | 'after' | 'inside'
+  order?: number
+  visibleWhen?: PluginVisibilityCondition
+  component: DeclarativeNode
+}
+
+export interface PluginUiOverride {
+  id: string
+  pluginId?: string
+  zone: PluginZoneId
+  mode: 'hide' | 'replace'
+  order?: number
+  visibleWhen?: PluginVisibilityCondition
+  replacement?: DeclarativeNode
+}
 
 export interface PluginUiPanel {
   id: string
@@ -83,11 +189,23 @@ export interface PluginUiPanel {
   url?: string
 }
 
+export interface PluginSettingsTab {
+  id: string
+  pluginId?: string
+  label: LocalizedString
+  icon?: string
+  order?: number
+  content: DeclarativeNode[]
+}
+
 export interface PluginUiContributions {
   actions: PluginUiAction[]
   badges: PluginUiBadge[]
   panels: PluginUiPanel[]
   sections: PluginUiSection[]
+  components: PluginUiComponent[]
+  overrides: PluginUiOverride[]
+  settingsTabs: PluginSettingsTab[]
 }
 
 export interface PluginUiSection {
@@ -164,6 +282,9 @@ export interface PluginContributionSummary {
   uiActions: number
   uiBadges: number
   uiPanels: number
+  settingsTabs: number
+  uiComponents: number
+  uiOverrides: number
 }
 
 export interface PluginInfo {
@@ -224,4 +345,7 @@ export const EMPTY_PLUGIN_CONTRIBUTIONS: PluginContributionSummary = {
   uiActions: 0,
   uiBadges: 0,
   uiPanels: 0,
+  settingsTabs: 0,
+  uiComponents: 0,
+  uiOverrides: 0,
 }

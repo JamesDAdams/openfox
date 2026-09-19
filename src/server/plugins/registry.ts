@@ -16,6 +16,7 @@ import type {
   PluginRegistry as PluginRegistryContract,
   PluginRpcHandler,
   PluginSettingsSchema,
+  PluginSettingsTab,
   PluginSkillSource,
   PluginTool,
   PluginTransitionContext,
@@ -24,7 +25,9 @@ import type {
   PluginContributionSummary,
   PluginUiAction,
   PluginUiBadge,
+  PluginUiComponent,
   PluginUiContributions,
+  PluginUiOverride,
   PluginUiPanel,
   PluginUiSection,
 } from '../../shared/plugin.js'
@@ -46,6 +49,9 @@ type Kind =
   | 'uiAction'
   | 'uiBadge'
   | 'uiPanel'
+  | 'settingsTab'
+  | 'uiComponent'
+  | 'uiOverride'
   | 'asset'
 
 interface Owned<T> {
@@ -141,6 +147,18 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
     this.register('uiPanel', panel.id, panel)
   }
 
+  registerSettingsTab(tab: PluginSettingsTab): void {
+    this.register('settingsTab', tab.id, tab)
+  }
+
+  registerUiComponent(component: PluginUiComponent): void {
+    this.register('uiComponent', component.id, component)
+  }
+
+  registerUiOverride(override: PluginUiOverride): void {
+    this.register('uiOverride', override.id, override)
+  }
+
   registerHook(event: PluginHookEvent, handler: PluginHookHandler): void {
     const pluginId = this.currentPluginId ?? UNKNOWN_PLUGIN
     const list = this.hookHandlers.get(event) ?? []
@@ -226,6 +244,18 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
       badges: this.listOwned<PluginUiBadge>('uiBadge').map((entry) => ({ ...entry.value, pluginId: entry.pluginId })),
       panels: this.listOwned<PluginUiPanel>('uiPanel').map((entry) => ({ ...entry.value, pluginId: entry.pluginId })),
       sections: this.listSections(),
+      settingsTabs: this.listOwned<PluginSettingsTab>('settingsTab').map((entry) => ({
+        ...entry.value,
+        pluginId: entry.pluginId,
+      })),
+      components: this.listOwned<PluginUiComponent>('uiComponent').map((entry) => ({
+        ...entry.value,
+        pluginId: entry.pluginId,
+      })),
+      overrides: this.listOwned<PluginUiOverride>('uiOverride').map((entry) => ({
+        ...entry.value,
+        pluginId: entry.pluginId,
+      })),
     }
   }
 
@@ -274,6 +304,9 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
       uiActions: count('uiAction'),
       uiBadges: count('uiBadge'),
       uiPanels: count('uiPanel'),
+      settingsTabs: count('settingsTab'),
+      uiComponents: count('uiComponent'),
+      uiOverrides: count('uiOverride'),
     }
   }
 
