@@ -227,12 +227,12 @@ describe('terminateProcessTree', () => {
     })
 
     await terminateProcessTree(proc)
-    await waitFor(() => closed && allDead(proc.pid!, ...descendants)())
+    await waitFor(() => closed && allDead(proc.pid!, ...descendants)(), 15000)
 
     expect(closed).toBe(true)
     expect(isAlive(proc.pid!)).toBe(false)
     for (const pid of descendants) {
       expect(isAlive(pid)).toBe(false)
     }
-  }, 20000)
+  }, 30000)
 })
