@@ -615,6 +615,7 @@ export const SETTINGS_KEYS = {
   LLM_CAVEMAN_THINKING: 'llm.cavemanThinking',
   CACHE_WARMING: 'cache.warming',
   AUTO_CONTINUE_ON_BOOT: 'agent.autoContinueOnBoot',
+  AGENT_ALLOW_PARALLEL_SUB_AGENTS: 'agent.allowParallelSubAgents',
   KEYBINDINGS: 'keybindings',
   RETRY_PATTERNS: 'agent.retryPatterns',
   SKILLS_DIRECTORIES: 'skills.directories',

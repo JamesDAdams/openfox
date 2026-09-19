@@ -35,6 +35,7 @@ import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
+import { getSetting, SETTINGS_KEYS } from '../db/settings.js'
 import {
   createChatMessageUpdatedMessage,
   createChatDoneMessage,
@@ -704,6 +705,7 @@ ${COMPACTION_PROMPT}`,
           batchContext.providerManager = config.providerManager
         }
         batchContext.agentTimeout = getRuntimeConfig().agent.toolTimeout
+        batchContext.allowParallelSubAgents = getSetting(SETTINGS_KEYS.AGENT_ALLOW_PARALLEL_SUB_AGENTS) === 'true'
         const batchResult = await executeTools(assistantMsgId, result.toolCalls, batchContext, append)
         pendingToolResultTokens = estimateToolResultTokens(batchResult.toolMessages)
         if (batchResult.stepDoneCalled) {
