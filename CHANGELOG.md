@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.0.151 - 2026-09-19
+
+### Features
+
+- **Plugins render UI in app zones** — header, sidebar, session, composer, and settings now accept plugin content.
+- **Zones can be hidden or replaced** — plugins override native content via hide/replace with replacement nodes.
+- **Plugin settings tabs** — plugins can register their own tabs in the settings modal.
+- **Per-agent session stats** — the stats modal now breaks down usage by agent and sub-agent.
+- **Project search** — find projects by name in the project picker and open-project modal.
+- **Branch search** — filter git branches as you type in the branch switcher.
+- **Provider modal banners** — new banners point to OpenFox plugins and proxy settings.
+
+### Enhancements
+
+- **Plugin UI DSL extended** — new stack, card, callout, icon, input, select, and iframe nodes.
+- **MCP toggles apply instantly** — server and tool enable/disable updates apply immediately in settings.
+- **Stats split by reasoning effort** — model groups now separate reasoning-effort variants.
+- **Longer sessions use less memory** — the live feed caps visible messages and tool streaming output.
+
+### Bug Fixes
+
+- **Pending confirmations auto-expand** — tool calls awaiting user confirmation now expand automatically.
+- **Collapsed tool output survives reloads** — large collapsed outputs stay collapsed after reloading.
+- **Search engine API keys persist** — keys no longer vanish on page reload.
+
 ## 2.0.150 - 2026-09-18
 
 ### Features
