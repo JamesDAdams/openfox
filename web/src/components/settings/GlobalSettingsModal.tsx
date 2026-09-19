@@ -1,5 +1,5 @@
 import { ScrollArea } from '../shared/ScrollArea'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
 import { useT } from '../../hooks/useT'
 import { NotificationSettings } from './NotificationSettings'
@@ -17,25 +17,40 @@ import { PluginSettingsTabContent } from './PluginSettingsTabContent'
 import { usePlugins } from '../../hooks/usePlugins'
 import { useLocalizedString } from '../../hooks/useLocalizedString'
 
+export type CoreTab =
+  'instructions' | 'skills' | 'plugins' | 'notifications' | 'display' | 'keybindings' | 'advanced' | 'tools'
+
+export type SettingsTab = CoreTab | `plugin:${string}:${string}`
+
+export const OPEN_SETTINGS_EVENT = 'open-global-settings'
+
+export function openSettings(tab?: SettingsTab) {
+  window.dispatchEvent(new CustomEvent(OPEN_SETTINGS_EVENT, { detail: { tab } }))
+}
+
 interface GlobalSettingsModalProps {
   isOpen: boolean
   onClose: () => void
+  initialTab?: SettingsTab
 }
 
-type CoreTab =
-  'instructions' | 'skills' | 'plugins' | 'notifications' | 'display' | 'keybindings' | 'advanced' | 'tools'
-type Tab = CoreTab | `plugin:${string}:${string}`
-
-export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('instructions')
+export function GlobalSettingsModal({ isOpen, onClose, initialTab }: GlobalSettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab ?? 'instructions')
   const updateAvailable = useUpdateStore((state) => state.status === 'available')
   const { contributions } = usePlugins()
   const localize = useLocalizedString()
   const t = useT()
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab)
+    }
+  }, [isOpen, initialTab])
+
   const pluginTabs = [...(contributions.settingsTabs ?? [])].sort((a, b) => (a.order ?? 50) - (b.order ?? 50))
   const activePluginTab = pluginTabs.find((tab) => `plugin:${tab.pluginId}:${tab.id}` === activeTab)
 
-  const tabs: { id: Tab; label: string; showDot?: boolean }[] = [
+  const tabs: { id: SettingsTab; label: string; showDot?: boolean }[] = [
     { id: 'instructions', label: t({ en: 'Instructions', fr: 'Instructions' }) },
     { id: 'tools', label: t({ en: 'Tools', fr: 'Outils' }) },
     { id: 'skills', label: t({ en: 'Skills', fr: 'Compétences' }) },
@@ -45,7 +60,7 @@ export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProp
     { id: 'keybindings', label: t({ en: 'Keybindings', fr: 'Raccourcis clavier' }) },
     { id: 'advanced', label: t({ en: 'Advanced', fr: 'Avancé' }), showDot: updateAvailable },
     ...pluginTabs.map((tab) => ({
-      id: `plugin:${tab.pluginId}:${tab.id}` as Tab,
+      id: `plugin:${tab.pluginId}:${tab.id}` as SettingsTab,
       label: localize(tab.label),
     })),
   ]
