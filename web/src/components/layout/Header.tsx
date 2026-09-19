@@ -33,6 +33,7 @@ import { useTasksStore } from '../../stores/tasks'
 import { TasksIcon, ArrowRightIcon } from '../shared/icons'
 import { PluginSlot } from '../plugins/PluginSlot'
 import { PluginBadges } from '../plugins/PluginBadges'
+import { PluginZone } from '../plugins/PluginZone'
 import { NotificationBell } from '../notifications/NotificationBell'
 import { useIsSplit } from '../../lib/splitPersistence'
 import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
@@ -169,246 +170,273 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   })
 
   return (
-    <header className="h-8 bg-secondary border-b border-border flex items-center justify-between px-2">
-      <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
-        {(onMenuClick && isSessionPage) || (onMenuClick && isSplit) ? (
-          <button
-            onClick={onMenuClick}
-            className="flex-shrink-0 p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-            title={
-              isSplit
-                ? t({ en: 'Toggle split view control panel', fr: 'Basculer le panneau de contrôle de la vue divisée' })
-                : t({ en: 'Toggle session list', fr: 'Basculer la liste des sessions' })
-            }
-            aria-label={
-              isSplit
-                ? t({ en: 'Toggle split view control panel', fr: 'Basculer le panneau de contrôle de la vue divisée' })
-                : t({ en: 'Toggle session list', fr: 'Basculer la liste des sessions' })
-            }
-          >
-            <MenuIcon />
-          </button>
-        ) : null}
-
-        <Link
-          href="/"
-          className="text-accent-primary font-semibold text-sm hover:underline flex-shrink-0 hidden md:inline"
-        >
-          OpenFox
-        </Link>
-
-        {!isSplit && project && (
-          <>
-            <span className="hidden md:inline text-text-muted flex-shrink-0">/</span>
-            <div className="flex-shrink-0">
-              <ProjectDropdown projects={projects} currentProject={project} />
-            </div>
-
-            <span className="text-text-muted flex-shrink-0">/</span>
-            <SessionDropdown
-              sessions={sessions}
-              currentProject={project}
-              currentSession={session}
-              isOpen={sessionDropdownOpen}
-              onOpenChange={setSessionDropdownOpen}
-            />
-          </>
-        )}
-
-        {!isSplit && !project && <ProjectDropdown projects={projects} />}
-      </div>
-
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <div className="hidden md:flex items-center gap-2">
-          {!isSplit && (
+    <PluginZone
+      id="header"
+      context={{
+        ...(project?.id ? { projectId: project.id } : {}),
+        ...(session?.id ? { sessionId: session.id } : {}),
+      }}
+    >
+      <header className="h-8 bg-secondary border-b border-border flex items-center justify-between px-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+          {(onMenuClick && isSessionPage) || (onMenuClick && isSplit) ? (
             <button
-              onClick={() => {
-                const sid = session?.id
-                if (isSessionPage && sid) {
-                  void useSessionStore.getState().openPane(sid, { focus: true })
-                }
-                setLocation('/split-view')
-              }}
-              className="p-2.5 rounded hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
-              title={t({ en: 'Open split view', fr: 'Ouvrir la vue divisée' })}
-              aria-label={t({ en: 'Open split view', fr: 'Ouvrir la vue divisée' })}
+              onClick={onMenuClick}
+              className="flex-shrink-0 p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+              title={
+                isSplit
+                  ? t({
+                      en: 'Toggle split view control panel',
+                      fr: 'Basculer le panneau de contrôle de la vue divisée',
+                    })
+                  : t({ en: 'Toggle session list', fr: 'Basculer la liste des sessions' })
+              }
+              aria-label={
+                isSplit
+                  ? t({
+                      en: 'Toggle split view control panel',
+                      fr: 'Basculer le panneau de contrôle de la vue divisée',
+                    })
+                  : t({ en: 'Toggle session list', fr: 'Basculer la liste des sessions' })
+              }
             >
-              <ColumnsIcon className="w-4 h-4" />
+              <MenuIcon />
             </button>
-          )}
+          ) : null}
 
-          {isSplit && (
-            <>
-              <span
-                className="flex items-center gap-1 text-xs text-text-muted px-1.5"
-                title={t({ en: 'Split view active', fr: 'Vue divisée active' })}
-                data-testid="split-indicator"
-              >
-                <ColumnsIcon className="w-3.5 h-3.5" />
-                {openSessionCount}
-              </span>
-              <button
-                onClick={() => {
-                  useSessionStore.getState().exitSplitView()
-                  setLocation('/')
-                }}
-                className="p-2.5 rounded hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
-                title={t({ en: 'Exit split view', fr: 'Quitter la vue divisée' })}
-                aria-label={t({ en: 'Exit split view', fr: 'Quitter la vue divisée' })}
-              >
-                <XCloseIcon className="w-4 h-4" />
-              </button>
-            </>
-          )}
-
-          {isProjectPage && (
-            <button
-              onClick={() => setTasksModalOpen(true)}
-              className="relative p-2.5 rounded hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
-              title={t({ en: 'Project tasks', fr: 'Tâches du projet' })}
-              aria-label={t({ en: 'Open project tasks', fr: 'Ouvrir les tâches du projet' })}
+          <PluginZone id="header.brand">
+            <Link
+              href="/"
+              className="text-accent-primary font-semibold text-sm hover:underline flex-shrink-0 hidden md:inline"
             >
-              <TasksIcon className="w-4 h-4" />
-              {runningTaskCount > 0 && (
-                <span className="absolute top-0.5 right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-accent-success text-white text-[9px] font-semibold flex items-center justify-center">
-                  {runningTaskCount > 99 ? '99+' : runningTaskCount}
-                </span>
-              )}
-            </button>
-          )}
+              OpenFox
+            </Link>
+          </PluginZone>
 
-          {isProjectPage && (
-            <button
-              onClick={() => setTerminalOpen(!terminalIsOpen)}
-              className={`p-2.5 rounded hover:bg-bg-tertiary transition-colors ${
-                terminalIsOpen ? 'text-accent-primary' : 'text-text-muted hover:text-text-primary'
-              }`}
-              title={t({ en: 'Toggle terminal (double Ctrl)', fr: 'Basculer le terminal (Ctrl double)' })}
-            >
-              <TerminalIcon />
-            </button>
-          )}
+          <PluginZone id="header.nav" className="flex items-center gap-2 min-w-0 overflow-hidden">
+            {!isSplit && project && (
+              <>
+                <span className="hidden md:inline text-text-muted flex-shrink-0">/</span>
+                <div className="flex-shrink-0">
+                  <ProjectDropdown projects={projects} currentProject={project} />
+                </div>
 
-          <PluginSlot
-            slot="header.actions"
+                <span className="text-text-muted flex-shrink-0">/</span>
+                <SessionDropdown
+                  sessions={sessions}
+                  currentProject={project}
+                  currentSession={session}
+                  isOpen={sessionDropdownOpen}
+                  onOpenChange={setSessionDropdownOpen}
+                />
+              </>
+            )}
+
+            {!isSplit && !project && <ProjectDropdown projects={projects} />}
+          </PluginZone>
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <PluginZone
+            id="header.actions"
+            className="hidden md:flex items-center gap-2"
             context={{
               ...(project?.id ? { projectId: project.id } : {}),
-              ...(project?.workdir ? { workdir: project.workdir } : {}),
+              ...(session?.id ? { sessionId: session.id } : {}),
             }}
-          />
-          {isSessionPage ? (
-            <>
-              <PluginSlot slot="session.header.actions" context={sessionContext} />
-              <PluginBadges slot="session.header.badges" context={sessionContext} />
-            </>
-          ) : null}
-          <NotificationBell />
+          >
+            {!isSplit && (
+              <button
+                onClick={() => {
+                  const sid = session?.id
+                  if (isSessionPage && sid) {
+                    void useSessionStore.getState().openPane(sid, { focus: true })
+                  }
+                  setLocation('/split-view')
+                }}
+                className="p-2.5 rounded hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
+                title={t({ en: 'Open split view', fr: 'Ouvrir la vue divisée' })}
+                aria-label={t({ en: 'Open split view', fr: 'Ouvrir la vue divisée' })}
+              >
+                <ColumnsIcon className="w-4 h-4" />
+              </button>
+            )}
 
-          {isProjectPage && project && (
+            {isSplit && (
+              <>
+                <span
+                  className="flex items-center gap-1 text-xs text-text-muted px-1.5"
+                  title={t({ en: 'Split view active', fr: 'Vue divisée active' })}
+                  data-testid="split-indicator"
+                >
+                  <ColumnsIcon className="w-3.5 h-3.5" />
+                  {openSessionCount}
+                </span>
+                <button
+                  onClick={() => {
+                    useSessionStore.getState().exitSplitView()
+                    setLocation('/')
+                  }}
+                  className="p-2.5 rounded hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
+                  title={t({ en: 'Exit split view', fr: 'Quitter la vue divisée' })}
+                  aria-label={t({ en: 'Exit split view', fr: 'Quitter la vue divisée' })}
+                >
+                  <XCloseIcon className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {isProjectPage && (
+              <button
+                onClick={() => setTasksModalOpen(true)}
+                className="relative p-2.5 rounded hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
+                title={t({ en: 'Project tasks', fr: 'Tâches du projet' })}
+                aria-label={t({ en: 'Open project tasks', fr: 'Ouvrir les tâches du projet' })}
+              >
+                <TasksIcon className="w-4 h-4" />
+                {runningTaskCount > 0 && (
+                  <span className="absolute top-0.5 right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-accent-success text-white text-[9px] font-semibold flex items-center justify-center">
+                    {runningTaskCount > 99 ? '99+' : runningTaskCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {isProjectPage && (
+              <button
+                onClick={() => setTerminalOpen(!terminalIsOpen)}
+                className={`p-2.5 rounded hover:bg-bg-tertiary transition-colors ${
+                  terminalIsOpen ? 'text-accent-primary' : 'text-text-muted hover:text-text-primary'
+                }`}
+                title={t({ en: 'Toggle terminal (double Ctrl)', fr: 'Basculer le terminal (Ctrl double)' })}
+              >
+                <TerminalIcon />
+              </button>
+            )}
+
+            <PluginSlot
+              slot="header.actions"
+              context={{
+                ...(project?.id ? { projectId: project.id } : {}),
+                ...(project?.workdir ? { workdir: project.workdir } : {}),
+              }}
+            />
+            {isSessionPage ? (
+              <>
+                <PluginSlot slot="session.header.actions" context={sessionContext} />
+                <PluginBadges slot="session.header.badges" context={sessionContext} />
+              </>
+            ) : null}
+            <NotificationBell />
+
+            {isProjectPage && project && (
+              <button
+                onClick={() => authFetch(`/api/projects/${project.id}/open-folder`).catch(() => {})}
+                className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+                title={t({ en: 'Open project folder', fr: 'Ouvrir le dossier du projet' })}
+              >
+                <FolderIcon className="w-4 h-4" />
+              </button>
+            )}
+
             <button
-              onClick={() => authFetch(`/api/projects/${project.id}/open-folder`).catch(() => {})}
-              className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-              title={t({ en: 'Open project folder', fr: 'Ouvrir le dossier du projet' })}
+              onClick={() => setShowSettings(true)}
+              className="relative p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+              title={
+                updateAvailable
+                  ? t({ en: 'Settings — update available', fr: 'Paramètres — mise à jour disponible' })
+                  : t({ en: 'Settings', fr: 'Paramètres' })
+              }
             >
-              <FolderIcon className="w-4 h-4" />
+              <SettingsIcon />
+              {updateAvailable && (
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent-primary" />
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                void useSessionStore.getState().logout()
+                setLocation('/')
+              }}
+              className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+              title={t({ en: 'Logout', fr: 'Se déconnecter' })}
+            >
+              <LogoutIcon />
+            </button>
+          </PluginZone>
+
+          <div className="md:hidden">
+            <DropdownMenu
+              items={mobileMenuItems}
+              align="right"
+              minWidth="200px"
+              trigger={
+                <button
+                  className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+                  title={t({ en: 'Menu', fr: 'Menu' })}
+                  aria-label={t({ en: 'Open header menu', fr: 'Ouvrir le menu d’en-tête' })}
+                >
+                  <ChevronDownIcon className="w-4 h-4" />
+                </button>
+              }
+            />
+          </div>
+
+          {onCriteriaToggle && isSessionPage && (
+            <button
+              onClick={onCriteriaToggle}
+              className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+              title={
+                keybindings.criteriaSidebar
+                  ? t(
+                      { en: 'Toggle criteria sidebar ({{key}})', fr: 'Basculer la barre de critères ({{key}})' },
+                      {
+                        key: formatKeybinding(keybindings.criteriaSidebar),
+                      },
+                    )
+                  : t({ en: 'Toggle criteria sidebar', fr: 'Basculer la barre de critères' })
+              }
+            >
+              <MenuIcon />
             </button>
           )}
-
-          <button
-            onClick={() => setShowSettings(true)}
-            className="relative p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-            title={
-              updateAvailable
-                ? t({ en: 'Settings — update available', fr: 'Paramètres — mise à jour disponible' })
-                : t({ en: 'Settings', fr: 'Paramètres' })
-            }
-          >
-            <SettingsIcon />
-            {updateAvailable && <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent-primary" />}
-          </button>
-
-          <button
-            onClick={() => {
-              void useSessionStore.getState().logout()
-              setLocation('/')
-            }}
-            className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-            title={t({ en: 'Logout', fr: 'Se déconnecter' })}
-          >
-            <LogoutIcon />
-          </button>
         </div>
 
-        <div className="md:hidden">
-          <DropdownMenu
-            items={mobileMenuItems}
-            align="right"
-            minWidth="200px"
-            trigger={
-              <button
-                className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-                title={t({ en: 'Menu', fr: 'Menu' })}
-                aria-label={t({ en: 'Open header menu', fr: 'Ouvrir le menu d’en-tête' })}
-              >
-                <ChevronDownIcon className="w-4 h-4" />
-              </button>
-            }
-          />
-        </div>
-
-        {onCriteriaToggle && isSessionPage && (
-          <button
-            onClick={onCriteriaToggle}
-            className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-            title={
-              keybindings.criteriaSidebar
-                ? t(
-                    { en: 'Toggle criteria sidebar ({{key}})', fr: 'Basculer la barre de critères ({{key}})' },
-                    {
-                      key: formatKeybinding(keybindings.criteriaSidebar),
-                    },
-                  )
-                : t({ en: 'Toggle criteria sidebar', fr: 'Basculer la barre de critères' })
-            }
-          >
-            <MenuIcon />
-          </button>
+        <GlobalSettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+        <TerminalDrawer isOpen={terminalIsOpen} onClose={() => setTerminalOpen(false)} />
+        {project && (
+          <TasksModal isOpen={tasksModalOpen} onClose={() => setTasksModalOpen(false)} projectId={project.id} />
         )}
-      </div>
-
-      <GlobalSettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
-      <TerminalDrawer isOpen={terminalIsOpen} onClose={() => setTerminalOpen(false)} />
-      {project && (
-        <TasksModal isOpen={tasksModalOpen} onClose={() => setTasksModalOpen(false)} projectId={project.id} />
-      )}
-      {lastAutoLaunch && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg bg-bg-secondary border border-border shadow-xl text-sm text-text-primary">
-          <span>
-            {t(
-              {
-                en: '“{{title}}” auto-launched — a slot freed up.',
-                fr: '« {{title}} » lancé automatiquement — un emplacement s’est libéré.',
-              },
-              { title: lastAutoLaunch.taskTitle },
-            )}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              const sessionId = lastAutoLaunch.sessionId
-              const targetProjectId = lastAutoLaunch.projectId
-              clearAutoLaunch()
-              setLocation(`/p/${targetProjectId}/s/${sessionId}`)
-            }}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-accent-primary/25 hover:bg-accent-primary/40 font-medium transition-colors"
-          >
-            {t({ en: 'Open session', fr: 'Ouvrir la session' })} <ArrowRightIcon className="w-3 h-3" />
-          </button>
-          <button type="button" onClick={clearAutoLaunch} className="text-xs text-text-muted underline">
-            {t({ en: 'Dismiss', fr: 'Fermer' })}
-          </button>
-        </div>
-      )}
-    </header>
+        {lastAutoLaunch && (
+          <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg bg-bg-secondary border border-border shadow-xl text-sm text-text-primary">
+            <span>
+              {t(
+                {
+                  en: '“{{title}}” auto-launched — a slot freed up.',
+                  fr: '« {{title}} » lancé automatiquement — un emplacement s’est libéré.',
+                },
+                { title: lastAutoLaunch.taskTitle },
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const sessionId = lastAutoLaunch.sessionId
+                const targetProjectId = lastAutoLaunch.projectId
+                clearAutoLaunch()
+                setLocation(`/p/${targetProjectId}/s/${sessionId}`)
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded bg-accent-primary/25 hover:bg-accent-primary/40 font-medium transition-colors"
+            >
+              {t({ en: 'Open session', fr: 'Ouvrir la session' })} <ArrowRightIcon className="w-3 h-3" />
+            </button>
+            <button type="button" onClick={clearAutoLaunch} className="text-xs text-text-muted underline">
+              {t({ en: 'Dismiss', fr: 'Fermer' })}
+            </button>
+          </div>
+        )}
+      </header>
+    </PluginZone>
   )
 }

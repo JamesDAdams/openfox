@@ -832,6 +832,7 @@ export const agentDefaultResource = resource<AgentFull | null, [string]>({
 export const pluginListResource = resource<import('./plugin-actions').PluginListData, []>({
   key: () => 'plugins:list',
   fetch: fetchPluginList,
+  maxAgeMs: 0,
 })
 
 /** Plugin-emitted notifications (bell + toast source of truth). */

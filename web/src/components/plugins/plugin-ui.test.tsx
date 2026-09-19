@@ -7,6 +7,8 @@ import userEvent from '@testing-library/user-event'
 import { PluginSlot } from './PluginSlot'
 import { PluginBadges } from './PluginBadges'
 import { PluginPanelHost } from './PluginPanelHost'
+import { PluginZone } from './PluginZone'
+import { DeclarativeRenderer } from './DeclarativeRenderer'
 import { usePluginUiStore } from '../../stores/pluginUi'
 import { useLocaleStore } from '../../stores/locale'
 import { clearBadgeCache } from '../../lib/plugin-badge-cache'
@@ -14,7 +16,7 @@ import { EMPTY_PLUGIN_CONTRIBUTIONS } from '@shared/plugin.js'
 import type { PluginUiContributions } from '@shared/plugin.js'
 
 const contributionsRef: { current: PluginUiContributions } = {
-  current: { actions: [], badges: [], panels: [], sections: [] },
+  current: { actions: [], badges: [], panels: [], sections: [], settingsTabs: [], components: [], overrides: [] },
 }
 
 vi.mock('../../hooks/usePlugins', () => ({
@@ -34,7 +36,15 @@ vi.mock('../../lib/plugin-actions', () => ({
 
 describe('plugin UI slots', () => {
   beforeEach(() => {
-    contributionsRef.current = { actions: [], badges: [], panels: [], sections: [] }
+    contributionsRef.current = {
+      actions: [],
+      badges: [],
+      panels: [],
+      sections: [],
+      settingsTabs: [],
+      components: [],
+      overrides: [],
+    }
     invokePluginRpc.mockReset()
     usePluginUiStore.setState({ values: {}, activePanel: null })
     useLocaleStore.setState({ locale: 'en' })
@@ -333,6 +343,170 @@ describe('plugin UI slots', () => {
     const iframe = screen.getByTitle('Board')
     expect(iframe.getAttribute('src')).toBe('/api/plugins/demo/assets/board.html')
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-forms')
+  })
+})
+
+describe('PluginZone and DeclarativeRenderer', () => {
+  beforeEach(() => {
+    contributionsRef.current = {
+      actions: [],
+      badges: [],
+      panels: [],
+      sections: [],
+      settingsTabs: [],
+      components: [],
+      overrides: [],
+    }
+    invokePluginRpc.mockReset()
+    usePluginUiStore.setState({ values: {}, activePanel: null })
+    useLocaleStore.setState({ locale: 'en' })
+  })
+
+  it('renders native children when no components or overrides exist', () => {
+    render(
+      <PluginZone id="header.brand">
+        <span data-testid="native-brand">My App</span>
+      </PluginZone>,
+    )
+    expect(screen.getByTestId('native-brand').textContent).toBe('My App')
+  })
+
+  it('hides native content when override mode is hide', () => {
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      overrides: [
+        {
+          id: 'hide-brand',
+          pluginId: 'demo',
+          zone: 'header.brand',
+          mode: 'hide',
+        },
+      ],
+    }
+
+    render(
+      <PluginZone id="header.brand">
+        <span data-testid="native-brand">My App</span>
+      </PluginZone>,
+    )
+    expect(screen.queryByTestId('native-brand')).toBeNull()
+  })
+
+  it('replaces native content with declarative replacement when override mode is replace', () => {
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      overrides: [
+        {
+          id: 'replace-brand',
+          pluginId: 'demo',
+          zone: 'header.brand',
+          mode: 'replace',
+          replacement: {
+            type: 'text',
+            text: { en: 'Custom Brand', fr: 'Marque Custom' },
+          },
+        },
+      ],
+    }
+
+    render(
+      <PluginZone id="header.brand">
+        <span data-testid="native-brand">My App</span>
+      </PluginZone>,
+    )
+    expect(screen.queryByTestId('native-brand')).toBeNull()
+    expect(screen.getByText('Custom Brand')).toBeDefined()
+  })
+
+  it('injects components before, inside, and after native content with proper ordering', () => {
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      components: [
+        {
+          id: 'after-comp',
+          pluginId: 'demo',
+          zone: 'sidebar.header',
+          position: 'after',
+          order: 100,
+          component: { type: 'text', text: { en: 'After Text', fr: 'Texte Après' } },
+        },
+        {
+          id: 'before-comp',
+          pluginId: 'demo',
+          zone: 'sidebar.header',
+          position: 'before',
+          order: 10,
+          component: { type: 'text', text: { en: 'Before Text', fr: 'Texte Avant' } },
+        },
+      ],
+    }
+
+    const { container } = render(
+      <PluginZone id="sidebar.header">
+        <span data-testid="native-header">Native Header</span>
+      </PluginZone>,
+    )
+
+    expect(screen.getByText('Before Text')).toBeDefined()
+    expect(screen.getByTestId('native-header')).toBeDefined()
+    expect(screen.getByText('After Text')).toBeDefined()
+    expect(container.textContent).toBe('Before TextNative HeaderAfter Text')
+  })
+
+  it('renders all rich declarative primitives (stack, card, callout, icon, input, select, button)', async () => {
+    render(
+      <DeclarativeRenderer
+        node={{
+          type: 'stack',
+          direction: 'column',
+          children: [
+            {
+              type: 'card',
+              title: { en: 'Card Title', fr: 'Titre Carte' },
+              children: [
+                {
+                  type: 'callout',
+                  tone: 'warning',
+                  title: { en: 'Warning', fr: 'Attention' },
+                  text: { en: 'Be careful', fr: 'Attention' },
+                },
+                {
+                  type: 'input',
+                  id: 'test-input',
+                  label: { en: 'Your Name', fr: 'Votre Nom' },
+                  defaultValue: 'Alice',
+                },
+                {
+                  type: 'select',
+                  id: 'test-select',
+                  label: { en: 'Choose', fr: 'Choisir' },
+                  options: [{ value: 'opt1', label: { en: 'Option 1', fr: 'Option 1' } }],
+                },
+                {
+                  type: 'button',
+                  label: { en: 'Click Me', fr: 'Cliquez-moi' },
+                  variant: 'primary',
+                  onActivate: { kind: 'rpc', method: 'testAction' },
+                },
+              ],
+            },
+          ],
+        }}
+        context={{ pluginId: 'demo-plugin' }}
+      />,
+    )
+
+    expect(screen.getByText('Card Title')).toBeDefined()
+    expect(screen.getByText('Warning')).toBeDefined()
+    expect(screen.getByText('Be careful')).toBeDefined()
+    expect(screen.getByText('Your Name')).toBeDefined()
+    expect(screen.getByDisplayValue('Alice')).toBeDefined()
+    expect(screen.getByText('Choose')).toBeDefined()
+    expect(screen.getByText('Option 1')).toBeDefined()
+
+    const btn = screen.getByRole('button', { name: 'Click Me' })
+    await userEvent.setup().click(btn)
+    expect(invokePluginRpc).toHaveBeenCalledWith('demo-plugin', 'testAction', {}, {})
   })
 })
 

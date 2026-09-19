@@ -6,9 +6,12 @@ import type {
   PluginCapability,
   PluginNotificationAction,
   PluginSettingsSchema,
+  PluginSettingsTab,
   PluginSettingValue,
   PluginUiAction,
   PluginUiBadge,
+  PluginUiComponent,
+  PluginUiOverride,
   PluginUiPanel,
 } from '../shared/plugin.js'
 import type {
@@ -32,13 +35,17 @@ export type {
   PluginNotificationAction,
   PluginSettingsField,
   PluginSettingsSchema,
+  PluginSettingsTab,
   PluginSettingScope,
   PluginSettingValue,
   PluginSettingsValues,
   PluginSlotName,
+  PluginZoneId,
   PluginUiAction,
   PluginUiBadge,
+  PluginUiComponent,
   PluginUiContributions,
+  PluginUiOverride,
   PluginUiPanel,
   PluginUiSection,
   PluginVisibilityCondition,
@@ -230,6 +237,9 @@ export interface PluginRegistry {
   registerUiAction(action: PluginUiAction): void
   registerUiBadge(badge: PluginUiBadge): void
   registerUiPanel(panel: PluginUiPanel): void
+  registerSettingsTab(tab: PluginSettingsTab): void
+  registerUiComponent(component: PluginUiComponent): void
+  registerUiOverride(override: PluginUiOverride): void
   registerHook(event: PluginHookEvent, handler: PluginHookHandler): void
   registerTransitionHandler(
     name: string,

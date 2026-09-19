@@ -10,6 +10,8 @@ export type PluginActionContext = {
   workdir?: string
   projectId?: string
   messageId?: string
+  tab?: string
+  [key: string]: unknown
 }
 
 const ICON_EXPORTS: Record<string, string> = {
