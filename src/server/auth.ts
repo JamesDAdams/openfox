@@ -109,7 +109,19 @@ function decryptPassword(privateKey: string, encryptedPassword: string): Buffer 
     try {
       return privateDecrypt({ key: privateKey, padding: constants.RSA_PKCS1_PADDING }, data)
     } catch {
-      return null
+      try {
+        const raw = privateDecrypt({ key: privateKey, padding: constants.RSA_NO_PADDING }, data)
+        const start = raw[0] === 0 ? 2 : raw[0] === 2 ? 1 : -1
+        if (start === -1) return null
+        for (let i = start; i < raw.length; i++) {
+          if (raw[i] === 0) {
+            return raw.subarray(i + 1)
+          }
+        }
+        return null
+      } catch {
+        return null
+      }
     }
   }
 }

@@ -24,6 +24,7 @@ export interface DropdownMenuItem {
 interface DropdownMenuProps {
   items: DropdownMenuItem[]
   footerItems?: DropdownMenuItem[]
+  header?: React.ReactNode
   trigger: React.ReactNode
   minWidth?: string
   /** Which edge of the trigger the menu's corresponding edge aligns to. */
@@ -38,6 +39,7 @@ interface DropdownMenuProps {
 export function DropdownMenu({
   items,
   footerItems = [],
+  header,
   trigger,
   minWidth = '120px',
   align = 'left',
@@ -323,6 +325,7 @@ export function DropdownMenu({
       }}
       tabIndex={-1}
     >
+      {header && <div className="p-2 border-b border-border">{header}</div>}
       {stack.length > 0 && (
         <button
           type="button"

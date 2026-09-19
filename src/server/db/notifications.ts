@@ -17,14 +17,42 @@ interface NotificationRow {
   read_at: string | null
 }
 
+function parseLocalizedString(value: string | null): LocalizedString | undefined {
+  if (!value) return undefined
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (typeof parsed === 'string') {
+      return { en: parsed, fr: parsed }
+    }
+    if (parsed && typeof parsed === 'object' && 'en' in parsed) {
+      return parsed as LocalizedString
+    }
+    return { en: String(parsed), fr: String(parsed) }
+  } catch {
+    return { en: value, fr: value }
+  }
+}
+
+function parseActions(value: string | null): PluginNotificationAction[] | undefined {
+  if (!value) return undefined
+  try {
+    return JSON.parse(value) as PluginNotificationAction[]
+  } catch {
+    return undefined
+  }
+}
+
 function toNotification(row: NotificationRow): PluginNotification {
+  const title = parseLocalizedString(row.title) ?? { en: row.title, fr: row.title }
+  const body = parseLocalizedString(row.body)
+  const actions = parseActions(row.actions)
   return {
     id: row.id,
     pluginId: row.plugin_id,
-    title: JSON.parse(row.title) as LocalizedString,
-    ...(row.body ? { body: JSON.parse(row.body) as LocalizedString } : {}),
+    title,
+    ...(body ? { body } : {}),
     level: row.level as PluginNotificationLevel,
-    ...(row.actions ? { actions: JSON.parse(row.actions) as PluginNotificationAction[] } : {}),
+    ...(actions ? { actions } : {}),
     createdAt: row.created_at,
     ...(row.read_at ? { readAt: row.read_at } : {}),
   }

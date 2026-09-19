@@ -10,7 +10,18 @@ import { EMPTY_PLUGIN_CONTRIBUTIONS } from '@shared/plugin.js'
 import type { PluginUiContributions, PluginInfo } from '@shared/plugin.js'
 
 const dataRef: { current: { plugins: PluginInfo[]; contributions: PluginUiContributions } } = {
-  current: { plugins: [], contributions: { actions: [], badges: [], panels: [], sections: [] } },
+  current: {
+    plugins: [],
+    contributions: {
+      actions: [],
+      badges: [],
+      panels: [],
+      sections: [],
+      components: [],
+      overrides: [],
+      settingsTabs: [],
+    },
+  },
 }
 
 vi.mock('../../hooks/usePlugins', () => ({
@@ -46,7 +57,18 @@ const DISABLED_PLUGIN: PluginInfo = { ...DEMO_PLUGIN, id: 'off', displayName: 'D
 
 describe('PluginMenu', () => {
   beforeEach(() => {
-    dataRef.current = { plugins: [], contributions: { actions: [], badges: [], panels: [], sections: [] } }
+    dataRef.current = {
+      plugins: [],
+      contributions: {
+        actions: [],
+        badges: [],
+        panels: [],
+        sections: [],
+        components: [],
+        overrides: [],
+        settingsTabs: [],
+      },
+    }
     invokePluginRpc.mockReset()
     useLocaleStore.setState({ locale: 'en' })
   })
@@ -65,6 +87,9 @@ describe('PluginMenu', () => {
     dataRef.current = {
       plugins: [DEMO_PLUGIN],
       contributions: {
+        components: [],
+        overrides: [],
+        settingsTabs: [],
         actions: [
           {
             id: 'open',
@@ -99,6 +124,9 @@ describe('PluginMenu', () => {
     dataRef.current = {
       plugins: [DEMO_PLUGIN, DISABLED_PLUGIN],
       contributions: {
+        components: [],
+        overrides: [],
+        settingsTabs: [],
         actions: [
           {
             id: 'needs-session',
@@ -131,7 +159,18 @@ describe('PluginMenu', () => {
   })
 
   it('lists a plugin with no visible actions', async () => {
-    dataRef.current = { plugins: [DEMO_PLUGIN], contributions: { actions: [], badges: [], panels: [], sections: [] } }
+    dataRef.current = {
+      plugins: [DEMO_PLUGIN],
+      contributions: {
+        actions: [],
+        badges: [],
+        panels: [],
+        sections: [],
+        components: [],
+        overrides: [],
+        settingsTabs: [],
+      },
+    }
     render(<PluginMenu context={{}} onManage={vi.fn()} />)
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Plugins' }))
@@ -146,7 +185,18 @@ describe('PluginMenu', () => {
   })
 
   it('fires onManage from the Manage plugins footer item', async () => {
-    dataRef.current = { plugins: [DEMO_PLUGIN], contributions: { actions: [], badges: [], panels: [], sections: [] } }
+    dataRef.current = {
+      plugins: [DEMO_PLUGIN],
+      contributions: {
+        actions: [],
+        badges: [],
+        panels: [],
+        sections: [],
+        components: [],
+        overrides: [],
+        settingsTabs: [],
+      },
+    }
     const onManage = vi.fn()
     render(<PluginMenu context={{}} onManage={onManage} />)
 

@@ -128,7 +128,8 @@ describe('plugin routes', () => {
     it('accepts scoped plugin ids without opening a folder', async () => {
       const res = await fetch(`${baseUrl}/api/plugins/@scope%2Fdemo/open-folder`)
       expect(res.status).toBe(200)
-      expect(openFolder).toHaveBeenCalledWith(expect.stringContaining('@scope/demo'))
+      const expectedPath = join('@scope', 'demo')
+      expect(openFolder).toHaveBeenCalledWith(expect.stringContaining(expectedPath))
     })
 
     it('rejects invalid plugin ids without opening a folder', async () => {

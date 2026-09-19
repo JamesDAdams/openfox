@@ -70,6 +70,8 @@ describe('PluginHost', () => {
       registry.registerCommand({ id: 'demo', name: 'Demo', prompt: 'do it' });
       registry.registerUiAction({ id: 'demo-action', slot: 'header.actions', label: { en: 'Demo', fr: 'Démo' }, onActivate: { kind: 'rpc', method: 'ping' } });
       registry.registerUiPanel({ id: 'demo-panel', title: { en: 'Demo panel', fr: 'Panneau démo' }, kind: 'declarative', content: [{ type: 'text', text: { en: 'Hi', fr: 'Salut' } }] });
+      registry.registerUiComponent({ id: 'demo-comp', zone: 'sidebar.header', component: { type: 'text', text: { en: 'Injected', fr: 'Injecté' } } });
+      registry.registerUiOverride({ id: 'demo-override', zone: 'header.brand', mode: 'hide' });
       registry.registerSettings({ fields: [{ key: 'token', type: 'password', label: { en: 'Token', fr: 'Jeton' }, secret: true }] });
       registry.registerRpc('ping', async () => 'pong');
       registry.registerHook('turn.completed', async () => {});
@@ -89,10 +91,14 @@ describe('PluginHost', () => {
     expect(info.contributions.commands).toBe(1)
     expect(info.contributions.uiActions).toBe(1)
     expect(info.contributions.uiPanels).toBe(1)
+    expect(info.contributions.uiComponents).toBe(1)
+    expect(info.contributions.uiOverrides).toBe(1)
     expect(info.contributions.rpcMethods).toBe(1)
     expect(info.contributions.hooks).toBe(1)
     expect(info.contributions.settingsFields).toBe(1)
     expect(host.getUiContributions().actions).toHaveLength(1)
+    expect(host.getUiContributions().components).toHaveLength(1)
+    expect(host.getUiContributions().overrides).toHaveLength(1)
   })
 
   it('keeps other plugins working when one register() throws', async () => {
