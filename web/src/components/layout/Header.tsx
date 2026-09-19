@@ -24,14 +24,17 @@ import { useUpdateStore } from '../../stores/update'
 import { useKeybindings, useBinding } from '../../hooks/useKeybindings'
 import { formatKeybinding } from '../../lib/keybindings'
 import { authFetch, hasStoredToken } from '../../lib/api'
-import { GlobalSettingsModal, OPEN_SETTINGS_EVENT, type SettingsTab } from '../settings/GlobalSettingsModal'
+import { GlobalSettingsModal, OPEN_SETTINGS_EVENT, type Tab } from '../settings/GlobalSettingsModal'
 import { TerminalDrawer } from '../terminal/TerminalDrawer'
 import { ProjectDropdown } from './ProjectDropdown'
 import { SessionDropdown } from './SessionDropdown'
 import { TasksModal } from '../tasks/TasksModal'
 import { useTasksStore } from '../../stores/tasks'
-import { TasksIcon, ArrowRightIcon } from '../shared/icons'
+import { TasksIcon, ArrowRightIcon, BellIcon, PuzzleIcon } from '../shared/icons'
 import { PluginZone } from '../plugins/PluginZone'
+import { PluginMenu, usePluginMenuItems } from '../plugins/PluginMenu'
+import { NotificationBell } from '../notifications/NotificationBell'
+import { useNotificationMenuItems } from '../notifications/NotificationCenter'
 import { useIsSplit } from '../../lib/splitPersistence'
 import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
 
@@ -43,7 +46,7 @@ interface HeaderProps {
 export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   const t = useT()
   const [showSettings, setShowSettings] = useState(false)
-  const [initialSettingsTab, setInitialSettingsTab] = useState<SettingsTab | undefined>(undefined)
+  const [settingsTab, setSettingsTab] = useState<Tab>('instructions')
   const [sessionDropdownOpen, setSessionDropdownOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement)
   const [location, setLocation] = useLocation()
@@ -63,6 +66,11 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   const session = useSessionStore((state) => state.currentSession)
   const sessions = useSessionStore((state) => state.sessions)
   const project = useCurrentProject()
+  const sessionContext = {
+    ...(session?.id ? { sessionId: session.id } : {}),
+    ...(session?.workdir ? { workdir: session.workdir } : {}),
+    ...(project?.id ? { projectId: project.id } : {}),
+  }
   const { projects } = useProjects()
   const { data: countsData } = useResource(summariesResource, project?.id ?? '')
   const runningTaskCount = countsData?.counts.running ?? 0
@@ -87,8 +95,8 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
 
   useEffect(() => {
     const handler = (e: Event) => {
-      const customEvent = e as CustomEvent<{ tab?: SettingsTab }>
-      setInitialSettingsTab(customEvent.detail?.tab)
+      const detail = (e as CustomEvent<{ tab?: Tab }>).detail
+      if (detail?.tab) setSettingsTab(detail.tab)
       setShowSettings(true)
     }
     window.addEventListener(OPEN_SETTINGS_EVENT, handler)
@@ -110,7 +118,32 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
     return () => stopAutoRefresh()
   }, [startAutoRefresh, stopAutoRefresh])
 
+  const notificationMenu = useNotificationMenuItems()
+  const pluginMenu = usePluginMenuItems(sessionContext, () => {
+    setSettingsTab('plugins')
+    setShowSettings(true)
+  })
+
   const mobileMenuItems: DropdownMenuItem[] = []
+  mobileMenuItems.push({
+    label: (
+      <span className="flex items-center gap-2">
+        {t({ en: 'Notifications', fr: 'Notifications' })}
+        {notificationMenu.unreadCount > 0 && (
+          <span className="min-w-3.5 h-3.5 px-0.5 rounded-full bg-accent-success text-white text-[9px] font-semibold flex items-center justify-center">
+            {notificationMenu.unreadCount > 99 ? '99+' : notificationMenu.unreadCount}
+          </span>
+        )}
+      </span>
+    ),
+    icon: <BellIcon className="w-4 h-4" />,
+    submenu: { items: notificationMenu.items, footerItems: notificationMenu.footerItems },
+  })
+  mobileMenuItems.push({
+    label: t({ en: 'Plugins', fr: 'Plugins' }),
+    icon: <PuzzleIcon className="w-4 h-4" />,
+    submenu: { items: pluginMenu.items, footerItems: pluginMenu.footerItems },
+  })
   if (isProjectPage) {
     mobileMenuItems.push({
       label: (
@@ -147,7 +180,10 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
       </span>
     ),
     icon: <SettingsIcon />,
-    onClick: () => setShowSettings(true),
+    onClick: () => {
+      setSettingsTab('instructions')
+      setShowSettings(true)
+    },
   })
   mobileMenuItems.push({
     label: isFullscreen
@@ -248,23 +284,6 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
               ...(session?.id ? { sessionId: session.id } : {}),
             }}
           >
-            {!isSplit && (
-              <button
-                onClick={() => {
-                  const sid = session?.id
-                  if (isSessionPage && sid) {
-                    void useSessionStore.getState().openPane(sid, { focus: true })
-                  }
-                  setLocation('/split-view')
-                }}
-                className="p-2.5 rounded hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
-                title={t({ en: 'Open split view', fr: 'Ouvrir la vue divisée' })}
-                aria-label={t({ en: 'Open split view', fr: 'Ouvrir la vue divisée' })}
-              >
-                <ColumnsIcon className="w-4 h-4" />
-              </button>
-            )}
-
             {isSplit && (
               <>
                 <span
@@ -317,6 +336,15 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
               </button>
             )}
 
+            <PluginMenu
+              context={sessionContext}
+              onManage={() => {
+                setSettingsTab('plugins')
+                setShowSettings(true)
+              }}
+            />
+            <NotificationBell />
+
             {isProjectPage && project && (
               <button
                 onClick={() => authFetch(`/api/projects/${project.id}/open-folder`).catch(() => {})}
@@ -328,7 +356,10 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
             )}
 
             <button
-              onClick={() => setShowSettings(true)}
+              onClick={() => {
+                setSettingsTab('instructions')
+                setShowSettings(true)
+              }}
               className="relative p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
               title={
                 updateAvailable
@@ -359,6 +390,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
               items={mobileMenuItems}
               align="right"
               minWidth="200px"
+              submenuBackLabel={t({ en: 'Back', fr: 'Retour' })}
               trigger={
                 <button
                   className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
@@ -391,14 +423,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
           )}
         </div>
 
-        <GlobalSettingsModal
-          isOpen={showSettings}
-          initialTab={initialSettingsTab}
-          onClose={() => {
-            setShowSettings(false)
-            setInitialSettingsTab(undefined)
-          }}
-        />
+        <GlobalSettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} initialTab={settingsTab} />
         <TerminalDrawer isOpen={terminalIsOpen} onClose={() => setTerminalOpen(false)} />
         {project && (
           <TasksModal isOpen={tasksModalOpen} onClose={() => setTasksModalOpen(false)} projectId={project.id} />

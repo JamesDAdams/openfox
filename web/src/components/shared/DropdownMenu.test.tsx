@@ -124,6 +124,68 @@ describe('DropdownMenu', () => {
     })
   })
 
+  describe('submenu drill-down', () => {
+    const SUBMENU_ITEMS: DropdownMenuItem[] = [
+      { label: 'Parent', submenu: { items: [{ label: 'Child 1', onClick: vi.fn() }, { label: 'Child 2' }] } },
+    ]
+
+    function clickItem(label: string) {
+      const menu = getMenu()
+      const button = Array.from(menu?.querySelectorAll('button') ?? []).find((b) => b.textContent?.includes(label))
+      if (!button) throw new Error(`Item "${label}" not found`)
+      act(() => {
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      })
+    }
+
+    it('replaces the menu content with the submenu when clicking a submenu item', () => {
+      const container = render(
+        <DropdownMenu items={SUBMENU_ITEMS} trigger={<button>Open</button>} submenuBackLabel="Back" />,
+      )
+      clickTrigger(container)
+      clickItem('Parent')
+      const menu = getMenu()
+      expect(menu?.textContent).toContain('Child 1')
+      expect(menu?.textContent).toContain('Child 2')
+      expect(menu?.textContent).not.toContain('Parent')
+      expect(menu?.textContent).toContain('Back')
+    })
+
+    it('keeps the menu open when entering a submenu', () => {
+      const container = render(
+        <DropdownMenu items={SUBMENU_ITEMS} trigger={<button>Open</button>} submenuBackLabel="Back" />,
+      )
+      clickTrigger(container)
+      clickItem('Parent')
+      expect(getMenu()).toBeTruthy()
+    })
+
+    it('returns to the parent menu with the back button', () => {
+      const container = render(
+        <DropdownMenu items={SUBMENU_ITEMS} trigger={<button>Open</button>} submenuBackLabel="Back" />,
+      )
+      clickTrigger(container)
+      clickItem('Parent')
+      clickItem('Back')
+      const menu = getMenu()
+      expect(menu?.textContent).toContain('Parent')
+      expect(menu?.textContent).not.toContain('Child 1')
+    })
+
+    it('renders submenu footer items', () => {
+      const items: DropdownMenuItem[] = [
+        {
+          label: 'Parent',
+          submenu: { items: [{ label: 'Child' }], footerItems: [{ label: 'Sub Footer' }] },
+        },
+      ]
+      const container = render(<DropdownMenu items={items} trigger={<button>Open</button>} submenuBackLabel="Back" />)
+      clickTrigger(container)
+      clickItem('Parent')
+      expect(getMenu()?.textContent).toContain('Sub Footer')
+    })
+  })
+
   // Keyboard navigation tests require useEffect to fire (keyboard listener + initial
   // selection are set up in effects). React.act doesn't flush effects in React 19,
   // so these can't be tested with unit tests. Covered by e2e tests instead.

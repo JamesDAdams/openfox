@@ -40,8 +40,8 @@ export function useNotifications() {
   const snapshot: NotificationsData = data ?? { notifications: [], unreadCount: 0 }
 
   return {
-    notifications: snapshot.notifications,
-    unreadCount: snapshot.unreadCount,
+    notifications: snapshot.notifications ?? [],
+    unreadCount: snapshot.unreadCount ?? 0,
     loading,
     refresh,
     markAllRead,

@@ -2,6 +2,12 @@ import { ScrollArea } from './ScrollArea'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'wouter'
+import { ArrowLeftIcon, ChevronRightIcon } from './icons'
+
+export interface DropdownMenuContent {
+  items: DropdownMenuItem[]
+  footerItems?: DropdownMenuItem[]
+}
 
 export interface DropdownMenuItem {
   label: string | React.ReactNode
@@ -11,6 +17,8 @@ export interface DropdownMenuItem {
   href?: string
   danger?: boolean
   closeOnClick?: boolean
+  /** Drill-down content rendered in place of the current level when activated. */
+  submenu?: DropdownMenuContent
 }
 
 interface DropdownMenuProps {
@@ -24,6 +32,8 @@ interface DropdownMenuProps {
   isOpen?: boolean
   onOpenChange?: (open: boolean) => void
   labelActionClassName?: string
+  /** Label of the back button shown on drilled-down submenu levels. */
+  submenuBackLabel?: React.ReactNode
 }
 
 export function DropdownMenu({
@@ -36,6 +46,7 @@ export function DropdownMenu({
   isOpen: controlledIsOpen,
   onOpenChange,
   labelActionClassName,
+  submenuBackLabel,
 }: DropdownMenuProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false)
   const isControlled = controlledIsOpen !== undefined
@@ -50,12 +61,29 @@ export function DropdownMenu({
   }
 
   const [position, setPosition] = useState<{ top: number; left: number; alignToTop: boolean } | null>(null)
+  const [stack, setStack] = useState<DropdownMenuContent[]>([])
+  const stackRef = useRef(stack)
   const triggerRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const selectedIndexRef = useRef(0)
-  const allItems = useMemo(() => [...items, ...footerItems], [items, footerItems])
+  const currentContent = stack.length > 0 ? stack[stack.length - 1]! : { items, footerItems }
+  const currentItems = currentContent.items
+  const currentFooterItems = currentContent.footerItems ?? []
+  const allItems = useMemo(() => [...currentItems, ...currentFooterItems], [currentItems, currentFooterItems])
   const allItemsRef = useRef(allItems)
+
+  useEffect(() => {
+    stackRef.current = stack
+  }, [stack])
+
+  const pushSubmenu = (content: DropdownMenuContent) => {
+    setStack((prev) => [...prev, content])
+  }
+
+  const popSubmenu = () => {
+    setStack((prev) => prev.slice(0, -1))
+  }
 
   const calculatePosition = useCallback(() => {
     if (!triggerRef.current) return
@@ -107,9 +135,7 @@ export function DropdownMenu({
     if (!isOpen) return
 
     setTimeout(() => {
-      if (!menuRef.current?.contains(document.activeElement)) {
-        menuRef.current?.focus()
-      }
+      menuRef.current?.focus()
     }, 0)
 
     function handleKeyDown(e: KeyboardEvent) {
@@ -144,7 +170,11 @@ export function DropdownMenu({
         case 'Escape':
           e.preventDefault()
           e.stopPropagation()
-          setIsOpen(false)
+          if (stackRef.current.length > 0) {
+            popSubmenu()
+          } else {
+            setIsOpen(false)
+          }
           break
       }
     }
@@ -188,6 +218,10 @@ export function DropdownMenu({
   function activateItemRef(index: number, itemsArr: DropdownMenuItem[]) {
     const item = itemsArr[index]
     if (!item || isHeaderItem(item)) return
+    if (item.submenu) {
+      pushSubmenu(item.submenu)
+      return
+    }
     item.onClick?.()
     if (item.href) {
       window.history.pushState(null, '', item.href)
@@ -207,6 +241,7 @@ export function DropdownMenu({
     e.stopPropagation()
     if (!isOpen) {
       calculatePosition()
+      setStack([])
     }
     setIsOpen(!isOpen)
   }
@@ -217,7 +252,8 @@ export function DropdownMenu({
     const content = (
       <>
         {item.icon && <span className="w-4 h-4 flex-shrink-0">{item.icon}</span>}
-        <span className="min-w-0">{item.label}</span>
+        <span className={`min-w-0 ${item.submenu ? 'flex-1' : ''}`}>{item.label}</span>
+        {item.submenu && <ChevronRightIcon className="w-4 h-4 text-text-muted flex-shrink-0" />}
       </>
     )
     const showBorder = index !== total - 1
@@ -244,6 +280,10 @@ export function DropdownMenu({
     ) : (
       <button
         onClick={(e) => {
+          if (item.submenu) {
+            pushSubmenu(item.submenu)
+            return
+          }
           item.onClick?.(e)
           if (item.closeOnClick !== false) {
             setIsOpen(false)
@@ -286,12 +326,24 @@ export function DropdownMenu({
       tabIndex={-1}
     >
       {header && <div className="p-2 border-b border-border">{header}</div>}
+      {stack.length > 0 && (
+        <button
+          type="button"
+          onClick={popSubmenu}
+          className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors border-b border-border"
+        >
+          <ArrowLeftIcon className="w-4 h-4" />
+          <span>{submenuBackLabel}</span>
+        </button>
+      )}
       <ScrollArea className="max-h-[60vh]">
-        {items.map((item, index) => renderItem(item, index, items.length, index))}
+        {currentItems.map((item, index) => renderItem(item, index, currentItems.length, index))}
       </ScrollArea>
-      {footerItems.length > 0 && (
+      {currentFooterItems.length > 0 && (
         <div className="border-t border-border">
-          {footerItems.map((item, index) => renderItem(item, index, footerItems.length, items.length + index))}
+          {currentFooterItems.map((item, index) =>
+            renderItem(item, index, currentFooterItems.length, currentItems.length + index),
+          )}
         </div>
       )}
     </div>

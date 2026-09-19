@@ -4,7 +4,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createPluginRoutes } from './plugins.js'
+import { openFolder } from '../utils/openFolder.js'
 import type { Config } from '../../shared/types.js'
+
+vi.mock('../utils/openFolder.js', () => ({ openFolder: vi.fn() }))
 
 const logger = {
   debug: vi.fn(),
@@ -46,6 +49,7 @@ describe('plugin routes', () => {
   })
 
   afterEach(async () => {
+    vi.clearAllMocks()
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await rm(rootDir, { recursive: true, force: true })
   })
@@ -121,14 +125,16 @@ describe('plugin routes', () => {
   })
 
   describe('GET /:id/open-folder', () => {
-    it('accepts scoped plugin ids', async () => {
+    it('accepts scoped plugin ids without opening a folder', async () => {
       const res = await fetch(`${baseUrl}/api/plugins/@scope%2Fdemo/open-folder`)
       expect(res.status).toBe(200)
+      expect(openFolder).toHaveBeenCalledWith(expect.stringContaining('@scope/demo'))
     })
 
-    it('rejects invalid plugin ids', async () => {
+    it('rejects invalid plugin ids without opening a folder', async () => {
       const res = await fetch(`${baseUrl}/api/plugins/bad%2F..%2Fid/open-folder`)
       expect(res.status).toBe(400)
+      expect(openFolder).not.toHaveBeenCalled()
     })
   })
 })

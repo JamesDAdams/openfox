@@ -1,5 +1,65 @@
 # Changelog
 
+## 2.0.150 - 2026-09-18
+
+### Features
+
+- **Plugin system** — install plugins from a curated registry, GitHub, npm, or a local folder.
+- **Plugins extend OpenFox** — providers, tools, commands, skills, and custom workflow transitions.
+- **Declarative plugin UI** — actions, badges, and panels in the header, composer, and sessions.
+- **Plugin notifications** — a new header bell with dropdown center and toasts.
+- **Plugin management tab** — enable, disable, reinstall, and uninstall plugins.
+
+### Enhancements
+
+- **Notifications moved to a header dropdown** — no more modal; clicking a notification marks it read.
+- **Plugin actions consolidated into one header menu** — with a direct shortcut to plugin management.
+- **Mobile menu gains nested submenus** — notifications and plugins now reachable from the hamburger menu.
+- **Workflow setup step guards existing workspaces** — already-used workspaces can no longer be selected.
+
+### Bug Fixes
+
+- **Pre-upgrade passwords work again** — passwords stored before the encryption upgrade now verify correctly.
+- **Tool-call timers survive reloads** — pending tool calls keep their elapsed-time display after reloading.
+- **Notification bell styling fixed** — icon color matches the header and the unread badge no longer clips.
+
+## 2.0.149 - 2026-09-15
+
+### Features
+
+- **Task attachments now readable by agents** — a new project_tasks get_attachment action returns image, text, and PDF attachments, with attachment metadata listed on task output.
+
+### Enhancements
+
+- **Retry pattern editor validates inline** — invalid regexes are flagged live as you type, and empty or invalid patterns are no longer saved.
+
+### Bug Fixes
+
+- **Empty retry patterns no longer loop every turn** — blank or invalid patterns are skipped server-side, so a stray empty pattern can't trigger infinite auto-retries.
+- **MCP tools honor their per-tool timeout** — calls no longer cap at the 60s default, and timed-out requests are aborted in flight.
+
+## 2.0.148 - 2026-09-14
+
+### Bug Fixes
+
+- **Sub-agent responses no longer truncate in long sessions** — sub-agent output is now budgeted against its own context instead of the parent session's, so plans and reviews run to completion even when the orchestrator session is huge.
+
+## 2.0.147 - 2026-09-14
+
+### Features
+
+- **Parallel workflow steps** — run sub-agent and shell steps concurrently inside one workflow step, capped by max concurrency, with per-child output keys to branch on.
+- **Parallel step editor** — build parallel steps in the workflow UI with a child list, per-child sub-agent/shell configuration, and slug-safe child ids.
+- **Project dropdown on session rows** — switch projects, start sessions, or open tasks directly from the home session list.
+
+### Enhancements
+
+- **Agent steps honor per-agent model overrides** — workflow steps pinned to a specific model (e.g. builder on Qwen) now actually run on it, matching the existing sub-agent behavior.
+
+### Bug Fixes
+
+- **Background process logs stream live** — the log viewer shows new output as it arrives without reopening the panel.
+
 ## 2.0.146 - 2026-09-12
 
 ### Bug Fixes
