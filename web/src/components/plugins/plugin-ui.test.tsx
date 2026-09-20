@@ -508,6 +508,84 @@ describe('PluginZone and DeclarativeRenderer', () => {
     await userEvent.setup().click(btn)
     expect(invokePluginRpc).toHaveBeenCalledWith('demo-plugin', 'testAction', {}, {})
   })
+
+  it('renders a ghost button matching native header buttons with icon and tooltip', async () => {
+    invokePluginRpc.mockResolvedValue('ok')
+    const { container } = render(
+      <DeclarativeRenderer
+        node={{
+          type: 'button',
+          label: { en: 'Plugin Button', fr: 'Bouton Plugin' },
+          icon: 'puzzle',
+          variant: 'ghost',
+          onActivate: { kind: 'rpc', method: 'pluginAction' },
+        }}
+        context={{ pluginId: 'demo-plugin' }}
+      />,
+    )
+    const btn = container.querySelector('button')
+    expect(btn).toBeTruthy()
+    expect(btn?.className).toContain('p-2.5 rounded hover:bg-bg-tertiary')
+    expect(btn?.getAttribute('title')).toBe('Plugin Button')
+    expect(btn?.getAttribute('aria-label')).toBe('Plugin Button')
+    expect(btn?.textContent).toBe('') // icon only, no inner label span
+    await userEvent.setup().click(btn!)
+    expect(invokePluginRpc).toHaveBeenCalledWith('demo-plugin', 'pluginAction', {}, {})
+  })
+
+  it('renders ghost button text label when no icon is provided', () => {
+    const { container } = render(
+      <DeclarativeRenderer
+        node={{
+          type: 'button',
+          label: { en: 'Cancel Action', fr: 'Annuler action' },
+          variant: 'ghost',
+          onActivate: { kind: 'rpc', method: 'cancel' },
+        }}
+        context={{ pluginId: 'demo-plugin' }}
+      />,
+    )
+    const btn = container.querySelector('button')
+    expect(btn).toBeTruthy()
+    expect(btn?.textContent).toBe('Cancel Action')
+    expect(container.querySelector('svg')).toBeNull()
+  })
+
+  it('renders a custom SVG path icon provided directly by a plugin', () => {
+    const customSvgPath = 'M3 13.5V11a9 9 0 0118 0v2.5M3 13.5h2.5M21 13.5h-2.5'
+    const { container } = render(
+      <DeclarativeRenderer
+        node={{
+          type: 'button',
+          label: { en: 'Custom Gauge', fr: 'Jauge personnalisée' },
+          icon: customSvgPath,
+          variant: 'ghost',
+          onActivate: { kind: 'rpc', method: 'gauge' },
+        }}
+        context={{ pluginId: 'demo-plugin' }}
+      />,
+    )
+    const pathEl = container.querySelector('svg path')
+    expect(pathEl).toBeTruthy()
+    expect(pathEl?.getAttribute('d')).toBe(customSvgPath)
+  })
+
+  it('dynamically resolves icon from shared/icons without being in static whitelist', () => {
+    const { container } = render(
+      <DeclarativeRenderer
+        node={{
+          type: 'button',
+          label: { en: 'Clock', fr: 'Horloge' },
+          icon: 'ClockIcon',
+          variant: 'ghost',
+          onActivate: { kind: 'rpc', method: 'clock' },
+        }}
+        context={{ pluginId: 'demo-plugin' }}
+      />,
+    )
+    const svgEl = container.querySelector('svg')
+    expect(svgEl).toBeTruthy()
+  })
 })
 
 describe('EMPTY_PLUGIN_CONTRIBUTIONS', () => {
