@@ -174,7 +174,7 @@ export interface TopLevelLoopConfig {
    *  system prompt + tools become canonical for that window. */
   rebuildCachedContext?: (() => Promise<void> | void) | undefined
   /** When set, assistant messages are tagged with sub-agent metadata for scope isolation. */
-  subAgentMetadata?: { subAgentId: string; subAgentType: string }
+  subAgentMetadata?: { subAgentId: string; subAgentType: string; subAgentName?: string }
   /** When set and return_value tool is called, emit done events and break immediately. */
   breakOnReturnValue?: boolean
   /** When set, if the loop would normally break without return_value being called,
@@ -211,6 +211,13 @@ export async function runTopLevelAgentLoop(
   const { mode, sessionManager, sessionId, llmClient, signal, onMessage, statsIdentity } = config
   const append = config.append
   const agentType = config.subAgentMetadata ? ('sub-agent' as const) : undefined
+  // Sub-agent identity tags spread into scoped events (assistant messages,
+  // compaction prompt/summary, rejection, nudges) so they stay in the
+  // sub-agent's context and chatfeed window. Empty for top-level runs.
+  const subAgentTags = (): { subAgentId?: string; subAgentType?: string } =>
+    config.subAgentMetadata
+      ? { subAgentId: config.subAgentMetadata.subAgentId, subAgentType: config.subAgentMetadata.subAgentType }
+      : {}
   // Fresh per attempt when a resolver is provided (provider switch mid-turn).
   const resolveClient = () => config.getLLMClient?.() ?? llmClient
 
@@ -357,9 +364,7 @@ export async function runTopLevelAgentLoop(
         append(
           createMessageStartEvent(assistantMsgId, 'assistant', undefined, {
             ...(currentWindowMessageOptions ?? {}),
-            ...(config.subAgentMetadata
-              ? { subAgentId: config.subAgentMetadata.subAgentId, subAgentType: config.subAgentMetadata.subAgentType }
-              : {}),
+            ...subAgentTags(),
           }),
         )
       }
@@ -595,7 +600,7 @@ export async function runTopLevelAgentLoop(
             runtimeConfig.context.compactionThreshold,
         )
       ) {
-        appendCompactionPrompt(sessionId, append)
+        appendCompactionPrompt(sessionId, append, config.subAgentMetadata)
         compacting = true
         continue
       }
@@ -668,6 +673,7 @@ ${COMPACTION_PROMPT}`,
               ...(currentWindowMessageOptions ?? {}),
               isSystemGenerated: true,
               messageKind: 'correction',
+              ...subAgentTags(),
             },
           ),
         )
@@ -785,23 +791,36 @@ ${COMPACTION_PROMPT}`,
 
       // The new context window starts fresh — apply the current system prompt
       // + tools so they are canonical and never stale there. Best-effort: a
-      // rebuild failure must not break the compaction itself.
-      try {
-        await config.rebuildCachedContext?.()
-      } catch (error) {
-        logger.error('Failed to rebuild cached context after compaction', {
-          sessionId,
-          error: error instanceof Error ? error.message : String(error),
-        })
+      // rebuild failure must not break the compaction itself. Top-level only:
+      // a sub-agent compaction must never rebuild the parent's cached context
+      // or reinject the parent's reminder.
+      if (!config.subAgentMetadata) {
+        try {
+          await config.rebuildCachedContext?.()
+        } catch (error) {
+          logger.error('Failed to rebuild cached context after compaction', {
+            sessionId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
       }
 
       const closedWindowId = getCurrentContextWindowId(sessionId) ?? ''
-      const newWindowId = crypto.randomUUID()
+      // Sub-agent compaction is scoped: it stays in the current window (the
+      // parent's window must not rotate), so no fresh window id is minted.
+      const newWindowId = config.subAgentMetadata ? closedWindowId : crypto.randomUUID()
       const tokenCountAtClose = result.usage.promptTokens
 
       append({
         type: 'context.compacted',
-        data: { closedWindowId, newWindowId, beforeTokens: tokenCountAtClose, afterTokens: 0, summary },
+        data: {
+          closedWindowId,
+          newWindowId,
+          beforeTokens: tokenCountAtClose,
+          afterTokens: 0,
+          summary,
+          ...subAgentTags(),
+        },
       })
 
       append({
@@ -812,13 +831,38 @@ ${COMPACTION_PROMPT}`,
           content: summary,
           contextWindowId: newWindowId,
           isCompactionSummary: true,
+          ...subAgentTags(),
         },
       })
       append(createMessageDoneEvent(assistantMsgId, { stats: turnMetrics.buildStats(statsIdentity, mode) }))
       append(createChatDoneEvent(assistantMsgId, 'complete', undefined, agentType))
 
-      // Reinject the agent reminder into the new window
-      config.injectAgentReminder?.()
+      // Sub-agent compaction: emit a fresh-context marker so the chatfeed
+      // shows a new window boundary — mirrors the reinjected agent reminder
+      // the top-level agent gets after compaction. Purely visual (excluded
+      // from LLM context), scoped to the sub-agent.
+      if (config.subAgentMetadata) {
+        const freshMsgId = crypto.randomUUID()
+        append(
+          createMessageStartEvent(
+            freshMsgId,
+            'user',
+            `Fresh Context - ${config.subAgentMetadata.subAgentName ?? config.subAgentMetadata.subAgentType} Sub-Agent`,
+            {
+              ...(currentWindowMessageOptions ?? {}),
+              isSystemGenerated: true,
+              messageKind: 'context-reset',
+              ...subAgentTags(),
+            },
+          ),
+        )
+        append({ type: 'message.done', data: { messageId: freshMsgId } })
+      }
+
+      // Reinject the agent reminder into the new window (top-level only)
+      if (!config.subAgentMetadata) {
+        config.injectAgentReminder?.()
+      }
       compacting = false
 
       // Manual compaction (initialCompacting) is a one-shot operation — break after done.
@@ -842,9 +886,7 @@ ${COMPACTION_PROMPT}`,
               ...(currentWindowMessageOptions ?? {}),
               isSystemGenerated: true,
               messageKind: 'correction',
-              ...(config.subAgentMetadata
-                ? { subAgentId: config.subAgentMetadata.subAgentId, subAgentType: config.subAgentMetadata.subAgentType }
-                : {}),
+              ...subAgentTags(),
             },
           ),
         )

@@ -346,7 +346,7 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
         )
         return getConversationMessages(subAgentScope, { events: processedEvents })
       },
-      subAgentMetadata: { subAgentId, subAgentType },
+      subAgentMetadata: { subAgentId, subAgentType, subAgentName: agentDef.metadata.name },
       breakOnReturnValue: true,
       requireReturnValue: true,
     },
