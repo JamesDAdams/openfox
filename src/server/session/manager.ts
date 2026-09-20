@@ -89,6 +89,7 @@ import {
   emitMetadataSet,
   emitContextState,
   getCurrentContextWindowId,
+  getCurrentWindowMessages,
 } from '../events/index.js'
 import type { Message, CriterionStatus } from '../../shared/types.js'
 import { isInDangerZone, canCompact } from '../context/tokenizer.js'
@@ -471,8 +472,20 @@ export class SessionManager {
     const state = getSessionState(originalSessionId)
     if (!state) throw new Error(`Session ${originalSessionId} has no state`)
 
-    const msgIndex = state.messages.findIndex((m) => m.id === messageId)
-    if (msgIndex === -1) throw new Error(`Message ${messageId} not found`)
+    // Fork only the latest context window: compacted sessions keep every
+    // historical window in state.messages, but the LLM prefix only covers the
+    // current window. Copying all of them would change the forked session's
+    // request prefix and defeat the provider-side prefix cache.
+    const windowMessages = getCurrentWindowMessages(originalSessionId)
+    const msgIndex = windowMessages.findIndex((m) => m.id === messageId)
+    if (msgIndex === -1) {
+      if (state.messages.some((m) => m.id === messageId)) {
+        throw new Error(
+          `Message ${messageId} belongs to a compacted context window; only the latest context window can be forked`,
+        )
+      }
+      throw new Error(`Message ${messageId} not found`)
+    }
 
     const newSession = this.createSession(
       projectId,
@@ -483,7 +496,7 @@ export class SessionManager {
     )
     const newWindowId = getCurrentContextWindowId(newSession.id) ?? crypto.randomUUID()
 
-    const messages = state.messages.slice(0, msgIndex + 1)
+    const messages = windowMessages.slice(0, msgIndex + 1)
 
     const snapshot: import('../events/types.js').SessionSnapshot = {
       mode: state.mode,
