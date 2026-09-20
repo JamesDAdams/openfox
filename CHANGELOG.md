@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.0.153 - 2026-09-20
+
+### Features
+
+- **write_file and edit_file previews stream live** — the file content, edit context, and diff update with auto-scroll as the tool call runs.
+- **New "Show live tool call previews" display setting** — opt out of streaming previews if you prefer.
+
+### Enhancements
+
+- **Forking a compacted session preserves prompt-cache hits** — only the latest context window is copied.
+- **Fork errors from the server now surface** — instead of a generic failure message.
+
+### Bug Fixes
+
+- **Drift reminders land in the running sub-agent's window** — no longer cluttering the main session.
+- **Sub-agent compactions now work** — post-compaction reasoning streams into the thinking block instead of visible content, and the parent context window is no longer rotated or inflated.
+
 ## 2.0.152 - 2026-09-20
 
 ### Features
