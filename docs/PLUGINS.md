@@ -307,7 +307,7 @@ registry.registerUiBadge({
 registry.registerUiPanel({
   id: 'quota',
   title: { en: 'Usage & quota', fr: 'Utilisation et quota' },
-  size: 'md',
+  size: 'xl', // 'sm' | 'md' | 'lg' | 'xl' (80vw) | 'full' (95vw) (default: 'md')
   kind: 'declarative',
   content: [
     { type: 'text', text: { en: 'Live usage', fr: 'Utilisation en direct' } },

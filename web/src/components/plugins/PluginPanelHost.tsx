@@ -8,10 +8,12 @@ import { DeclarativeRenderer } from './DeclarativeRenderer'
 import type { PluginActionContext } from './plugin-ui-utils'
 import type { PluginUiPanel } from '@shared/plugin.js'
 
-const PANEL_SIZES: Record<NonNullable<PluginUiPanel['size']>, 'sm' | 'md' | 'lg'> = {
+const PANEL_SIZES: Record<NonNullable<PluginUiPanel['size']>, 'sm' | 'md' | 'lg' | 'xl' | 'full'> = {
   sm: 'sm',
   md: 'md',
   lg: 'lg',
+  xl: 'xl',
+  full: 'full',
 }
 
 export function PluginPanelHost() {

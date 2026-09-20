@@ -237,6 +237,7 @@ matters architecturally:
 
 - The web fetches `GET /api/plugins/ui` → `{ actions, badges, panels, sections }`
   from `registry.getUiContributions()` — ownership stamped on every entry.
+- Panels support sizes (`'sm'`, `'md'`, `'lg'`, `'xl'`, `'full'`), rendered via `Modal` or iframe.
 - Actions dispatch through `web/src/lib/plugin-actions.ts` (`rpc` / `openPanel`
   / `openUrl`), so a notification action and a header button use the exact same
   activation contract.

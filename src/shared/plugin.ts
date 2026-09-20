@@ -183,7 +183,7 @@ export interface PluginUiPanel {
   id: string
   pluginId?: string
   title: LocalizedString
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
   kind: 'declarative' | 'iframe'
   content?: DeclarativeNode[]
   url?: string
