@@ -429,6 +429,22 @@ describe('SessionManager', () => {
     expect(subAgentCtx.compactionCount).toBe(0)
   })
 
+  it('tracks the active sub-agent per session and clears it', () => {
+    const session = manager.createSession(projectId)
+
+    expect(manager.getActiveSubAgent(session.id)).toBeUndefined()
+
+    manager.setActiveSubAgent(session.id, { subAgentId: 'sub-1', subAgentType: 'explorer' })
+    expect(manager.getActiveSubAgent(session.id)).toEqual({ subAgentId: 'sub-1', subAgentType: 'explorer' })
+
+    // Scoped per session — another session stays empty
+    const other = manager.createSession(projectId)
+    expect(manager.getActiveSubAgent(other.id)).toBeUndefined()
+
+    manager.setActiveSubAgent(session.id, undefined)
+    expect(manager.getActiveSubAgent(session.id)).toBeUndefined()
+  })
+
   it('getContextState uses latest context.state event value', () => {
     const session = manager.createSession(projectId)
 

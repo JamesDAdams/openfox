@@ -159,6 +159,10 @@ export class SessionManager {
   // turn, and the warning is only worth one line per session.
   private unknownProviderWarned = new Set<string>()
   private subAgentContextSizes = new Map<string, number>()
+  // The sub-agent currently running per session (last-wins when parallel).
+  // Used to scope system-generated events (drift reminders) to the sub-agent
+  // window instead of the main session.
+  private activeSubAgents = new Map<string, { subAgentId: string; subAgentType: string }>()
   private switchLocks = new Map<string, Promise<unknown>>()
   private workspaceCreationLocks = new Map<string, Promise<void>>()
   // Cooperative pause: in-memory only (a pause is only meaningful for a live,
@@ -1585,6 +1589,20 @@ export class SessionManager {
   /** Tokens used by a sub-agent's own scoped context (fresh, never-compacted). */
   getSubAgentContextTokens(subAgentId: string): number | undefined {
     return this.subAgentContextSizes.get(subAgentId)
+  }
+
+  /** Record the sub-agent currently running for a session (undefined clears it). */
+  setActiveSubAgent(sessionId: string, subAgent: { subAgentId: string; subAgentType: string } | undefined): void {
+    if (subAgent) {
+      this.activeSubAgents.set(sessionId, subAgent)
+    } else {
+      this.activeSubAgents.delete(sessionId)
+    }
+  }
+
+  /** The sub-agent currently running for a session, if any. */
+  getActiveSubAgent(sessionId: string): { subAgentId: string; subAgentType: string } | undefined {
+    return this.activeSubAgents.get(sessionId)
   }
 
   // ============================================================================
