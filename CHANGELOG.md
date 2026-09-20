@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.152 - 2026-09-20
+
+### Features
+
+- **Plugin buttons gain a ghost variant** — matches native header button styling and shows the text label when no icon is set.
+- **Plugin icons accept SVG paths or raw markup** — icons also resolve dynamically by name from the built-in icon set, no whitelist needed.
+
+### Enhancements
+
+- **Sub-agent calls run sequentially by default** — several sub-agent calls in one batch no longer compete for context on local models; a new Advanced setting restores parallelism.
+
 ## 2.0.151 - 2026-09-19
 
 ### Features
