@@ -146,10 +146,10 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
           title={labelText || undefined}
           aria-label={labelText || undefined}
           onClick={() => void activatePluginAction(context.pluginId, node.onActivate, context)}
-          className={`transition-colors ${
+          className={`transition-colors inline-flex items-center justify-center ${
             isGhost
               ? `${BUTTON_VARIANT_CLASSES.ghost} ${!Icon ? 'px-2.5 py-1.5 text-sm' : ''}`
-              : `inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium ${
+              : `gap-1.5 px-3 py-1.5 rounded text-sm font-medium ${
                   BUTTON_VARIANT_CLASSES[node.variant ?? 'default']
                 }`
           }`}
