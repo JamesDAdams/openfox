@@ -30,6 +30,7 @@ import {
   recordLLMFailure,
   clearLLMFailure,
 } from './stream-pure.js'
+import { computeLiveEditContext } from './edit-file-preview.js'
 import { getCurrentContextWindowId, getCurrentWindowMessageOptions } from '../events/index.js'
 import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
@@ -414,8 +415,21 @@ export async function runTopLevelAgentLoop(
         ...(modelSettings && { modelSettings }),
       })
 
-      const attemptResult = await consumeStreamGenerator(streamGen, (event) => {
+      // Per-turn cache of file contents read to build live edit context for
+      // streaming edit_file preparing events.
+      const editFileContentCache = new Map<string, string>()
+
+      const attemptResult = await consumeStreamGenerator(streamGen, async (event) => {
         ensureAssistantMessage()
+        // While the LLM streams an edit_file call, enrich its preparing events
+        // with a live edit context (surrounding lines) computed from the file —
+        // the same shape the final tool result carries. The file content is
+        // read once per path for the whole turn.
+        if (event.type === 'tool.preparing' && event.data.name === 'edit_file') {
+          const editContext = await computeLiveEditContext(event.data.arguments, session.workdir, editFileContentCache)
+          append(editContext && editContext.length > 0 ? { ...event, data: { ...event.data, editContext } } : event)
+          return
+        }
         append(event)
       })
 

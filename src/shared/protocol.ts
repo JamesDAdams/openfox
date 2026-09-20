@@ -14,6 +14,7 @@ import type {
   ToolResult,
   ContextState,
   Attachment,
+  EditContextRegion,
 } from './types.js'
 
 // ============================================================================
@@ -266,6 +267,7 @@ export interface ChatToolPreparingPayload {
   index: number // Tool call index (for multiple parallel calls)
   name: string // Tool name (available early in stream)
   arguments?: string // Partial arguments (streaming JSON fragments)
+  editContext?: EditContextRegion[] // Live edit context for streaming edit_file
 }
 
 export interface ChatToolCallPayload {

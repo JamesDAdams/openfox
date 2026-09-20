@@ -390,6 +390,7 @@ export interface PreparingToolCall {
   index: number // Tool call index (for matching when complete)
   name: string // Tool name (available early in stream)
   arguments?: string // Partial arguments (streaming JSON fragments)
+  editContext?: EditContextRegion[] // Live edit context for streaming edit_file
 }
 
 export interface Attachment {

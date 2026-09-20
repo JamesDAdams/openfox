@@ -1168,3 +1168,78 @@ describe('feed memory bounds', () => {
     expect(capped[0]?.timestamp).toBeGreaterThan(chunks[0]!.timestamp)
   })
 })
+
+describe('chat.tool_preparing handler', () => {
+  beforeEach(() => {
+    wsSendMock.mockClear()
+    wsSubscribeMock.mockClear()
+    wsConnectMock.mockClear()
+    wsDisconnectMock.mockClear()
+    wsStatusMock.mockClear()
+    playNotificationMock.mockClear()
+    playAchievementMock.mockClear()
+    playInterventionMock.mockClear()
+    playWaitingForUserMock.mockClear()
+    playNewMessageMock.mockClear()
+    fetchMock.mockClear()
+  })
+
+  it('preserves the live edit context streamed with edit_file preparing events', async () => {
+    const useSessionStore = await loadSessionStore()
+    useSessionStore.setState((state) => ({
+      ...state,
+      currentSession: { id: 'session-1' } as any,
+    }))
+    const handler = useSessionStore.getState().handleServerMessage
+
+    handler({
+      type: 'chat.message',
+      sessionId: 'session-1',
+      payload: { message: { id: 'm1', role: 'assistant', content: '' } as any },
+    })
+
+    const editContext = [
+      {
+        startLine: 3,
+        endLine: 3,
+        beforeContext: [{ lineNumber: 2, content: 'line two' }],
+        afterContext: [{ lineNumber: 4, content: 'line four' }],
+        oldContent: 'a',
+        newContent: 'b',
+        edits: [{ startLine: 3, endLine: 3, oldContent: 'a', newContent: 'b' }],
+      },
+    ]
+
+    handler({
+      type: 'chat.tool_preparing',
+      sessionId: 'session-1',
+      payload: {
+        messageId: 'm1',
+        index: 0,
+        name: 'edit_file',
+        arguments: '{"path":"a.ts","old_string":"a"}',
+        editContext,
+      } as any,
+    })
+
+    const pane = useSessionStore.getState().panes['session-1']
+    const preparing = pane?.messages[0]?.preparingToolCalls?.[0]
+    expect(preparing?.editContext).toEqual(editContext)
+
+    // A later delta without editContext must not clobber the previous one.
+    handler({
+      type: 'chat.tool_preparing',
+      sessionId: 'session-1',
+      payload: {
+        messageId: 'm1',
+        index: 0,
+        name: 'edit_file',
+        arguments: '{"path":"a.ts","old_string":"a","new_string":"b"}',
+      } as any,
+    })
+
+    const preparing2 = useSessionStore.getState().panes['session-1']?.messages[0]?.preparingToolCalls?.[0]
+    expect(preparing2?.editContext).toEqual(editContext)
+    expect(preparing2?.arguments).toBe('{"path":"a.ts","old_string":"a","new_string":"b"}')
+  })
+})
