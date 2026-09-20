@@ -620,7 +620,15 @@ export function handleServerMessage(
           let preparingToolCalls: typeof existing
           if (existingIndex >= 0) {
             preparingToolCalls = existing.map((p, i) =>
-              i === existingIndex ? { ...p, arguments: payload.arguments } : p,
+              i === existingIndex
+                ? {
+                    ...p,
+                    arguments: payload.arguments,
+                    ...(payload.editContext && payload.editContext.length > 0
+                      ? { editContext: payload.editContext }
+                      : {}),
+                  }
+                : p,
             )
           } else {
             preparingToolCalls = [
@@ -629,6 +637,7 @@ export function handleServerMessage(
                 index: payload.index,
                 name: payload.name,
                 ...(payload.arguments ? { arguments: payload.arguments } : {}),
+                ...(payload.editContext && payload.editContext.length > 0 ? { editContext: payload.editContext } : {}),
               },
             ]
           }

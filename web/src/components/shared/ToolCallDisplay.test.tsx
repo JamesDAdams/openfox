@@ -13,9 +13,16 @@ vi.mock('./RunCommandView', () => ({
   RunCommandView: () => <div data-testid="run-command-view">command output content</div>,
 }))
 
+const { filePreviewCaptureMock } = vi.hoisted(() => ({
+  filePreviewCaptureMock: vi.fn(),
+}))
+
 vi.mock('./DiffView', () => ({
   DiffView: () => <div data-testid="diff-view">diff output</div>,
-  FilePreview: () => <div data-testid="file-preview">file preview</div>,
+  FilePreview: (props: unknown) => {
+    filePreviewCaptureMock(props)
+    return <div data-testid="file-preview">file preview</div>
+  },
   EditContextView: () => <div data-testid="edit-context-view">edit context</div>,
   ReadFileView: () => <div data-testid="read-file-view">read file output</div>,
 }))
@@ -361,6 +368,24 @@ describe('ToolCallDisplay — default expansion', () => {
     )
 
     expect(container.querySelector('[data-testid="file-preview"]')).not.toBeNull()
+  })
+
+  it('renders the finished write_file preview without the live streaming flag', () => {
+    filePreviewCaptureMock.mockClear()
+    render(
+      <ToolCallDisplay
+        tool="write_file"
+        args={{ path: '/tmp/x.ts', content: 'final content' }}
+        status="success"
+        variant="expandable"
+      />,
+    )
+
+    expect(filePreviewCaptureMock.mock.calls.length).toBeGreaterThan(0)
+    for (const call of filePreviewCaptureMock.mock.calls) {
+      expect(call[0]).toMatchObject({ filePath: '/tmp/x.ts', content: 'final content' })
+      expect((call[0] as { streaming?: boolean }).streaming).toBeFalsy()
+    }
   })
 })
 

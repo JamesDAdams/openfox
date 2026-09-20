@@ -86,6 +86,34 @@ describe('DisplayTab Composer setting', () => {
   })
 })
 
+describe('DisplayTab tool call streaming toggle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.keys(mockSettings).forEach((k) => delete mockSettings[k])
+    setLocale('en')
+  })
+
+  it('renders the live tool call previews toggle on by default', () => {
+    render(<DisplayTab />)
+
+    const label = screen.getByText('Show live tool call previews').closest('label') as HTMLElement
+    expect(label).toBeTruthy()
+    const toggle = within(label).getByRole('button')
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('persists turning the live previews toggle off', async () => {
+    const user = userEvent.setup()
+    render(<DisplayTab />)
+
+    const label = screen.getByText('Show live tool call previews').closest('label') as HTMLElement
+    const toggle = within(label).getByRole('button')
+    await user.click(toggle)
+
+    expect(mockSetSetting).toHaveBeenCalledWith(SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING, 'false')
+  })
+})
+
 describe('DisplayTab Model Selector', () => {
   beforeEach(() => {
     vi.clearAllMocks()

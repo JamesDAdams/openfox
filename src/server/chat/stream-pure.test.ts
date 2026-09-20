@@ -226,6 +226,114 @@ describe('stream-pure', () => {
     })
   })
 
+  it('streams partial arguments for write_file', async () => {
+    const client = createMockClient([
+      { type: 'tool_call_delta', index: 0, name: 'write_file' },
+      { type: 'tool_call_delta', index: 0, arguments: '{"path":"src/app.ts","content":"const x = 1' },
+      { type: 'tool_call_delta', index: 0, arguments: ';\\n' },
+      { type: 'tool_call_delta', index: 0, arguments: 'export default x"}' },
+      {
+        type: 'done',
+        response: {
+          id: 'resp-1',
+          content: '',
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'write_file',
+              arguments: { path: 'src/app.ts', content: 'const x = 1;\nexport default x' },
+            },
+          ],
+          finishReason: 'tool_calls',
+          usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+        },
+      },
+    ])
+
+    const gen = streamLLMPure({
+      messageId: 'msg-write',
+      systemPrompt: 'system',
+      llmClient: client,
+      messages: [{ role: 'user', content: 'write' }],
+      tools: [{ type: 'function', function: { name: 'write_file', description: 'Write', parameters: {} } }],
+    })
+
+    const events: Array<{ type: string; data: unknown }> = []
+    await consumeStreamGenerator(gen, (event) => {
+      events.push(event)
+    })
+
+    const preparingEvents = events.filter((e) => e.type === 'tool.preparing')
+    expect(preparingEvents).toHaveLength(4)
+    expect(preparingEvents[0]!).toMatchObject({ data: { name: 'write_file' } })
+    expect(preparingEvents[1]!).toMatchObject({
+      data: { name: 'write_file', arguments: '{"path":"src/app.ts","content":"const x = 1' },
+    })
+    expect(preparingEvents[2]!).toMatchObject({
+      data: { name: 'write_file', arguments: '{"path":"src/app.ts","content":"const x = 1;\\n' },
+    })
+    expect(preparingEvents[3]!).toMatchObject({
+      data: { name: 'write_file', arguments: '{"path":"src/app.ts","content":"const x = 1;\\nexport default x"}' },
+    })
+  })
+
+  it('streams partial arguments for edit_file', async () => {
+    const client = createMockClient([
+      { type: 'tool_call_delta', index: 0, name: 'edit_file' },
+      {
+        type: 'tool_call_delta',
+        index: 0,
+        arguments: '{"path":"src/app.ts","old_string":"const x = 1","new_string":"const x',
+      },
+      { type: 'tool_call_delta', index: 0, arguments: ' = 2"}' },
+      {
+        type: 'done',
+        response: {
+          id: 'resp-1',
+          content: '',
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'edit_file',
+              arguments: { path: 'src/app.ts', old_string: 'const x = 1', new_string: 'const x = 2' },
+            },
+          ],
+          finishReason: 'tool_calls',
+          usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+        },
+      },
+    ])
+
+    const gen = streamLLMPure({
+      messageId: 'msg-edit',
+      systemPrompt: 'system',
+      llmClient: client,
+      messages: [{ role: 'user', content: 'edit' }],
+      tools: [{ type: 'function', function: { name: 'edit_file', description: 'Edit', parameters: {} } }],
+    })
+
+    const events: Array<{ type: string; data: unknown }> = []
+    await consumeStreamGenerator(gen, (event) => {
+      events.push(event)
+    })
+
+    const preparingEvents = events.filter((e) => e.type === 'tool.preparing')
+    expect(preparingEvents).toHaveLength(3)
+    expect(preparingEvents[0]!).toMatchObject({ data: { name: 'edit_file' } })
+    expect(preparingEvents[1]!).toMatchObject({
+      data: {
+        name: 'edit_file',
+        arguments: '{"path":"src/app.ts","old_string":"const x = 1","new_string":"const x',
+      },
+    })
+    expect(preparingEvents[2]!).toMatchObject({
+      data: {
+        name: 'edit_file',
+        arguments: '{"path":"src/app.ts","old_string":"const x = 1","new_string":"const x = 2"}',
+      },
+    })
+  })
+
   it('treats AbortError as an aborted result', async () => {
     const controller = new AbortController()
     controller.abort()

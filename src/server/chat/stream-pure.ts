@@ -308,9 +308,16 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
           } else if (seenToolIndices.has(value.index) && value.arguments) {
             // Only stream partial arguments for tools that display them live
             // (run_command shows the command text, return_value shows sub-agent
-            // output, session_metadata shows the item being added)
+            // output, session_metadata shows the item being added, write_file
+            // and edit_file show the file content/diff while it streams in)
             const name = toolNames.get(value.index)
-            if (name === 'run_command' || name === 'return_value' || name === 'session_metadata') {
+            if (
+              name === 'run_command' ||
+              name === 'return_value' ||
+              name === 'session_metadata' ||
+              name === 'write_file' ||
+              name === 'edit_file'
+            ) {
               const accumulatedArgs = toolArgs.get(value.index)
               if (accumulatedArgs) {
                 yield {
@@ -771,7 +778,7 @@ export function createChatDoneEvent(
  */
 export async function consumeStreamGenerator(
   gen: AsyncGenerator<TurnEvent, PureStreamResult>,
-  onEvent: (event: TurnEvent) => void,
+  onEvent: (event: TurnEvent) => void | Promise<void>,
 ): Promise<PureStreamResult> {
   let result: IteratorResult<TurnEvent, PureStreamResult>
 
@@ -780,6 +787,6 @@ export async function consumeStreamGenerator(
     if (result.done) {
       return result.value
     }
-    onEvent(result.value)
+    await onEvent(result.value)
   }
 }

@@ -225,6 +225,8 @@ export const AssistantMessage = memo(function AssistantMessage({
                   key={`preparing-${element.preparing.index}`}
                   name={element.preparing.name}
                   arguments={element.preparing.arguments}
+                  editContext={element.preparing.editContext}
+                  forceCompact={!showVerboseToolOutput}
                 />
               )
 
