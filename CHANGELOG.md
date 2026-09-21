@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.154 - 2026-09-21
+
+### Features
+
+- **Write/edit on unread files now fails fast** — the call aborts mid-stream once the path arrives, saving tokens on doomed payloads.
+
+### Enhancements
+
+- **Live tool call previews are now opt-in** — off by default; re-enable in Display settings.
+
 ## 2.0.153 - 2026-09-20
 
 ### Features
