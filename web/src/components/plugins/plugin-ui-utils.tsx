@@ -69,74 +69,95 @@ export function pluginIcon(name: string | undefined): IconComponent {
     }
   }
 
-  // 2. Lookup in ICON_EXPORTS
-  const exportName = ICON_EXPORTS[name.toLowerCase()]
-  if (exportName && exportsIcon(exportName)) {
-    return exportsIcon(exportName)!
+  // 2. Direct named export lookup
+  const direct = exportsIcon(name)
+  if (direct) return direct
+
+  // 3. Known alias lookup
+  const mapped = ICON_EXPORTS[name.toLowerCase()]
+  if (mapped) {
+    const fromMapped = exportsIcon(mapped)
+    if (fromMapped) return fromMapped
   }
 
-  // 3. Dynamic lookup from shared/icons
-  const pascalName = name.charAt(0).toUpperCase() + name.slice(1)
-  const candidateWithIcon = pascalName.endsWith('Icon') ? pascalName : `${pascalName}Icon`
-  if (exportsIcon(candidateWithIcon)) {
-    return exportsIcon(candidateWithIcon)!
+  // 4. Case-insensitive lookup (e.g. "puzzle" -> "PuzzleIcon")
+  const lower = name.toLowerCase().replace(/[-_\s]+/g, '')
+  for (const [key, value] of Object.entries(iconsModule)) {
+    if (typeof value !== 'function') continue
+    const keyLower = key.toLowerCase()
+    if (keyLower === lower || keyLower === `${lower}icon`) {
+      return value as IconComponent
+    }
   }
-  if (exportsIcon(pascalName)) {
-    return exportsIcon(pascalName)!
-  }
 
-  return exportsIcon('PuzzleIcon') ?? MissingIcon
+  return MissingIcon
 }
 
-function exportsIcon(name: string): IconComponent | undefined {
-  const exports = iconsModule as unknown as Record<string, IconComponent | undefined>
-  return exports[name]
+function exportsIcon(exportName: string): IconComponent | undefined {
+  const mod = iconsModule as Record<string, unknown>
+  const found = mod[exportName]
+  return typeof found === 'function' ? (found as IconComponent) : undefined
 }
 
-function MissingIcon({ className }: { className?: string }) {
-  return <span className={className} aria-hidden="true" />
-}
-
-const TONE_CLASSES: Record<PluginBadgeTone, string> = {
-  neutral: 'bg-bg-tertiary text-text-secondary border-border',
-  info: 'bg-accent-primary/10 text-accent-primary border-accent-primary/30',
-  success: 'bg-accent-success/10 text-accent-success border-accent-success/30',
-  warning: 'bg-accent-warning/10 text-accent-warning border-accent-warning/30',
-  danger: 'bg-accent-error/10 text-accent-error border-accent-error/30',
+function MissingIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={2} strokeDasharray="3 3" />
+    </svg>
+  )
 }
 
 export function badgeToneClasses(tone: PluginBadgeTone | undefined): string {
-  return TONE_CLASSES[tone ?? 'neutral']
+  switch (tone) {
+    case 'info':
+      return 'bg-accent-primary/10 text-accent-primary border-accent-primary/20'
+    case 'success':
+      return 'bg-accent-success/10 text-accent-success border-accent-success/20'
+    case 'warning':
+      return 'bg-accent-warning/10 text-accent-warning border-accent-warning/20'
+    case 'danger':
+      return 'bg-accent-error/10 text-accent-error border-accent-error/20'
+    case 'neutral':
+    default:
+      return 'bg-bg-tertiary text-text-muted border-border'
+  }
 }
 
-/**
- * Evaluate a contribution's declarative visibility against the slot context.
- * Omitted fields impose no constraint; present fields must match the context.
- */
 export function isContributionVisible(
-  visibleWhen: PluginVisibilityCondition | undefined,
+  condition: PluginVisibilityCondition | undefined,
   context: PluginActionContext,
 ): boolean {
-  if (!visibleWhen) return true
-  if (visibleWhen.hasSession !== undefined && Boolean(context.sessionId) !== visibleWhen.hasSession) return false
-  if (visibleWhen.hasProject !== undefined && Boolean(context.projectId) !== visibleWhen.hasProject) return false
-  if (visibleWhen.hasMessage !== undefined && Boolean(context.messageId) !== visibleWhen.hasMessage) return false
+  if (!condition) return true
+  if (condition.hasProject !== undefined) {
+    const actual = Boolean(context.projectId)
+    if (actual !== condition.hasProject) return false
+  }
+  if (condition.hasSession !== undefined) {
+    const actual = Boolean(context.sessionId)
+    if (actual !== condition.hasSession) return false
+  }
+  if (condition.hasMessage !== undefined) {
+    const actual = Boolean(context.messageId)
+    if (actual !== condition.hasMessage) return false
+  }
   return true
 }
 
-const RPC_ERROR_TITLE = { en: 'Plugin action failed', fr: 'Échec de l’action du plugin' }
-
-/** Narrow a slot context to the fields plugin RPC calls accept. */
 export function pluginRpcContext(context: PluginActionContext): {
   sessionId?: string
   workdir?: string
   projectId?: string
 } {
   return {
-    ...(context.sessionId ? { sessionId: context.sessionId } : {}),
-    ...(context.workdir ? { workdir: context.workdir } : {}),
-    ...(context.projectId ? { projectId: context.projectId } : {}),
+    ...(typeof context.sessionId === 'string' ? { sessionId: context.sessionId } : {}),
+    ...(typeof context.workdir === 'string' ? { workdir: context.workdir } : {}),
+    ...(typeof context.projectId === 'string' ? { projectId: context.projectId } : {}),
   }
+}
+
+const RPC_ERROR_TITLE = {
+  en: 'Plugin Action Failed',
+  fr: 'Échec de l’action du plugin',
 }
 
 export async function activatePluginAction(
@@ -148,12 +169,36 @@ export async function activatePluginAction(
   try {
     if (activation.kind === 'rpc') {
       await invokePluginRpc(pluginId, activation.method, activation.params ?? {}, pluginRpcContext(context))
+
+      // If active panel is currently open and belongs to this plugin, refresh dynamic content if supported
+      const activePanel = usePluginUiStore.getState().activePanel
+      if (activePanel && activePanel.pluginId === pluginId) {
+        try {
+          const res = (await invokePluginRpc(
+            pluginId,
+            `${activePanel.panelId}.getContent`,
+            {},
+            pluginRpcContext(context),
+          )) as {
+            nodes?: unknown[]
+          }
+          if (res && Array.isArray(res.nodes)) {
+            usePluginUiStore.getState().setState(pluginId, activePanel.panelId, 'content', res.nodes)
+          }
+        } catch {
+          // Gracefully ignore if custom getContent not implemented
+        }
+      }
+
+      void import('../../lib/resources').then((m) => m.providersResource.refresh()).catch(() => {})
       return
     }
+
     if (activation.kind === 'openPanel') {
       usePluginUiStore.getState().openPanel(pluginId, activation.panelId)
       return
     }
+
     window.open(activation.url, '_blank', 'noopener,noreferrer')
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

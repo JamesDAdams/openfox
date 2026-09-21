@@ -10,6 +10,15 @@ import type { PluginSettingsField, PluginSettingScope, PluginSettingValue } from
 type FormValues = Record<string, PluginSettingValue | string>
 
 const FIELD_CLASS = 'w-full px-2 py-1.5 text-sm text-text-primary bg-bg-tertiary border border-border rounded'
+const MASKED_SECRET = '••••••••••••••••'
+
+function isSecretField(field: PluginSettingsField): boolean {
+  return field.secret === true || field.type === 'password'
+}
+
+function isMaskedValue(value: unknown): boolean {
+  return typeof value === 'string' && (value === MASKED_SECRET || /^[•*]+$/.test(value))
+}
 
 function FieldInput({
   id,
@@ -43,7 +52,19 @@ function FieldInput({
       type={type ?? 'text'}
       value={value}
       placeholder={placeholder ?? ''}
-      onChange={(event) => onChange(event.target.value)}
+      onFocus={(event) => {
+        if (value === MASKED_SECRET) {
+          event.target.select()
+        }
+      }}
+      onChange={(event) => {
+        const next = event.target.value
+        if (value === MASKED_SECRET && next.startsWith(MASKED_SECRET)) {
+          onChange(next.slice(MASKED_SECRET.length))
+        } else {
+          onChange(next)
+        }
+      }}
       className={FIELD_CLASS}
     />
   )
@@ -54,11 +75,13 @@ function initialValue(
   values: Record<string, unknown>,
   secretsSet: string[],
 ): FormValues[string] {
+  if (isSecretField(field) && secretsSet.includes(field.key)) {
+    return MASKED_SECRET
+  }
   const stored = values[field.key]
   if (field.type === 'boolean') return typeof stored === 'boolean' ? stored : ((field.default as boolean) ?? false)
   if (field.type === 'number') return typeof stored === 'number' ? stored : ((field.default as number) ?? '')
   if (typeof stored === 'string') return stored
-  if (secretsSet.includes(field.key)) return ''
   return (field.default as string) ?? ''
 }
 
@@ -96,7 +119,7 @@ export function PluginSettingsForm({
     const payload: Record<string, unknown> = {}
     for (const field of data.schema.fields) {
       const value = values[field.key]
-      if (field.secret && (value === '' || value === undefined)) continue
+      if (isSecretField(field) && (isMaskedValue(value) || value === '' || value === undefined)) continue
       if (field.type === 'number' && value === '') continue
       payload[field.key] = value
     }

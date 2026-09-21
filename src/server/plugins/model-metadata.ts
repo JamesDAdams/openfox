@@ -34,12 +34,38 @@ export async function enrichModelWithPluginMetadata(providerId: string, model: M
   return { ...model, pluginMetadata: merged }
 }
 
+export async function enrichProviderWithPluginMetadata(provider: Provider): Promise<Provider> {
+  if (providers.length === 0) return provider
+  const merged: PluginModelMetadata = {}
+  const badges: NonNullable<PluginModelMetadata['badges']> = []
+
+  for (const p of providers) {
+    if (typeof p.getProviderMetadata !== 'function') continue
+    let metadata: PluginModelMetadata | undefined
+    try {
+      metadata = await p.getProviderMetadata({ providerId: provider.id, provider })
+    } catch {
+      continue
+    }
+    if (!metadata) continue
+    if (metadata.pricing) merged.pricing = { ...merged.pricing, ...metadata.pricing }
+    if (metadata.badges) badges.push(...metadata.badges)
+  }
+
+  if (badges.length > 0) merged.badges = badges
+  if (Object.keys(merged).length === 0) return provider
+  return { ...provider, pluginMetadata: merged }
+}
+
 export async function enrichProvidersWithPluginMetadata(providersToEnrich: Provider[]): Promise<Provider[]> {
   if (providers.length === 0) return providersToEnrich
   return Promise.all(
-    providersToEnrich.map(async (provider) => ({
-      ...provider,
-      models: await Promise.all(provider.models.map((model) => enrichModelWithPluginMetadata(provider.id, model))),
-    })),
+    providersToEnrich.map(async (provider) => {
+      const enrichedProvider = await enrichProviderWithPluginMetadata(provider)
+      return {
+        ...enrichedProvider,
+        models: await Promise.all(provider.models.map((model) => enrichModelWithPluginMetadata(provider.id, model))),
+      }
+    }),
   )
 }

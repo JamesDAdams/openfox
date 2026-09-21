@@ -356,6 +356,11 @@ describe('PluginHost', () => {
 
     expect(host.updateSettings('settings-plugin', { limit: 'nope' }).errors[0]).toContain('must be a number')
     expect(getAllSettings()['plugin.settings-plugin.global.token']).toBe('"s3cret"')
+
+    // Updating other fields with secret omitted or masked retains existing secret even if required
+    expect(host.updateSettings('settings-plugin', { limit: 10, token: '••••••••••••••••' })).toEqual({ errors: [] })
+    expect(getAllSettings()['plugin.settings-plugin.global.token']).toBe('"s3cret"')
+    expect(host.getSettingsView('settings-plugin').values['limit']).toBe(10)
   })
 
   it('scopes plugin settings per project when requested', async () => {

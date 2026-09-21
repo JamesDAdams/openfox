@@ -43,10 +43,10 @@ describe('PluginSettingsForm', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders schema fields with stored values and never echoes secrets', () => {
+  it('renders schema fields with stored values and displays masked asterisks for configured secrets', () => {
     render(<PluginSettingsForm pluginId="demo" />)
     expect(screen.getByLabelText('Endpoint')).toHaveProperty('value', 'https://api.test')
-    expect(screen.getByLabelText('Token')).toHaveProperty('value', '')
+    expect(screen.getByLabelText('Token')).toHaveProperty('value', '••••••••••••••••')
     expect(screen.getByLabelText('Limit')).toHaveProperty('value', '5')
     expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true')
   })

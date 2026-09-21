@@ -149,9 +149,7 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
           className={`transition-colors inline-flex items-center justify-center ${
             isGhost
               ? `${BUTTON_VARIANT_CLASSES.ghost} ${!Icon ? 'px-2.5 py-1.5 text-sm' : ''}`
-              : `gap-1.5 px-3 py-1.5 rounded text-sm font-medium ${
-                  BUTTON_VARIANT_CLASSES[node.variant ?? 'default']
-                }`
+              : `gap-1.5 px-3 py-1.5 rounded text-sm font-medium ${BUTTON_VARIANT_CLASSES[node.variant ?? 'default']}`
           }`}
         >
           {Icon && <Icon className="w-4 h-4" />}
@@ -171,7 +169,12 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
       return (
         <div className={`${directionClass} ${gapClass} ${alignClass} ${justifyClass} ${node.className ?? ''}`}>
           {node.children.map((child, index) => (
-            <DeclarativeRenderer key={index} node={child} values={values} context={context} />
+            <DeclarativeRenderer
+              key={`${index}-${child.type}-${child.type === 'button' ? child.label.en : ''}`}
+              node={child}
+              values={values}
+              context={context}
+            />
           ))}
         </div>
       )
@@ -188,7 +191,12 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
           )}
           <div className="space-y-2">
             {node.children.map((child, index) => (
-              <DeclarativeRenderer key={index} node={child} values={values} context={context} />
+              <DeclarativeRenderer
+                key={`${index}-${child.type}-${child.type === 'button' ? child.label.en : ''}`}
+                node={child}
+                values={values}
+                context={context}
+              />
             ))}
           </div>
         </div>

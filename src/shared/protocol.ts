@@ -16,6 +16,7 @@ import type {
   Attachment,
   EditContextRegion,
 } from './types.js'
+import type { PluginNotification } from './plugin.js'
 
 // ============================================================================
 // Client → Server Messages
@@ -546,7 +547,7 @@ export interface TasksUpdatePayload {
 
 // Plugin payloads
 export interface PluginNotificationMessagePayload {
-  notification: import('./plugin.js').PluginNotification
+  notification: PluginNotification
   unreadCount: number
 }
 

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { authFetch } from '../lib/api'
 import { configResource, providersResource, providerModelsResource, readProviders } from '../lib/resources'
 import type { ModelConfig } from '@shared/types.js'
+import type { PluginModelMetadataView } from '@shared/plugin.js'
 
 type LlmStatus = 'connected' | 'disconnected' | 'unknown'
 
@@ -34,6 +35,7 @@ interface Provider {
   authAdapter?: string
   transportAdapter?: string
   credentialRef?: string
+  pluginMetadata?: PluginModelMetadataView
 }
 
 export interface PlatformInfo {

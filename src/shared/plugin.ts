@@ -264,7 +264,7 @@ export interface PluginModelMetadataView {
   contextWindow?: number
   vision?: boolean
   reasoning?: boolean
-  badges?: { label: LocalizedString; tone?: PluginBadgeTone }[]
+  badges?: { label: LocalizedString; tooltip?: LocalizedString; tone?: PluginBadgeTone; icon?: string }[]
 }
 
 export interface PluginContributionSummary {
