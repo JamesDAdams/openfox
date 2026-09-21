@@ -1,3 +1,6 @@
+import type { PluginModelMetadataView } from './plugin.js'
+export type { PluginModelMetadataView } from './plugin.js'
+
 // ============================================================================
 // Project Types
 // ============================================================================
@@ -810,7 +813,7 @@ export interface ModelConfig {
   defaultTopK?: number
   defaultMaxTokens?: number
   /** Metadata contributed by plugins (pricing, capabilities, badges). */
-  pluginMetadata?: import('./plugin.js').PluginModelMetadataView
+  pluginMetadata?: PluginModelMetadataView
 }
 
 /** LLM provider configuration */
@@ -837,6 +840,8 @@ export interface Provider {
   thinkingField?: string
   /** When false, strips reasoning/thinking content from outgoing assistant messages */
   sendReasoningInMessages?: boolean
+  /** Metadata contributed by plugins (pricing, capabilities, badges, quota indicators). */
+  pluginMetadata?: PluginModelMetadataView
 }
 
 export interface Config {

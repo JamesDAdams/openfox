@@ -6,12 +6,14 @@ import { usePluginUiStore } from '../../stores/pluginUi'
 import { getSessionToken } from '../../lib/api'
 import { DeclarativeRenderer } from './DeclarativeRenderer'
 import type { PluginActionContext } from './plugin-ui-utils'
-import type { PluginUiPanel } from '@shared/plugin.js'
+import type { DeclarativeNode, PluginUiPanel } from '@shared/plugin.js'
 
-const PANEL_SIZES: Record<NonNullable<PluginUiPanel['size']>, 'sm' | 'md' | 'lg'> = {
+const PANEL_SIZES: Record<NonNullable<PluginUiPanel['size']>, 'sm' | 'md' | 'lg' | 'xl' | 'full'> = {
   sm: 'sm',
   md: 'md',
   lg: 'lg',
+  xl: 'xl',
+  full: 'full',
 }
 
 export function PluginPanelHost() {
@@ -26,7 +28,9 @@ export function PluginPanelHost() {
     () =>
       activePanel
         ? contributions.panels.find(
-            (candidate) => candidate.pluginId === activePanel.pluginId && candidate.id === activePanel.panelId,
+            (candidate) =>
+              candidate.id === activePanel.panelId &&
+              (!candidate.pluginId || candidate.pluginId === 'unknown' || candidate.pluginId === activePanel.pluginId),
           )
         : undefined,
     [activePanel, contributions.panels],
@@ -34,19 +38,24 @@ export function PluginPanelHost() {
 
   if (!activePanel || !panel) return null
 
-  const context: PluginActionContext & { pluginId: string } = { pluginId: activePanel.pluginId }
+  const targetPluginId = panel.pluginId && panel.pluginId !== 'unknown' ? panel.pluginId : activePanel.pluginId
+  const context: PluginActionContext & { pluginId: string } = { pluginId: targetPluginId }
   const values: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(publishedValues)) {
-    const prefix = `${activePanel.pluginId}:${activePanel.panelId}:`
+    const prefix = `${targetPluginId}:${activePanel.panelId}:`
     if (key.startsWith(prefix)) values[key.slice(prefix.length)] = value
   }
 
   const iframeUrl =
     panel.kind === 'iframe' && panel.url
-      ? `/api/plugins/${encodeURIComponent(activePanel.pluginId)}/assets/${panel.url.replace(/^\//, '')}${
+      ? `/api/plugins/${encodeURIComponent(targetPluginId)}/assets/${panel.url.replace(/^\//, '')}${
           token ? `?token=${encodeURIComponent(token)}` : ''
         }`
       : undefined
+
+  const contentNodes = Array.isArray(values['content'])
+    ? (values['content'] as DeclarativeNode[])
+    : (panel.content ?? [])
 
   const handleClose = () => {
     usePluginUiStore.getState().clearPanel(activePanel.pluginId, activePanel.panelId)
@@ -59,13 +68,18 @@ export function PluginPanelHost() {
         <iframe
           src={iframeUrl}
           sandbox="allow-scripts allow-forms"
-          className="w-full h-[60vh] border border-border rounded bg-bg-primary"
+          className="w-full h-[78vh] border-0 rounded bg-bg-primary"
           title={localize(panel.title)}
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {(panel.content ?? []).map((node, index) => (
-            <DeclarativeRenderer key={index} node={node} values={values} context={context} />
+          {contentNodes.map((node, index) => (
+            <DeclarativeRenderer
+              key={`${index}-${node.type}-${node.type === 'card' && node.title ? node.title.en : ''}`}
+              node={node}
+              values={values}
+              context={context}
+            />
           ))}
         </div>
       )}

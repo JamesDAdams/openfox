@@ -183,7 +183,7 @@ export interface PluginUiPanel {
   id: string
   pluginId?: string
   title: LocalizedString
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
   kind: 'declarative' | 'iframe'
   content?: DeclarativeNode[]
   url?: string
@@ -264,7 +264,7 @@ export interface PluginModelMetadataView {
   contextWindow?: number
   vision?: boolean
   reasoning?: boolean
-  badges?: { label: LocalizedString; tone?: PluginBadgeTone }[]
+  badges?: { label: LocalizedString; tooltip?: LocalizedString; tone?: PluginBadgeTone; icon?: string }[]
 }
 
 export interface PluginContributionSummary {

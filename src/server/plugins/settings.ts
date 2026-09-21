@@ -7,6 +7,12 @@ import type {
   PluginSettingValue,
 } from '../../shared/plugin.js'
 
+export const MASKED_SECRET = '••••••••••••••••'
+
+export function isMaskedValue(value: unknown): boolean {
+  return typeof value === 'string' && (value === MASKED_SECRET || /^[•*]+$/.test(value))
+}
+
 export interface PluginSettingsView {
   values: PluginSettingsValues
   secretsSet: string[]
@@ -75,14 +81,33 @@ export function isSecret(field: PluginSettingsField): boolean {
   return field.secret === true || field.type === 'password'
 }
 
-export function validatePluginSettings(schema: PluginSettingsSchema, values: Record<string, unknown>): string[] {
+export function validatePluginSettings(
+  schema: PluginSettingsSchema,
+  values: Record<string, unknown>,
+  isExistingSecret?: (key: string) => boolean,
+): string[] {
   const errors: string[] = []
   for (const field of schema.fields) {
     if (!(field.key in values)) {
-      if (field.required) errors.push(`Missing required setting '${field.key}'`)
+      if (field.required) {
+        if (isSecret(field) && isExistingSecret && isExistingSecret(field.key)) {
+          continue
+        }
+        errors.push(`Missing required setting '${field.key}'`)
+      }
       continue
     }
     const value = values[field.key]
+    if (isSecret(field) && (isMaskedValue(value) || value === '' || value === undefined)) {
+      if (
+        field.required &&
+        !(isExistingSecret && isExistingSecret(field.key)) &&
+        (value === '' || value === undefined)
+      ) {
+        errors.push(`Missing required setting '${field.key}'`)
+      }
+      continue
+    }
     if (field.type === 'boolean') {
       if (typeof value !== 'boolean') errors.push(`Setting '${field.key}' must be a boolean`)
     } else if (field.type === 'number') {
@@ -105,13 +130,20 @@ export function writePluginSettings(
   scope: PluginSettingScope = 'global',
   projectId?: string,
 ): { errors: string[] } {
-  const errors = validatePluginSettings(schema, incoming)
+  const stored = getAllSettings()
+  const isExistingSecret = (key: string) => {
+    const field = schema.fields.find((f) => f.key === key)
+    const raw = stored[pluginSettingKey(pluginId, field?.scope ?? scope, projectId, key)]
+    return raw !== undefined && raw !== ''
+  }
+  const errors = validatePluginSettings(schema, incoming, isExistingSecret)
   if (errors.length > 0) return { errors }
-
   for (const field of schema.fields) {
     if (!(field.key in incoming)) continue
     const value = incoming[field.key]
-    if (isSecret(field) && (value === '' || value === null || value === undefined)) continue
+    if (isSecret(field) && (value === '' || value === null || value === undefined || isMaskedValue(value))) {
+      continue
+    }
     setSetting(pluginSettingKey(pluginId, field.scope ?? scope, projectId, field.key), JSON.stringify(value))
   }
   return { errors: [] }

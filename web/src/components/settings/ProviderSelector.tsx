@@ -26,6 +26,7 @@ import { useSetting } from '../../hooks/useSetting'
 import { useIsTouchDevice } from '../../hooks/useIsTouchDevice'
 import { SETTINGS_KEYS, setSetting } from '../../lib/resources'
 import { PluginZone } from '../plugins/PluginZone'
+import { PluginModelMeta } from '../plugins/PluginModelMeta'
 
 type ProviderLabelProps = {
   activeProvider: { name: string; isLocal?: boolean } | undefined
@@ -860,13 +861,16 @@ export function ProviderSelector() {
                         onClick={() => !activating && handleProviderClick(group.provider)}
                         className="flex flex-col min-w-0 flex-1 cursor-pointer"
                       >
-                        <span
-                          className={`text-sm font-medium truncate ${
-                            group.provider.id === effectiveProviderId ? 'text-accent-primary' : 'text-text-primary'
-                          }`}
-                        >
-                          {group.provider.name}
-                        </span>
+                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                          <span
+                            className={`text-sm font-medium truncate ${
+                              group.provider.id === effectiveProviderId ? 'text-accent-primary' : 'text-text-primary'
+                            }`}
+                          >
+                            {group.provider.name}
+                          </span>
+                          <PluginModelMeta metadata={group.provider.pluginMetadata} />
+                        </div>
                         {!group.provider.authAdapter &&
                           !group.provider.transportAdapter &&
                           group.provider.backend !== 'unknown' && (

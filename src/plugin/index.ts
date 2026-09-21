@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { ModelConfig } from '../shared/types.js'
+import type { ModelConfig, Provider } from '../shared/types.js'
 import type {
   LocalizedString,
   PluginBadgeTone,
@@ -163,6 +163,10 @@ export interface PluginModelMetadataProvider {
     modelId: string
     model: ModelConfig
   }): PluginModelMetadata | undefined | Promise<PluginModelMetadata | undefined>
+  getProviderMetadata?(context: {
+    providerId: string
+    provider?: Provider
+  }): PluginModelMetadata | undefined | Promise<PluginModelMetadata | undefined>
 }
 
 export type PluginHookEvent =
@@ -269,5 +273,5 @@ export type {
   LLMStreamEvent,
   LLMToolDefinition,
 } from '../server/llm/types.js'
-export type { ModelConfig, ToolCall } from '../shared/types.js'
+export type { ModelConfig, ToolCall, Provider } from '../shared/types.js'
 export type { ProviderPluginRegistry } from '../provider/index.js'

@@ -10,6 +10,7 @@ import {
   WarningIcon,
 } from '../shared/icons'
 import type { Provider } from '../../stores/config'
+import type { PluginModelMetadataView } from '@shared/plugin.js'
 import { isSmallContext } from '../../lib/context-warning'
 import { useT } from '../../hooks/useT'
 import { PluginModelMeta } from '../plugins/PluginModelMeta'
@@ -30,7 +31,7 @@ export interface ModelWithConfig {
   reasoningEffortOverride?: string
   thinkingLevel?: string
   thinkingEnabled?: boolean
-  pluginMetadata?: import('@shared/plugin.js').PluginModelMetadataView
+  pluginMetadata?: PluginModelMetadataView
 }
 
 export function modelMatchesQuery(model: { name?: string; id: string }, query: string): boolean {
