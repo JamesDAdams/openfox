@@ -190,6 +190,8 @@ export interface MessageStats {
   reasoningEffort?: string
   mode: ToolMode // Which system prompt was used (planner, builder, verifier)
   totalTime: number // wall clock time (seconds)
+  /** Wall-clock time spent in the thinking phase across LLM calls (seconds). */
+  thinkingDuration?: number
   toolTime: number // time spent in tool execution (seconds)
   prefillTokens: number // total prompt tokens across all LLM calls
   prefTokenIncrement?: number // sum of new (non-cached) tokens across all calls; used for accurate prefillSpeed

@@ -75,6 +75,8 @@ export interface PureStreamOptions {
 export interface PureStreamResult {
   content: string
   thinkingContent?: string
+  /** Wall-clock time spent streaming thinking deltas (ms), when the model thought. */
+  thinkingDurationMs?: number
   toolCalls: ToolCall[]
   segments: MessageSegment[]
   usage: { promptTokens: number; completionTokens: number }
@@ -325,6 +327,8 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
   let streamError: string | undefined
   let accumulatedContent = ''
   let accumulatedThinking = ''
+  let thinkingStartedAt: number | undefined
+  let lastThinkingAt = 0
   let patternMatch: RetryPatternMatch | undefined
   // Preflight fast-fail state: indices already checked + the failure payload
   const checkedPreflight = new Set<number>()
@@ -359,6 +363,8 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
 
         case 'thinking_delta':
           accumulatedThinking += value.content
+          if (thinkingStartedAt === undefined) thinkingStartedAt = Date.now()
+          lastThinkingAt = Date.now()
           yield {
             type: 'message.thinking',
             data: { messageId, content: value.content },
@@ -598,6 +604,9 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
   if (result.thinkingContent) {
     baseResult.thinkingContent = result.thinkingContent
   }
+  if (thinkingStartedAt !== undefined) {
+    baseResult.thinkingDurationMs = Math.max(0, lastThinkingAt - thinkingStartedAt)
+  }
 
   return baseResult
 }
@@ -750,6 +759,7 @@ export class TurnMetrics {
   private totalGenTokens = 0
   private totalGenTime = 0 // seconds
   private totalToolTime = 0 // seconds
+  private totalThinkingTime = 0 // milliseconds
   private llmCalls: Array<
     Omit<NonNullable<MessageStats['llmCalls']>[number], 'providerId' | 'providerName' | 'backend' | 'model'>
   > = []
@@ -823,6 +833,11 @@ export class TurnMetrics {
     this.totalToolTime += durationMs / 1000
   }
 
+  /** Add wall-clock thinking time (in milliseconds) */
+  addThinkingTime(durationMs: number): void {
+    this.totalThinkingTime += durationMs
+  }
+
   /** Build final stats object */
   buildStats(identity: StatsIdentity, mode: string): MessageStats {
     return computeAggregatedStats({
@@ -834,6 +849,7 @@ export class TurnMetrics {
       totalPrefillTime: this.totalPrefillTime,
       totalGenTime: this.totalGenTime,
       totalToolTime: this.totalToolTime,
+      ...(this.totalThinkingTime > 0 && { thinkingDuration: Math.round(this.totalThinkingTime / 100) / 10 }),
       totalTime: (performance.now() - this.startTime) / 1000,
       llmCalls: this.llmCalls.map((call) => ({
         ...identity,

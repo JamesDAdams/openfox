@@ -132,6 +132,7 @@ describe('executeTools', () => {
         turnMetrics: {
           addToolTime: vi.fn(),
           addLLMCall: vi.fn(),
+          addThinkingTime: vi.fn(),
           buildStats: vi.fn(),
         } as unknown as TurnMetrics,
         signal: undefined,
@@ -180,6 +181,7 @@ describe('executeTools', () => {
         turnMetrics: {
           addToolTime: vi.fn(),
           addLLMCall: vi.fn(),
+          addThinkingTime: vi.fn(),
           buildStats: vi.fn(),
         } as unknown as TurnMetrics,
         signal: undefined,
@@ -223,6 +225,7 @@ describe('executeTools', () => {
         turnMetrics: {
           addToolTime: vi.fn(),
           addLLMCall: vi.fn(),
+          addThinkingTime: vi.fn(),
           buildStats: vi.fn(),
         } as unknown as TurnMetrics,
         signal: undefined,
@@ -283,6 +286,7 @@ describe('executeTools', () => {
         turnMetrics: {
           addToolTime: vi.fn(),
           addLLMCall: vi.fn(),
+          addThinkingTime: vi.fn(),
           buildStats: vi.fn(),
         } as unknown as TurnMetrics,
         signal: undefined,
@@ -325,6 +329,7 @@ describe('runTopLevelAgentLoop assembleRequest', () => {
     mockTurnMetrics = {
       addToolTime: vi.fn(),
       addLLMCall: vi.fn(),
+      addThinkingTime: vi.fn(),
       buildStats: vi.fn().mockReturnValue({}),
     } as unknown as TurnMetrics
 
@@ -423,6 +428,7 @@ describe('runTopLevelAgentLoop compaction', () => {
     mockTurnMetrics = {
       addToolTime: vi.fn(),
       addLLMCall: vi.fn(),
+      addThinkingTime: vi.fn(),
       buildStats: vi.fn().mockReturnValue({}),
     } as unknown as TurnMetrics
 
@@ -635,6 +641,7 @@ describe('maxTokens clamping', () => {
     mockTurnMetrics = {
       addToolTime: vi.fn(),
       addLLMCall: vi.fn(),
+      addThinkingTime: vi.fn(),
       buildStats: vi.fn().mockReturnValue({}),
     } as unknown as TurnMetrics
 
@@ -799,6 +806,55 @@ describe('maxTokens clamping', () => {
     const callArgs = (streamLLMPure as any).mock.calls[0]?.[0]
     expect(callArgs).toBeDefined()
     expect(callArgs.sessionId).toBe('test-session')
+  })
+
+  it('accumulates thinking duration from the stream result into turn metrics', async () => {
+    mockSessionManager = {
+      enterPauseGate: vi.fn().mockResolvedValue('released'),
+      requireSession: vi.fn().mockReturnValue({
+        workdir: '/test',
+        projectId: 'test-project',
+        executionState: null,
+        criteria: [],
+        isRunning: false,
+      }),
+      getEffectiveWorkdir: vi.fn().mockReturnValue('/test'),
+      getProjectWorkdir: vi.fn().mockReturnValue('/test'),
+      getContextState: vi.fn().mockReturnValue({
+        currentTokens: 0,
+        maxTokens: 200000,
+        compactionCount: 0,
+        dangerZone: false,
+        canCompact: false,
+        dynamicContextChanged: false,
+      }),
+      getCurrentModelContext: vi.fn().mockReturnValue(200000),
+      getCurrentModelSettings: vi.fn().mockReturnValue({}),
+      setCurrentContextSize: vi.fn(),
+      getDynamicContextChanged: vi.fn().mockReturnValue(false),
+      setDynamicContextChanged: vi.fn(),
+      getCachedPrompt: vi.fn().mockReturnValue(undefined),
+      setCachedPrompt: vi.fn(),
+      getLspManager: vi.fn(),
+      drainAsapMessages: vi.fn().mockReturnValue([]),
+      getCurrentWindowMessages: vi.fn().mockReturnValue([]),
+      updateMessage: vi.fn(),
+    } as any
+    ;(consumeStreamGenerator as any).mockResolvedValue({
+      content: 'done',
+      toolCalls: [],
+      segments: [{ type: 'text', content: 'done' }],
+      usage: { promptTokens: 10, completionTokens: 5 },
+      timing: { ttft: 0.1, completionTime: 0.5, tps: 10, prefillTps: 100 },
+      aborted: false,
+      finishReason: 'stop',
+      modelParams: {},
+      thinkingDurationMs: 2_400,
+    })
+
+    await runTopLevelAgentLoop(makeConfig(), mockTurnMetrics).catch(() => {})
+
+    expect(mockTurnMetrics.addThinkingTime).toHaveBeenCalledWith(2_400)
   })
 
   it('uses the profile defaultMaxTokens when no user maxTokens is configured', async () => {
@@ -1954,6 +2010,7 @@ describe('runTopLevelAgentLoop live stats', () => {
     mockTurnMetrics = {
       addToolTime: vi.fn(),
       addLLMCall: vi.fn(),
+      addThinkingTime: vi.fn(),
       buildStats: vi.fn().mockReturnValue({}),
     } as unknown as TurnMetrics
 
@@ -2091,6 +2148,7 @@ describe('runTopLevelAgentLoop queue draining', () => {
     mockTurnMetrics = {
       addToolTime: vi.fn(),
       addLLMCall: vi.fn(),
+      addThinkingTime: vi.fn(),
       buildStats: vi.fn().mockReturnValue({}),
     } as unknown as TurnMetrics
 

@@ -17,6 +17,13 @@ vi.mock('../shared/ThinkingBlock', () => ({
   ThinkingBlock: ({ content }: { content: string }) => <div>{content}</div>,
 }))
 
+vi.mock('../shared/ThinkingBlockToggle', () => ({
+  ThinkingBlockToggle: (props: unknown) => {
+    thinkingBlockToggleMock(props)
+    return <div>thinking-block-toggle</div>
+  },
+}))
+
 vi.mock('../shared/ToolCallDisplay', () => ({
   ToolCallDisplay: () => <div>tool call</div>,
 }))
@@ -32,9 +39,10 @@ vi.mock('../shared/TodoListDisplay', () => ({
   TodoListDisplay: () => <div>todo</div>,
 }))
 
-const { criteriaGroupMock, toolCallPreparingMock } = vi.hoisted(() => ({
+const { criteriaGroupMock, toolCallPreparingMock, thinkingBlockToggleMock } = vi.hoisted(() => ({
   criteriaGroupMock: vi.fn(),
   toolCallPreparingMock: vi.fn(),
+  thinkingBlockToggleMock: vi.fn(),
 }))
 
 vi.mock('../shared/CriteriaGroupDisplay', () => ({
@@ -87,6 +95,124 @@ describe('AssistantMessage', () => {
 
     expect(html).toContain('Aborted')
     expect(html).not.toContain('Interrupted')
+  })
+
+  it('renders a collapsed toggle when showThinking is off', () => {
+    thinkingBlockToggleMock.mockClear()
+    render(
+      <AssistantMessage
+        showThinking={false}
+        message={{
+          id: 'assistant-hide-thinking',
+          role: 'assistant',
+          content: 'Answer',
+          thinkingContent: 'secret reasoning',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          isStreaming: false,
+        }}
+      />,
+    )
+
+    expect(screen.queryByText('secret reasoning')).toBeNull()
+    expect(thinkingBlockToggleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: 'assistant-hide-thinking',
+        content: 'secret reasoning',
+        isStreaming: false,
+        thinkingFinished: true,
+        showThinking: false,
+      }),
+    )
+  })
+
+  it('renders the toggle for a message that only contains thinking', () => {
+    thinkingBlockToggleMock.mockClear()
+    render(
+      <AssistantMessage
+        showThinking={false}
+        message={{
+          id: 'assistant-only-thinking',
+          role: 'assistant',
+          content: '',
+          thinkingContent: 'only reasoning',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          isStreaming: true,
+        }}
+      />,
+    )
+
+    expect(screen.queryByText('only reasoning')).toBeNull()
+    expect(thinkingBlockToggleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: 'assistant-only-thinking',
+        isStreaming: true,
+        thinkingFinished: false,
+        showThinking: false,
+      }),
+    )
+  })
+
+  it('passes the persisted thinking duration to the toggle', () => {
+    thinkingBlockToggleMock.mockClear()
+    render(
+      <AssistantMessage
+        showThinking={false}
+        message={{
+          id: 'assistant-thinking-stats',
+          role: 'assistant',
+          content: 'Answer',
+          thinkingContent: 'reasoning',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          isStreaming: false,
+          stats: {
+            providerId: 'openai',
+            providerName: 'OpenAI',
+            backend: 'openai',
+            model: 'deepseek-v4-flash',
+            mode: 'planner',
+            totalTime: 160,
+            toolTime: 0,
+            prefillTokens: 10,
+            prefillSpeed: 10,
+            generationTokens: 10,
+            generationSpeed: 10,
+            thinkingDuration: 160,
+          },
+        }}
+      />,
+    )
+
+    expect(thinkingBlockToggleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: 'assistant-thinking-stats',
+        thinkingFinished: true,
+        thinkingDuration: 160,
+      }),
+    )
+  })
+
+  it('passes the full thinking content when showThinking is on', () => {
+    thinkingBlockToggleMock.mockClear()
+    render(
+      <AssistantMessage
+        message={{
+          id: 'assistant-show-thinking',
+          role: 'assistant',
+          content: 'Answer',
+          thinkingContent: 'visible reasoning',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          isStreaming: false,
+        }}
+      />,
+    )
+
+    expect(thinkingBlockToggleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: 'assistant-show-thinking',
+        content: 'visible reasoning',
+        showThinking: true,
+      }),
+    )
   })
 
   it('displays the full model name in stats (no hyphen truncation)', () => {

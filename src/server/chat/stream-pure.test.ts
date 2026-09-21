@@ -85,6 +85,7 @@ describe('stream-pure', () => {
     expect(result).toEqual({
       content: 'I will help.',
       thinkingContent: 'Need to inspect files',
+      thinkingDurationMs: expect.any(Number),
       toolCalls: [{ id: 'call-1', name: 'read_file', arguments: { path: 'src/index.ts' } }],
       segments: [
         { type: 'thinking', content: 'Need to inspect files' },
@@ -131,6 +132,24 @@ describe('stream-pure', () => {
     expect(result.modelParams).not.toHaveProperty('temperature')
     expect(result.modelParams).not.toHaveProperty('maxTokens')
     expect(result.modelParams).toHaveProperty('topP')
+  })
+
+  it('omits thinkingDurationMs when the model did not think', async () => {
+    const client = createMockClient([
+      { type: 'text_delta', content: 'hi' },
+      { type: 'done', response: mockResponse },
+    ])
+
+    const gen = streamLLMPure({
+      messageId: 'msg-nothink',
+      systemPrompt: 'system',
+      llmClient: client,
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+
+    const result = await consumeStreamGenerator(gen, () => {})
+
+    expect(result).not.toHaveProperty('thinkingDurationMs')
   })
 
   it('streams partial arguments for run_command', async () => {
@@ -606,6 +625,30 @@ describe('stream-pure', () => {
         },
       ],
     })
+  })
+
+  it('includes accumulated thinking time in stats when thinking was recorded', () => {
+    const metrics = new TurnMetrics()
+    metrics.addThinkingTime(2_400)
+    metrics.addThinkingTime(1_600)
+
+    const stats = metrics.buildStats(
+      { providerId: 'p', providerName: 'Local vLLM', backend: 'vllm', model: 'm' },
+      'builder',
+    )
+
+    expect(stats.thinkingDuration).toBe(4)
+  })
+
+  it('omits thinkingDuration from stats when no thinking time was recorded', () => {
+    const metrics = new TurnMetrics()
+
+    const stats = metrics.buildStats(
+      { providerId: 'p', providerName: 'Local vLLM', backend: 'vllm', model: 'm' },
+      'builder',
+    )
+
+    expect(stats.thinkingDuration).toBeUndefined()
   })
 
   it('creates event helper objects with optional fields only when present', () => {

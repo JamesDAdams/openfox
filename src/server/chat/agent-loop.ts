@@ -584,6 +584,10 @@ export async function runTopLevelAgentLoop(
       previousContextTokens,
       result.modelParams,
     )
+    // Accumulate wall-clock thinking time across LLM attempts in this turn.
+    if (result.thinkingDurationMs !== undefined) {
+      turnMetrics.addThinkingTime(result.thinkingDurationMs)
+    }
     // Stream the running turn totals to the client so the sidebar can build
     // dynamically as each LLM call completes. Sub-agent turns run inside the
     // parent turn — their stats would clobber the parent's live numbers, so
