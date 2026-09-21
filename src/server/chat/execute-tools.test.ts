@@ -191,6 +191,38 @@ describe('executeTools', () => {
     expect(result.toolMessages[0]?.content).toContain('Failed to parse')
   })
 
+  it('short-circuits preflight-rejected calls without calling tool registry', async () => {
+    const append = vi.fn()
+    const execute = vi.fn()
+
+    const toolCalls: ToolCall[] = [
+      {
+        id: 'call-1',
+        name: 'write_file',
+        arguments: { path: 'src/app.ts' },
+        preflightError: 'File "src/app.ts" must be read before writing',
+      },
+    ]
+
+    const result = await executeTools(
+      'msg-1',
+      toolCalls,
+      { ...makeCtx(), toolRegistry: { tools: [], execute, definitions: [] } as any },
+      append,
+    )
+
+    expect(execute).not.toHaveBeenCalled()
+    expect(result.toolMessages).toHaveLength(1)
+    expect(result.toolMessages[0]?.content).toContain('must be read before writing')
+
+    const resultEvents = append.mock.calls.filter((args: unknown[]) => (args[0] as TurnEvent).type === 'tool.result')
+    expect(resultEvents).toHaveLength(1)
+    expect((resultEvents[0]![0] as TurnEvent).data).toMatchObject({
+      toolCallId: 'call-1',
+      result: { success: false, error: 'File "src/app.ts" must be read before writing' },
+    })
+  })
+
   it('throws Aborted when signal is aborted before tool calls are emitted', async () => {
     const append = vi.fn()
     const controller = new AbortController()

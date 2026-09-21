@@ -49,6 +49,10 @@ describe('ToolCallPreparing remote execution', () => {
 })
 
 describe('ToolCallPreparing live file preview', () => {
+  beforeEach(() => {
+    settingResource.write('true', SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING)
+  })
+
   it('shows the placeholder while write_file content is not yet streamed', () => {
     const { container } = render(<ToolCallPreparing name="write_file" arguments={'{"path":"src/a.ts"'} />)
 
@@ -157,6 +161,19 @@ describe('ToolCallPreparing live file preview', () => {
 
   it('hides the live preview when the show tool call streaming setting is off', () => {
     settingResource.write('false', SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING)
+    filePreviewMock.mockClear()
+    const { container } = render(
+      <ToolCallPreparing name="write_file" arguments={'{"path":"src/a.ts","content":"const x = 1'} />,
+    )
+
+    expect(filePreviewMock).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-testid="file-preview"]')).toBeNull()
+    expect(container.textContent).toContain('Writing file')
+  })
+})
+
+describe('ToolCallPreparing live file preview default', () => {
+  it('hides the live preview by default (opt-in setting)', () => {
     filePreviewMock.mockClear()
     const { container } = render(
       <ToolCallPreparing name="write_file" arguments={'{"path":"src/a.ts","content":"const x = 1'} />,

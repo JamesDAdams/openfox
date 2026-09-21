@@ -458,6 +458,7 @@ export interface ToolCall {
   streamingOutputTruncated?: boolean
   parseError?: string // Error message if JSON parsing failed
   rawArguments?: string // The unparsed arguments string for debugging
+  preflightError?: string // Set by stream fast-fail: the call must NOT execute, surface this error instead
 }
 
 /** A single line of context around an edit */

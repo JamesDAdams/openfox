@@ -31,6 +31,7 @@ import {
   clearLLMFailure,
 } from './stream-pure.js'
 import { computeLiveEditContext } from './edit-file-preview.js'
+import { preflightPathTool } from './tool-preflight.js'
 import { getCurrentContextWindowId, getCurrentWindowMessageOptions } from '../events/index.js'
 import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
@@ -413,6 +414,11 @@ export async function runTopLevelAgentLoop(
         subAgentAliases,
         ...(config.retryPatterns ? { retryPatterns: config.retryPatterns } : {}),
         ...(modelSettings && { modelSettings }),
+        preflight: (path) =>
+          preflightPathTool(path, {
+            workdir: sessionManager.getEffectiveWorkdir(sessionId),
+            readFiles: sessionManager.getReadFiles(sessionId),
+          }),
       })
 
       // Per-turn cache of file contents read to build live edit context for

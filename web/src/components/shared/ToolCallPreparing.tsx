@@ -68,7 +68,7 @@ export const ToolCallPreparing = memo(function ToolCallPreparing({
   forceCompact,
 }: ToolCallPreparingProps) {
   const description = getToolDescription(name, args)
-  const showToolCallStreaming = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING, 'true')
+  const showToolCallStreaming = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING, 'false')
 
   let detailText = description + '...'
   let remoteProtocol = null

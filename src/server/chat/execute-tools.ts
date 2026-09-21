@@ -248,10 +248,22 @@ export async function executeTools(
 
     const startTime = Date.now()
     let toolResult: ToolResult
-    try {
-      toolResult = await ctx.toolRegistry.execute(toolCall.name, toolCall.arguments, toolContext)
-    } catch (error) {
-      toolResult = await handleToolExecutionError(error, ctx.sessionId, startTime)
+    // Preflight-rejected calls must never execute: their arguments were cut
+    // short (path-only), so running the tool would either crash or produce a
+    // misleading result. Surface the preflight error directly instead.
+    if (toolCall.preflightError) {
+      toolResult = {
+        success: false,
+        error: toolCall.preflightError,
+        durationMs: Date.now() - startTime,
+        truncated: false,
+      }
+    } else {
+      try {
+        toolResult = await ctx.toolRegistry.execute(toolCall.name, toolCall.arguments, toolContext)
+      } catch (error) {
+        toolResult = await handleToolExecutionError(error, ctx.sessionId, startTime)
+      }
     }
 
     ctx.onToolExecuted?.(toolCall, toolResult)
