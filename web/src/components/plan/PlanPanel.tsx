@@ -349,6 +349,7 @@ export function PlanPanel({
           onScrollToTop={() => setAutoScroll(false)}
           hiddenCount={hiddenCount}
           onScrollbarGesture={handleScrollbarGesture}
+          isAutoScrollActive={isAutoScrollActive}
           emptyState={
             messages.length === 0 && session?.projectId ? (
               <FeedTaskPreview projectId={session.projectId} sessionId={session.id} />

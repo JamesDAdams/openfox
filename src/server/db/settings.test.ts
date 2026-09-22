@@ -34,7 +34,7 @@ describe('db settings', () => {
 
   describe('max visible items', () => {
     it('uses the declared default when the setting is absent', () => {
-      expect(getMaxVisibleItems()).toBe(300)
+      expect(getMaxVisibleItems()).toBe(100)
     })
 
     it('preserves explicit limits, including zero for unlimited history', () => {
@@ -47,7 +47,7 @@ describe('db settings', () => {
 
     it.each(['', 'not-a-number', '-1', '12.5'])('falls back to the default for invalid value %j', (value) => {
       setSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, value)
-      expect(getMaxVisibleItems()).toBe(300)
+      expect(getMaxVisibleItems()).toBe(100)
     })
   })
 

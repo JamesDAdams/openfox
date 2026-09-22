@@ -999,18 +999,18 @@ describe('feed memory bounds', () => {
     }))
     const handler = useSessionStore.getState().handleServerMessage
 
-    // Default cap is 300 visible items + headroom; a long agent run appends
+    // Default cap is 100 visible items + headroom; a long agent run appends
     // far more than that with no turn-boundary session.state in between.
     for (let i = 0; i < 500; i++) {
       handler({ type: 'chat.message', sessionId: 'session-1', payload: { message: makeMessage(`m-${i}`) } })
     }
 
     const pane = useSessionStore.getState().panes['session-1']
-    expect(pane?.messages.length).toBeLessThanOrEqual(325)
+    expect(pane?.messages.length).toBeLessThanOrEqual(125)
     // Newest messages survive; the oldest are evicted.
     expect(pane?.messages[pane.messages.length - 1]?.id).toBe('m-499')
     expect(pane?.messages[0]?.id).not.toBe('m-0')
-    expect(useSessionStore.getState().messages.length).toBeLessThanOrEqual(325)
+    expect(useSessionStore.getState().messages.length).toBeLessThanOrEqual(125)
   })
 
   it('respects a custom maxVisibleItems setting', async () => {

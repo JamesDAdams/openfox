@@ -126,10 +126,10 @@ const PERF_TOGGLES: ToggleDefinition[] = [
     key: SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION,
     label: { en: 'Virtualize long feeds', fr: 'Virtualiser les longs fils' },
     description: {
-      en: 'Mount only the most recent items and reveal older ones as you scroll up. Faster on very long sessions, but older history loading is experimental.',
-      fr: 'Ne monte que les éléments les plus récents et révèle les plus anciens en remontant. Plus rapide sur les très longues sessions, mais le chargement de l’historique ancien est expérimental.',
+      en: 'Show only the most recent items and load older ones as you scroll up. Keeps long sessions fast — the most recent messages are always retained.',
+      fr: 'N’affiche que les éléments les plus récents et charge les plus anciens en remontant. Garde les longues sessions fluides — les messages les plus récents sont toujours conservés.',
     },
-    defaultValue: 'false',
+    defaultValue: 'true',
   },
   {
     key: SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING,
@@ -173,10 +173,10 @@ export function DisplayTab() {
     SETTINGS_KEYS.DISPLAY_DEFER_CODE_HIGHLIGHT_WHILE_STREAMING,
     'false',
   )
-  const feedVirtualization = useSetting(SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION, 'false')
+  const feedVirtualization = useSetting(SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION, 'true')
   const syntaxHighlighting = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING, 'true')
   const fullscreenComposer = useSetting(SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER, 'false')
-  const maxVisibleItems = useSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, '300')
+  const maxVisibleItems = useSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, '100')
   const storedLocale = useSetting(SETTINGS_KEYS.DISPLAY_LOCALE, 'automatic')
   const isLoading = showThinking.loading
 

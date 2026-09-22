@@ -63,7 +63,7 @@ const countedChatMessageIds = new Set<string>()
 // window, but live chat.message events are unbounded until a turn-boundary
 // session.state prune. Trim to the display window plus a small headroom so a
 // long agent run cannot balloon pane.messages (and Firefox's heap) with it.
-const MAX_VISIBLE_ITEMS_DEFAULT = 300
+const MAX_VISIBLE_ITEMS_DEFAULT = 100
 export const MESSAGE_CAP_HEADROOM = 25
 export const MAX_COUNTED_MESSAGE_IDS = 2000
 export const MAX_TRIGGERED_SOUND_IDS = 200

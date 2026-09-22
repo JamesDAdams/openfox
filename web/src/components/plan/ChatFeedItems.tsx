@@ -18,12 +18,25 @@ const INITIAL_RENDER_COUNT = 30
 const REVEAL_BATCH_SIZE = 20
 const REVEAL_MARGIN = 10
 const BULK_APPEND_THRESHOLD = 5
+// How close to the top the feed has to get before older items are revealed.
+// A "scrollTop === 0" trigger is useless: the feed is pinned to the bottom, so
+// reaching the hard stop means traversing every placeholder first — and the
+// unmounted hint is already visible well before that.
+const REVEAL_TOP_THRESHOLD_PX = 240
 
 interface ChatFeedItemsProps {
   displayItems: DisplayItem[]
   highlightedMessageId?: string | null
   sessionId?: string | null
   scrollContainerRef?: React.RefObject<OverlayScrollbarsComponentRef<'div'> | null>
+  /**
+   * Whether auto-scroll is currently pinned to the newest items. This is the
+   * authoritative "is the user following the stream?" signal: it is already
+   * false whenever the user scrolls into history, and — unlike a scroll
+   * position check — it is not tripped by auto-scroll's own programmatic
+   * scrolls or by content growing between two animation frames.
+   */
+  isAutoScrollActive?: boolean
   showThinking?: boolean
   showVerboseToolOutput?: boolean
   showStats?: boolean
@@ -42,6 +55,7 @@ export const ChatFeedItems = memo(function ChatFeedItems({
   highlightedMessageId = null,
   sessionId,
   scrollContainerRef,
+  isAutoScrollActive = true,
   showThinking = true,
   showVerboseToolOutput = true,
   showStats = true,
@@ -72,18 +86,26 @@ export const ChatFeedItems = memo(function ChatFeedItems({
     userScrolledRef.current = false
   }, [sessionId])
 
-  // Re-anchor the window when a large batch of items arrives at once (initial
-  // history load). Single-item streaming appends keep the window stable, and
-  // so does a bulk replay after WS reconnect when the user has scrolled into
-  // history — jumping back to the bottom would yank the viewport away.
+  // Re-anchor the window to the newest items. This has to cover three cases:
+  // a bulk history load, a session that started empty and grew by single
+  // streaming appends (where the initial `totalItems - INITIAL_RENDER_COUNT`
+  // was clamped to 0 and would otherwise never establish a window), and a
+  // window that drifted past the render count as items accumulated.
+  // Only while the feed follows the bottom: re-anchoring under a reader who
+  // scrolled into history would yank the viewport away.
   useEffect(() => {
     const prev = prevItemCountRef.current
     prevItemCountRef.current = displayItems.length
     if (!feedVirtualization) return
-    if (displayItems.length - prev >= BULK_APPEND_THRESHOLD && !userScrolledRef.current) {
-      setStartIndex(Math.max(0, displayItems.length - INITIAL_RENDER_COUNT))
-    }
-  }, [displayItems.length, feedVirtualization])
+    if (!isAutoScrollActive) return
+    const length = displayItems.length
+    const bulkAppend = length - prev >= BULK_APPEND_THRESHOLD
+    setStartIndex((current) => {
+      const drifted = length - current > INITIAL_RENDER_COUNT
+      if (!bulkAppend && !drifted) return current
+      return Math.max(0, length - INITIAL_RENDER_COUNT)
+    })
+  }, [displayItems.length, feedVirtualization, isAutoScrollActive])
 
   // Clamp when items are removed (truncation, session switch).
   useEffect(() => {
@@ -123,12 +145,16 @@ export const ChatFeedItems = memo(function ChatFeedItems({
 
   useEffect(() => {
     if (!feedVirtualization) return
-    const container = scrollContainerRef?.current
-    if (!container) return
-    const viewport = container.osInstance?.()?.elements().viewport
-    if (!viewport) return
-    const onScroll = () => {
-      if (viewport.scrollTop > 4) {
+    // Resolve the viewport inside the handler, not while attaching. The
+    // OverlayScrollbars instance is created in a passive effect of the feed's
+    // ScrollArea, and React runs child effects first — so at attach time
+    // `osInstance()` is still undefined and the listener would silently never
+    // be added. A capture listener on the document sees every scroll event,
+    // including the feed viewport's (scroll events do not bubble).
+    const onScroll = (event: Event) => {
+      const viewport = scrollContainerRef?.current?.osInstance?.()?.elements().viewport
+      if (!viewport || event.target !== viewport) return
+      if (viewport.scrollTop > REVEAL_TOP_THRESHOLD_PX) {
         userScrolledRef.current = true
         return
       }
@@ -136,8 +162,8 @@ export const ChatFeedItems = memo(function ChatFeedItems({
         setStartIndex((index) => Math.max(0, index - REVEAL_BATCH_SIZE))
       }
     }
-    viewport.addEventListener('scroll', onScroll, { passive: true })
-    return () => viewport.removeEventListener('scroll', onScroll)
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => document.removeEventListener('scroll', onScroll, { capture: true })
   }, [scrollContainerRef, feedVirtualization])
 
   useEffect(() => {
@@ -145,7 +171,7 @@ export const ChatFeedItems = memo(function ChatFeedItems({
     if (startIndex <= 0 || !userScrolledRef.current) return
     const container = scrollContainerRef?.current
     const viewport = container?.osInstance?.()?.elements().viewport
-    if (viewport && viewport.scrollTop <= 4) {
+    if (viewport && viewport.scrollTop <= REVEAL_TOP_THRESHOLD_PX) {
       setStartIndex((index) => Math.max(0, index - REVEAL_BATCH_SIZE))
     }
   }, [startIndex, scrollContainerRef, feedVirtualization])
