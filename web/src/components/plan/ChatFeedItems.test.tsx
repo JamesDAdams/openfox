@@ -215,6 +215,54 @@ describe('ChatFeedItems containment styling', () => {
   })
 })
 
+describe('ChatFeedItems virtualization override', () => {
+  beforeEach(() => {
+    clearCache()
+    settingResource.write('true', SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION)
+    MockIntersectionObserver.instances = []
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('mounts every item with no hint, placeholders or sentinel when virtualization is forced off', () => {
+    const items = Array.from({ length: 70 }, (_, i) => msg(`m${i}`, 'user', `Content ${i}`))
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    flushSync(() => root.render(<ChatFeedItems displayItems={items} virtualization={false} />))
+
+    expect(container.querySelector('[data-message-id="m0"]')).toBeTruthy()
+    expect(container.querySelector('[data-message-id="m69"]')).toBeTruthy()
+    expect(container.querySelectorAll('.feed-item')).toHaveLength(70)
+    expect(container.querySelector('[data-testid="feed-unmounted-hint"]')).toBeNull()
+    expect(container.querySelector('[data-placeholder]')).toBeNull()
+    expect(container.querySelector('[data-testid="feed-sentinel"]')).toBeNull()
+    expect(MockIntersectionObserver.instances).toHaveLength(0)
+  })
+
+  it('keeps content-visibility containment on mounted items when virtualization is forced off', () => {
+    const items = Array.from({ length: 40 }, (_, i) => msg(`m${i}`, 'user', `Content ${i}`))
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    flushSync(() => root.render(<ChatFeedItems displayItems={items} virtualization={false} />))
+
+    const wrappers = container.querySelectorAll<HTMLElement>('[data-item-index]:not([data-placeholder])')
+    expect(wrappers.length).toBe(40)
+    for (const wrapper of wrappers) {
+      expect(wrapper.style.getPropertyValue('content-visibility')).toBe('auto')
+      expect(wrapper.style.getPropertyValue('contain-intrinsic-size')).toBe('auto 200px')
+    }
+  })
+})
+
 describe('ChatFeedItems progressive rendering', () => {
   beforeEach(() => {
     clearCache()
