@@ -873,7 +873,7 @@ export function ChatInput({
                 <AgentSelector />
                 <DangerLevelSelector />
               </div>
-              <div className="flex items-center @md:ms-auto" data-testid="model-selector-group">
+              <div className="flex items-center @md:ms-auto min-w-0" data-testid="model-selector-group">
                 {perSessionMcpEnabled && (
                   <div data-testid="mcp-selector-slot">
                     <McpSelector />

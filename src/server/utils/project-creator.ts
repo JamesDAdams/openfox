@@ -39,7 +39,11 @@ function isGitMissing(err: unknown): boolean {
   return /is not recognized as an internal or external command/i.test(e.message)
 }
 
-export async function createProjectDirectory(projectName: string, workdir: string, autoGitInit = true): Promise<Project> {
+export async function createProjectDirectory(
+  projectName: string,
+  workdir: string,
+  autoGitInit = true,
+): Promise<Project> {
   const validation = validateProjectName(projectName)
   if (!validation.valid) {
     throw new Error(validation.error)

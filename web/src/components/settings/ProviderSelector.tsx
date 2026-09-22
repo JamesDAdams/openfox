@@ -51,7 +51,7 @@ function ProviderLabel({
   const t = useT()
   return (
     <>
-      <span className="text-sm text-accent-primary flex items-center gap-1">
+      <span className="text-sm text-accent-primary flex items-center gap-1 min-w-0 max-w-full">
         {agentOverrideActive && (
           <span
             className="w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-border"
@@ -64,14 +64,34 @@ function ProviderLabel({
         )}
         {activeProvider ? (
           <>
-            <span className="hidden @sm:inline">{`${activeProvider.name} • `}</span>
-            <span className="truncate min-w-0">{shortModelName}</span>
-            {effort && <span className="text-text-muted flex-shrink-0">:{effort}</span>}
+            <span
+              data-testid="provider-label-provider"
+              title={activeProvider.name}
+              className="hidden @sm:inline truncate shrink-[100]"
+            >{`${activeProvider.name} • `}</span>
+            <span
+              data-testid="provider-label-model"
+              title={`${activeProvider.name} • ${shortModelName}${effort ? ` :${effort}` : ''}`}
+              className="truncate min-w-0"
+            >
+              {shortModelName}
+            </span>
+            {effort && (
+              <span title={`:${effort}`} className="text-text-muted truncate shrink-[100]">
+                :{effort}
+              </span>
+            )}
           </>
         ) : (
           <>
-            <span className="truncate min-w-0">{shortModelName}</span>
-            {effort && <span className="text-text-muted flex-shrink-0">:{effort}</span>}
+            <span data-testid="provider-label-model" title={shortModelName} className="truncate min-w-0">
+              {shortModelName}
+            </span>
+            {effort && (
+              <span title={`:${effort}`} className="text-text-muted truncate shrink-[100]">
+                :{effort}
+              </span>
+            )}
           </>
         )}
         {pinned && (
@@ -87,7 +107,7 @@ function ProviderLabel({
         )}
       </span>
       <span
-        className={`text-xs px-1.5 py-0.5 rounded-full ${
+        className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${
           activeProvider?.isLocal
             ? 'text-accent-success bg-accent-success/10'
             : 'text-accent-warning bg-accent-warning/10'
