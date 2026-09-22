@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.155 - 2026-09-22
+
+### Features
+
+- **Skills join slash commands** — enabled skills appear in autocomplete, and skill folders load recursively with group labels.
+- **Fullscreen slash command view** — a new Display setting opens the slash picker fullscreen.
+- **Skills manager groups by folder** — collapsible folders, bulk enable toggles, and per-skill token estimates.
+- **Thinking blocks collapse to a summary** — expanded reasoning shrinks to "Thought for Xs" with a live timer while streaming.
+- **Option to skip git init on non-git projects** — new setting decides whether new projects get a git repository.
+- **Custom VSCode remote prefix** — "Open in VSCode" links now respect a configurable remote prefix.
+- **Plugin panels reach xl and full sizes** — provider badges and pricing from plugin metadata render in the provider selector.
+- **Plugin secrets stay masked** — settings forms never show saved secret values in plaintext.
+
+### Enhancements
+
+- **Faster edit live previews** — LSP diagnostics coalesce during same-file edit bursts and preview payloads are deduped.
+- **Feed virtualization on by default** — long sessions render faster with lazy scroll panes and bounded history.
+
+### Bug Fixes
+
+- **Full-history view shows no more gaps** — virtualization is off in readonly view, fixing placeholder jumps.
+- **Provider chip keeps the model name visible** — truncation now shrinks the provider name first.
+
 ## 2.0.154 - 2026-09-21
 
 ### Features
