@@ -35,6 +35,9 @@ interface Provider {
   authAdapter?: string
   transportAdapter?: string
   credentialRef?: string
+  preset?: string
+  logo?: string
+  icon?: string
   pluginMetadata?: PluginModelMetadataView
 }
 

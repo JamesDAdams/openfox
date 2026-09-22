@@ -15,6 +15,8 @@ export interface PluginDiagnostic {
   apiVersion: number
   displayName: string
   description?: string
+  icon?: string
+  logo?: string
   capabilities: PluginCapability[]
   timeoutMs?: number
   enabled: boolean
@@ -58,6 +60,8 @@ export async function readPluginManifest(packageDir: string): Promise<PluginMani
         ...(data.openfox.plugin ? { plugin: data.openfox.plugin } : {}),
         ...(data.openfox.displayName ? { displayName: data.openfox.displayName } : {}),
         ...(data.openfox.description ? { description: data.openfox.description } : {}),
+        ...(data.openfox.icon ? { icon: data.openfox.icon } : {}),
+        ...(data.openfox.logo ? { logo: data.openfox.logo } : {}),
         ...(data.openfox.capabilities ? { capabilities: data.openfox.capabilities as PluginCapability[] } : {}),
         ...(data.openfox.timeoutMs ? { timeoutMs: data.openfox.timeoutMs } : {}),
       },
@@ -76,6 +80,8 @@ function baseDiagnostic(manifest: PluginManifest, source: string): PluginDiagnos
     apiVersion: manifest.openfox.apiVersion,
     displayName: manifest.openfox.displayName ?? manifest.name,
     ...(manifest.openfox.description ? { description: manifest.openfox.description } : {}),
+    ...(manifest.openfox.icon ? { icon: manifest.openfox.icon } : {}),
+    ...(manifest.openfox.logo ? { logo: manifest.openfox.logo } : {}),
     capabilities: manifest.openfox.capabilities ?? [],
     ...(manifest.openfox.timeoutMs ? { timeoutMs: manifest.openfox.timeoutMs } : {}),
     enabled: true,

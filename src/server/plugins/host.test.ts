@@ -559,12 +559,15 @@ describe('PluginHost', () => {
     const host = makeHost(configDirectory)
     await host.start()
 
-    emitPluginHook('llm.completed', { sessionId: 'session-llm', data: { model: 'mock-model' } })
+    emitPluginHook('llm.completed', {
+      sessionId: 'session-llm',
+      data: { providerId: 'openai-provider', model: 'mock-model' },
+    })
     await vi.waitFor(() => {
       expect((globalThis as Record<string, unknown>)['__llmHook']).toMatchObject({
         event: 'llm.completed',
         sessionId: 'session-llm',
-        data: { model: 'mock-model' },
+        data: { providerId: 'openai-provider', model: 'mock-model' },
       })
     })
   })

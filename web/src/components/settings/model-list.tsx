@@ -14,6 +14,7 @@ import type { PluginModelMetadataView } from '@shared/plugin.js'
 import { isSmallContext } from '../../lib/context-warning'
 import { useT } from '../../hooks/useT'
 import { PluginModelMeta } from '../plugins/PluginModelMeta'
+import { PluginLogo } from '../shared/PluginLogo'
 
 export function formatContextWindow(context: number): string {
   if (context >= 1000000) return `${(context / 1000000).toFixed(1)}M`
@@ -78,6 +79,7 @@ export interface ModelEntryRowProps {
   isActive: boolean
   highlighted: boolean
   onModelClick: (providerId: string, modelId: string) => void
+  providerLogo?: string
   isDefault?: boolean
   isFavorite?: boolean
   disabled?: boolean
@@ -104,6 +106,7 @@ export function ModelEntryRow({
   settingDefault,
   highlighted,
   onModelClick,
+  providerLogo,
   onSetDefault,
   onToggleFavorite,
   onEditModel,
@@ -126,8 +129,9 @@ export function ModelEntryRow({
           type="button"
           onClick={() => onModelClick(providerId, modelConfig.id)}
           disabled={disabled}
-          className="flex-1 truncate text-left"
+          className="flex-1 truncate text-left inline-flex items-center gap-1.5 min-w-0"
         >
+          {providerLogo && <PluginLogo icon={providerLogo} className="w-3.5 h-3.5 shrink-0" />}
           {modelConfig.name ?? modelConfig.id.split('/').pop()?.replace(/-/g, ' ') ?? modelConfig.id}
         </button>
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">

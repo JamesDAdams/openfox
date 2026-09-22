@@ -27,6 +27,8 @@ import { useIsTouchDevice } from '../../hooks/useIsTouchDevice'
 import { SETTINGS_KEYS, setSetting } from '../../lib/resources'
 import { PluginZone } from '../plugins/PluginZone'
 import { PluginModelMeta } from '../plugins/PluginModelMeta'
+import { usePlugins } from '../../hooks/usePlugins'
+import { PluginLogo, findPluginLogoForProvider } from '../shared/PluginLogo'
 
 type ProviderLabelProps = {
   activeProvider: { name: string; isLocal?: boolean } | undefined
@@ -144,6 +146,7 @@ export function ProviderSelector() {
   const loadedProvidersRef = useRef<Set<string>>(new Set())
   const prevIsOpenRef = useRef(false)
   const { providers, activeProviderId } = useProviders()
+  const { plugins } = usePlugins()
   const defaultModelSelection = useConfig().config?.defaultModelSelection ?? null
   const activating = useConfigStore((state) => state.activating)
   const activateProvider = useConfigStore((state) => state.activateProvider)
@@ -826,6 +829,7 @@ export function ProviderSelector() {
                             <ModelEntryRow
                               providerId={pId}
                               modelConfig={modelConfig}
+                              providerLogo={findPluginLogoForProvider(provider, plugins)}
                               isActive={isSessionActive(pId, mId)}
                               isDefault={isDefault(pId, mId)}
                               isFavorite
@@ -862,6 +866,12 @@ export function ProviderSelector() {
                         className="flex flex-col min-w-0 flex-1 cursor-pointer"
                       >
                         <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                          {findPluginLogoForProvider(group.provider, plugins) && (
+                            <PluginLogo
+                              icon={findPluginLogoForProvider(group.provider, plugins)}
+                              className="w-4 h-4 shrink-0"
+                            />
+                          )}
                           <span
                             className={`text-sm font-medium truncate ${
                               group.provider.id === effectiveProviderId ? 'text-accent-primary' : 'text-text-primary'
@@ -873,7 +883,9 @@ export function ProviderSelector() {
                         </div>
                         {!group.provider.authAdapter &&
                           !group.provider.transportAdapter &&
-                          group.provider.backend !== 'unknown' && (
+                          group.provider.backend !== 'unknown' &&
+                          getBackendDisplayName(group.provider.backend).toLowerCase() !==
+                            group.provider.name.trim().toLowerCase() && (
                             <span className="text-xs text-text-muted truncate">
                               {getBackendDisplayName(group.provider.backend)}
                             </span>
@@ -1176,6 +1188,7 @@ export function ProviderSelector() {
             sendReasoningInMessages: modalProvider.sendReasoningInMessages,
             authAdapter: modalProvider.authAdapter,
             transportAdapter: modalProvider.transportAdapter,
+            logo: modalProvider.logo,
             models: modalProvider.models,
           }}
           editModelId={editingModel?.model.id}

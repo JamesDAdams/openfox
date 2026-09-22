@@ -36,3 +36,22 @@ export function formatPluginPrice(pricing: PluginModelPricingView): string | nul
   }
   return parts.length > 0 ? parts.join(' · ') : null
 }
+
+/**
+ * Detailed multi-line tooltip for pricing hover display.
+ */
+export function formatPluginPricingTooltip(pricing: PluginModelPricingView): string | undefined {
+  const lines: string[] = []
+  const prefix = currencyPrefix(pricing.currency)
+  if (pricing.input !== undefined) lines.push(`Input: ${prefix}${rate(pricing.input)} / 1M tokens`)
+  if (pricing.output !== undefined) lines.push(`Output: ${prefix}${rate(pricing.output)} / 1M tokens`)
+  if (pricing.cacheRead !== undefined) lines.push(`Cache read: ${prefix}${rate(pricing.cacheRead)} / 1M tokens`)
+  if (pricing.cacheWrite !== undefined) lines.push(`Cache write: ${prefix}${rate(pricing.cacheWrite)} / 1M tokens`)
+  if (pricing.discountPercent !== undefined && pricing.discountPercent > 0) {
+    lines.push(`Discount: -${rate(pricing.discountPercent)}%`)
+  }
+  if (pricing.lastUpdatedAt) {
+    lines.push(`Updated: ${pricing.lastUpdatedAt}`)
+  }
+  return lines.length > 0 ? lines.join('\n') : undefined
+}

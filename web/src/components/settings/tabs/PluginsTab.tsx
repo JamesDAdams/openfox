@@ -12,6 +12,7 @@ import { Button } from '../../shared/Button'
 import { Toggle } from '../../shared/Toggle'
 import { ConfirmModal } from '../../shared/ConfirmModal'
 import { PluginSettingsForm } from '../../plugins/PluginSettingsForm'
+import { PluginLogo } from '../../shared/PluginLogo'
 import type { PluginContributionSummary, PluginInfo } from '@shared/plugin.js'
 
 interface RegistryPlugin {
@@ -52,9 +53,22 @@ function contributionSummaryParts(summary: PluginContributionSummary): { key: st
   ].filter((entry) => entry.count > 0)
 }
 
-function PluginTitle({ title, subtitle, children }: { title: string; subtitle: string; children?: ReactNode }) {
+function PluginTitle({
+  title,
+  subtitle,
+  icon,
+  logo,
+  children,
+}: {
+  title: string
+  subtitle: string
+  icon?: string
+  logo?: string
+  children?: ReactNode
+}) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
+      <PluginLogo icon={icon} logo={logo} className="w-5 h-5" />
       <h3 className="text-sm font-medium text-text-primary">{title}</h3>
       <span className="text-xs text-text-muted">{subtitle}</span>
       {children}
@@ -141,12 +155,14 @@ function InstalledPluginCard({ plugin }: { plugin: PluginInfo }) {
     <PluginCardLayout
       header={
         <>
-          <PluginTitle title={plugin.displayName} subtitle={plugin.id}>
+          <PluginTitle title={plugin.displayName} subtitle={plugin.id} icon={plugin.icon} logo={plugin.logo}>
             <span className="text-xs text-text-muted">{`v${plugin.version}`}</span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusClass}`}>{statusLabel}</span>
             <span className="text-[10px] text-text-muted">{`API v${plugin.apiVersion}`}</span>
           </PluginTitle>
-          {plugin.description ? <p className="text-xs text-text-muted mt-1">{plugin.description}</p> : null}
+          {plugin.description ? (
+            <p className="text-xs text-text-muted mt-1 whitespace-pre-line leading-relaxed">{plugin.description}</p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             {CAPABILITY_ORDER.filter((capability) => plugin.capabilities.includes(capability)).map((capability) => (
               <span
@@ -236,7 +252,9 @@ function RegistryPluginCard({ plugin, installed }: { plugin: RegistryPlugin; ins
       header={
         <>
           <PluginTitle title={plugin.displayName} subtitle={plugin.name} />
-          <p className="text-xs text-text-muted mt-1">{plugin.description}</p>
+          {plugin.description ? (
+            <p className="text-xs text-text-muted mt-1 whitespace-pre-line leading-relaxed">{plugin.description}</p>
+          ) : null}
           <a
             href={plugin.githubUrl}
             target="_blank"

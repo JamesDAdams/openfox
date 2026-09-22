@@ -72,6 +72,8 @@ export const pluginManifestSchema = z.object({
     plugin: z.string().min(1).optional(),
     displayName: z.string().min(1).optional(),
     description: z.string().optional(),
+    icon: z.string().optional(),
+    logo: z.string().optional(),
     capabilities: z.array(z.string()).optional(),
     timeoutMs: z.number().int().positive().optional(),
   }),
@@ -86,6 +88,8 @@ export interface PluginManifest {
     plugin?: string
     displayName?: string
     description?: string
+    icon?: string
+    logo?: string
     capabilities?: PluginCapability[]
     timeoutMs?: number
   }
@@ -144,6 +148,7 @@ export interface PluginModelPricing {
   cacheWrite?: number
   currency?: string
   discountPercent?: number
+  lastUpdatedAt?: string
 }
 
 export interface PluginModelMetadata {
@@ -179,6 +184,7 @@ export type PluginHookEvent =
   | 'tool.completed'
   | 'llm.completed'
   | 'criterion.updated'
+  | 'provider.changed'
 
 export interface PluginHookPayload {
   event: PluginHookEvent

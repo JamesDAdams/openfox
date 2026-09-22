@@ -1,6 +1,6 @@
 import { useLocalizedString } from '../../hooks/useLocalizedString'
 import { badgeToneClasses, pluginIcon } from './plugin-ui-utils'
-import { formatPluginPrice } from '../../lib/plugin-model-meta'
+import { formatPluginPrice, formatPluginPricingTooltip } from '../../lib/plugin-model-meta'
 import type { PluginModelMetadataView } from '@shared/plugin.js'
 
 /**
@@ -12,6 +12,7 @@ export function PluginModelMeta({ metadata }: { metadata?: PluginModelMetadataVi
   if (!metadata) return null
 
   const price = metadata.pricing ? formatPluginPrice(metadata.pricing) : null
+  const priceTooltip = metadata.pricing ? formatPluginPricingTooltip(metadata.pricing) : undefined
 
   return (
     <>
@@ -39,7 +40,11 @@ export function PluginModelMeta({ metadata }: { metadata?: PluginModelMetadataVi
         )
       })}
       {price ? (
-        <span data-plugin-price className="text-[10px] text-text-muted whitespace-nowrap">
+        <span
+          data-plugin-price
+          title={priceTooltip}
+          className="text-[10px] text-text-muted whitespace-nowrap cursor-help"
+        >
           {price}
         </span>
       ) : null}

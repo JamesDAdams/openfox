@@ -840,6 +840,9 @@ export interface Provider {
   thinkingField?: string
   /** When false, strips reasoning/thinking content from outgoing assistant messages */
   sendReasoningInMessages?: boolean
+  /** Custom logo or icon URL/SVG for the provider */
+  logo?: string
+  icon?: string
   /** Metadata contributed by plugins (pricing, capabilities, badges, quota indicators). */
   pluginMetadata?: PluginModelMetadataView
 }

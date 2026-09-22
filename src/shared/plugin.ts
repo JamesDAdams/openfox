@@ -95,7 +95,7 @@ export interface PluginUiBadge {
 }
 
 export type DeclarativeNode =
-  | { type: 'text'; text: LocalizedString; muted?: boolean }
+  | { type: 'text'; text: LocalizedString; muted?: boolean; className?: string }
   | { type: 'keyValue'; items: { key: LocalizedString; value: string }[] }
   | { type: 'table'; columns: LocalizedString[]; rows: string[][] }
   | { type: 'progress'; label: LocalizedString; value: number; max: number; tone?: PluginBadgeTone }
@@ -103,7 +103,7 @@ export type DeclarativeNode =
   | {
       type: 'button'
       label: LocalizedString
-      variant?: 'default' | 'primary' | 'danger' | 'ghost'
+      variant?: 'default' | 'primary' | 'danger' | 'ghost' | 'pill'
       icon?: string
       onActivate: PluginActivation
     }
@@ -257,6 +257,7 @@ export interface PluginModelPricingView {
   cacheWrite?: number
   currency?: string
   discountPercent?: number
+  lastUpdatedAt?: string
 }
 
 export interface PluginModelMetadataView {
@@ -291,6 +292,8 @@ export interface PluginInfo {
   id: string
   displayName: string
   description?: string
+  icon?: string
+  logo?: string
   version: string
   apiVersion: 1 | 2
   source: string

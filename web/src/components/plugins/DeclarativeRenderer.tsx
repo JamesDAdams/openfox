@@ -10,11 +10,12 @@ const PROGRESS_COLORS: Record<string, string> = {
   danger: 'bg-accent-error',
 }
 
-const BUTTON_VARIANT_CLASSES: Record<'default' | 'primary' | 'danger' | 'ghost', string> = {
+const BUTTON_VARIANT_CLASSES: Record<'default' | 'primary' | 'danger' | 'ghost' | 'pill', string> = {
   default: 'bg-bg-tertiary text-text-primary hover:bg-bg-primary',
   primary: 'bg-accent-primary text-white hover:bg-accent-primary/80',
   danger: 'bg-accent-error text-white hover:bg-accent-error/80',
   ghost: 'p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary',
+  pill: 'px-2.5 py-0.5 rounded-full border border-accent-primary/40 bg-accent-primary/10 text-accent-primary text-xs font-mono font-medium hover:bg-accent-primary/20',
 }
 
 const GAP_CLASSES: Record<'none' | 'xs' | 'sm' | 'md' | 'lg', string> = {
@@ -63,7 +64,7 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
   switch (node.type) {
     case 'text':
       return (
-        <p className={node.muted ? 'text-sm text-text-muted' : 'text-sm text-text-primary'}>
+        <p className={node.className ?? (node.muted ? 'text-sm text-text-muted' : 'text-sm text-text-primary')}>
           {interpolate(localize(node.text), values)}
         </p>
       )
@@ -106,23 +107,32 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
         </table>
       )
 
-    case 'progress':
+    case 'progress': {
+      const pct = node.max > 0 ? Math.min(100, Math.max(0, (node.value / node.max) * 100)) : 0
+      const labelText = localize(node.label)
+      const toneColor = PROGRESS_COLORS[node.tone ?? 'info'] ?? 'bg-accent-primary'
       return (
-        <div>
-          <div className="flex justify-between text-xs text-text-muted mb-1">
-            <span>{localize(node.label)}</span>
-            <span>
-              {node.value} / {node.max}
-            </span>
-          </div>
-          <div className="h-2 rounded bg-bg-tertiary overflow-hidden">
-            <div
-              className={`h-full ${PROGRESS_COLORS[node.tone ?? 'info'] ?? 'bg-accent-primary'}`}
-              style={{ width: `${node.max > 0 ? Math.min(100, (node.value / node.max) * 100) : 0}%` }}
-            />
+        <div className="w-full space-y-1.5">
+          {labelText ? (
+            <div className="flex justify-between text-xs text-text-muted font-mono">
+              <span>{labelText}</span>
+              <span>
+                {node.value} / {node.max}
+              </span>
+            </div>
+          ) : null}
+          <div className="relative h-1.5 w-full rounded-full bg-bg-tertiary">
+            <div className={`h-full rounded-full ${toneColor}`} style={{ width: `${pct}%` }} />
+            {pct > 0 && (
+              <div
+                className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full ${toneColor} ring-2 ring-bg-secondary`}
+                style={{ left: `${pct}%` }}
+              />
+            )}
           </div>
         </div>
       )
+    }
 
     case 'badge':
       return (
