@@ -51,3 +51,76 @@ export async function computeLiveEditContext(
   )
   return regions.length > 0 ? regions : undefined
 }
+
+interface LiveEditTrackState {
+  oldString: string | undefined
+  newString: string | undefined
+  regions: EditContextRegion[] | undefined
+  lastEmitted: EditContextRegion[] | undefined
+}
+
+function sameRegions(a: EditContextRegion[], b: EditContextRegion[] | undefined): boolean {
+  return b !== undefined && JSON.stringify(a) === JSON.stringify(b)
+}
+
+/**
+ * Per-index tracker for live edit context enrichment of streaming edit_file
+ * preparing events.
+ *
+ * Two dedupes keep a burst of parallel edits cheap:
+ * - `extractEditContext` over the file runs only when the parsed old/new
+ *   strings changed since the previous preparing event for the same index
+ *   (otherwise the cached regions are reused);
+ * - an editContext payload is emitted only when it differs from the last one
+ *   sent for that index, so byte-identical chunks don't re-send redundant
+ *   context over the WebSocket.
+ */
+export class LiveEditContextTracker {
+  private byIndex = new Map<number, LiveEditTrackState>()
+
+  /**
+   * Decide the editContext payload for the next tool.preparing event of an
+   * edit_file call. Returns the regions to attach (or undefined to omit them).
+   *
+   * `compute` defaults to computeLiveEditContext; tests inject a stub to count
+   * recomputes.
+   */
+  async next(
+    index: number,
+    argsFragment: string | undefined,
+    workdir: string,
+    cache: Map<string, string>,
+    compute: (fragment: string | undefined) => Promise<EditContextRegion[] | undefined> = (fragment) =>
+      computeLiveEditContext(fragment, workdir, cache),
+  ): Promise<EditContextRegion[] | undefined> {
+    const state: LiveEditTrackState = this.byIndex.get(index) ?? {
+      oldString: undefined,
+      newString: undefined,
+      regions: undefined,
+      lastEmitted: undefined,
+    }
+    const args = parsePartialFileArgs(argsFragment)
+    const specChanged = args.old_string !== state.oldString || args.new_string !== state.newString
+    state.oldString = args.old_string
+    state.newString = args.new_string
+
+    if (specChanged) {
+      const computed = await compute(argsFragment)
+      if (computed && computed.length > 0) {
+        state.regions = computed
+      } else {
+        // A stale match (old_string changed to a non-matching form) must drop,
+        // along with the last-emitted dedupe state so a later identical rematch
+        // is re-emitted.
+        state.regions = undefined
+        state.lastEmitted = undefined
+      }
+    }
+
+    const regions = state.regions
+    const toEmit = regions && regions.length > 0 && !sameRegions(regions, state.lastEmitted) ? regions : undefined
+    if (toEmit) state.lastEmitted = toEmit
+    this.byIndex.set(index, state)
+    return toEmit
+  }
+}
