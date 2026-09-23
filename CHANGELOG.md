@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.0.157 - 2026-09-23
+
+### Features
+
+- **Plugin logo support** — plugins can ship an icon or logo shown across the UI, including raw SVG markup.
+- **Built-in provider logos** — Ollama, LM Studio, llama.cpp, vLLM, and Unsloth ship local logos used across pickers.
+- **Custom provider logo** — set a logo URL when adding or editing a provider.
+- **Auto-saving plugin settings** — toggles save instantly, with sections, grouped/dependent fields, and half-width layout.
+- **Action buttons in plugin settings** — settings can include buttons that invoke a plugin RPC.
+- **Model metadata popovers** — hover a model to see pricing and badges; plugins can color model names and add sublines.
+- **Smarter declarative plugin UIs** — collapsible details sections, and inputs/selects can trigger plugin actions.
+- **Plugin RPC context** — calls automatically carry modelId, providerId, fieldId, and value.
+- **Pill button variant** — new pill-style button for plugin UIs.
+
+### Enhancements
+
+- **Provider logos in pickers** — provider and model pickers now show each provider's logo.
+- **Richer plugin card descriptions** — plugin cards render formatted description text.
+- **Sleeker progress bars** — declarative progress bars gain a position knob and cleaner design.
+- **Table row separators** — declarative tables now show row separators.
+- **Longer feed by default** — default max visible feed items raised from 100 to 300.
+- **llm.completed hook enriched** — now includes the active provider ID.
+
+### Bug Fixes
+
+- **Display toggles respect defaults** — toggles without a saved value now use their configured default.
+- **Accessible toggle switches** — toggles expose proper role and aria-pressed state.
+- **Provider list refreshes** — provider list now updates after saving plugin settings.
+
 ## 2.0.156 - 2026-09-23
 
 ### Features
