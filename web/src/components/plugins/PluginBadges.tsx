@@ -116,14 +116,7 @@ function PluginBadgeView({ badge, context }: { badge: PluginUiBadge; context: Pl
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [
-    badge.pluginId,
-    badge.source,
-    cacheKey,
-    context.sessionId,
-    context.workdir,
-    context.projectId,
-  ])
+  }, [badge.pluginId, badge.source, cacheKey, context.sessionId, context.workdir, context.projectId])
 
   const current: ResolvedBadgeValue =
     resolved.key === undefined || resolved.key === cacheKey ? resolved : { loaded: false }
@@ -140,9 +133,11 @@ function PluginBadgeView({ badge, context }: { badge: PluginUiBadge; context: Pl
 
   if (badge.appearance === 'icon') {
     const accessibleLabel = tooltip || label
+    const decorative = !accessibleLabel
     return (
       <span
-        role="img"
+        role={decorative ? undefined : 'img'}
+        aria-hidden={decorative}
         aria-label={accessibleLabel || undefined}
         title={tooltip}
         data-testid="plugin-badge"
@@ -154,7 +149,7 @@ function PluginBadgeView({ badge, context }: { badge: PluginUiBadge; context: Pl
   }
 
   const hasValue = value !== undefined && value !== ''
-  const displayText = hasValue ? `${label}${label ? ' ' : ''}${String(value)}` : label
+  const displayText = hasValue ? (label ? `${label} ${String(value)}` : String(value)) : label
 
   return (
     <span
