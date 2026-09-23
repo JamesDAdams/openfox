@@ -10,6 +10,7 @@ import { startInspectProxy } from './inspect-proxy.js'
 import type { SessionManager } from '../session/manager.js'
 import { emitPluginHook } from '../plugins/hook-emitter.js'
 import { getProjectByWorkdir } from '../db/projects.js'
+import type { PluginHookPayload } from '../../plugin/index.js'
 
 const MAX_LOG_LINES = 2000
 const MAX_LOG_BYTES = 100_000
@@ -140,18 +141,28 @@ class DevServerManager {
       listener(resolved, state, errorMessage, url, inspectProxyPort)
     }
 
-    const projectId = this.resolveProjectId(workdir)
-    emitPluginHook('devserver.state.changed', {
-      sessionId: '',
-      ...(projectId ? { projectId } : {}),
-      data: {
+    emitPluginHook(
+      'devserver.state.changed',
+      this.buildHookPayload(workdir, {
         workdir: resolved,
         state,
         url,
         inspectProxyPort,
         ...(errorMessage ? { errorMessage } : {}),
-      },
-    })
+      }),
+    )
+  }
+
+  private buildHookPayload(
+    workdir: string,
+    data: Record<string, unknown>,
+  ): Omit<PluginHookPayload, 'event' | 'timestamp'> {
+    const projectId = this.resolveProjectId(workdir)
+    return {
+      sessionId: '',
+      ...(projectId ? { projectId } : {}),
+      data,
+    }
   }
 
   private resolveProjectId(workdir: string): string | undefined {
@@ -183,17 +194,15 @@ class DevServerManager {
   ): void {
     if (instance.lifecycleStopHookEmitted) return
     instance.lifecycleStopHookEmitted = true
-    const projectId = this.resolveProjectId(workdir)
-    emitPluginHook('devserver.stopped', {
-      sessionId: '',
-      ...(projectId ? { projectId } : {}),
-      data: {
+    emitPluginHook(
+      'devserver.stopped',
+      this.buildHookPayload(workdir, {
         workdir: this.resolveWorkdir(workdir),
         url: instance.resolvedUrl ?? instance.config?.url ?? null,
         reason,
         ...extra,
-      },
-    })
+      }),
+    )
   }
 
   /** Probe whether a TCP port is in use */
@@ -400,17 +409,15 @@ class DevServerManager {
     instance.errorMessage = undefined
     this.emitStateChange(workdir, 'running', undefined)
     logger.info('Dev server started', { workdir, command: resolvedCommand, port: assignedPort })
-    const projectId = this.resolveProjectId(workdir)
-    emitPluginHook('devserver.started', {
-      sessionId: '',
-      ...(projectId ? { projectId } : {}),
-      data: {
+    emitPluginHook(
+      'devserver.started',
+      this.buildHookPayload(workdir, {
         workdir: resolved,
         url: resolvedUrl,
         command: resolvedCommand,
         port: assignedPort,
-      },
-    })
+      }),
+    )
 
     return this.getStatus(workdir)
   }
