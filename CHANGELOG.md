@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.0.156 - 2026-09-23
+
+### Features
+
+- **Cache-token attribution in session stats** — provider-reported cached and cache-write tokens now shown alongside token counts.
+- **Event-derived stats rollup** — the stats API exposes compactions, retries, tool errors, and sub-agent activity.
+- **New plugin hooks** — `context.compacted` and `retry.triggered` fire live from the session event stream.
+- **Plugin iframe session context** — plugin panels receive `sessionId`, `projectId`, and `workdir` as query params.
+- **Dynamic plugin badges** — badge RPC can drive state, live refresh intervals, and icon-only tone styling.
+- **Workdir-scoped badges** — badge state is scoped per workdir, and sessions pass their workdir to plugins.
+- **Dev-server lifecycle hooks** — plugins observe started/stopped events with reason and exit info.
+- **Dev-server state hook** — `devserver.state.changed` reports state plus the inspect-proxy port.
+
+### Enhancements
+
+- **llm.completed hook enriched** — now includes total tokens and provider cache-token fields.
+- **No stale badge flash** — dynamic badges stay hidden until the RPC value resolves.
+
 ## 2.0.155 - 2026-09-22
 
 ### Features
