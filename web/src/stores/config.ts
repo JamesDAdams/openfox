@@ -21,6 +21,7 @@ type ProviderStatus = 'connected' | 'disconnected' | 'unknown'
 
 interface Provider {
   id: string
+  preset?: string
   name: string
   url: string
   backend: Backend
@@ -35,6 +36,9 @@ interface Provider {
   authAdapter?: string
   transportAdapter?: string
   credentialRef?: string
+  /** Custom logo or icon URL/SVG for the provider */
+  logo?: string
+  icon?: string
   pluginMetadata?: PluginModelMetadataView
 }
 

@@ -27,6 +27,17 @@ interface ToggleDefinition {
 
 const FEED_TOGGLES: ToggleDefinition[] = [
   {
+    key: SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING,
+    label: {
+      en: 'Show live tool call previews',
+      fr: 'Afficher les aperçus d’appels d’outils en direct',
+    },
+    description: {
+      en: 'While a model writes or edits a file, preview the content live as it streams in',
+      fr: 'Pendant que le modèle écrit ou modifie un fichier, prévisualisez le contenu en direct pendant le streaming',
+    },
+  },
+  {
     key: SETTINGS_KEYS.DISPLAY_SHOW_THINKING,
     label: { en: 'Show thinking blocks', fr: 'Afficher les blocs de réflexion' },
     description: {
@@ -40,14 +51,6 @@ const FEED_TOGGLES: ToggleDefinition[] = [
     description: {
       en: 'Always show full tool call details instead of compact view',
       fr: 'Affiche toujours le détail complet des appels d’outils au lieu d’une vue compacte',
-    },
-  },
-  {
-    key: SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING,
-    label: { en: 'Show live tool call previews', fr: 'Afficher les aperçus en direct des appels d’outils' },
-    description: {
-      en: 'While the model writes or edits a file, preview the content live as it streams in',
-      fr: 'Pendant que le modèle écrit ou modifie un fichier, prévisualisez le contenu en direct pendant le streaming',
     },
   },
   {
@@ -171,10 +174,10 @@ export function DisplayTab() {
   const applyLocale = useLocaleStore((state) => state.applyLocale)
   const showThinking = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_THINKING, 'true')
   const showVerboseToolOutput = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_VERBOSE_TOOL_OUTPUT, 'true')
-  const showToolCallStreaming = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING, 'false')
   const showStats = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_STATS, 'true')
   const showAgentDefinitions = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS, 'true')
   const showWorkflowBars = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS, 'true')
+  const showToolCallStreaming = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING, 'false')
   const fullscreenSlashCommand = useSetting(SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND, 'false')
   const nativeScrollbars = useSetting(SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS, 'false')
   const nativeScrollbarsCodeBlocks = useSetting(SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS_CODE_BLOCKS, 'false')
@@ -185,9 +188,9 @@ export function DisplayTab() {
   )
   const feedVirtualization = useSetting(SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION, 'true')
   const syntaxHighlighting = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING, 'true')
-  const fullscreenComposer = useSetting(SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER, 'false')
-  const maxVisibleItems = useSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, '100')
+  const maxVisibleItems = useSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, '300')
   const storedLocale = useSetting(SETTINGS_KEYS.DISPLAY_LOCALE, 'automatic')
+  const fullscreenComposer = useSetting(SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER, 'false')
   const isLoading = showThinking.loading
 
   const [maxItemsLocal, setMaxItemsLocal] = useState(maxVisibleItems.value)
@@ -206,9 +209,9 @@ export function DisplayTab() {
   const allToggles = [...FEED_TOGGLES, ...PERF_TOGGLES, ...COMPOSER_TOGGLES]
 
   const localValues: Record<string, string> = {
+    [SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING]: showToolCallStreaming.value,
     [SETTINGS_KEYS.DISPLAY_SHOW_THINKING]: showThinking.value,
     [SETTINGS_KEYS.DISPLAY_SHOW_VERBOSE_TOOL_OUTPUT]: showVerboseToolOutput.value,
-    [SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING]: showToolCallStreaming.value,
     [SETTINGS_KEYS.DISPLAY_SHOW_STATS]: showStats.value,
     [SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS]: showAgentDefinitions.value,
     [SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS]: showWorkflowBars.value,
@@ -221,12 +224,19 @@ export function DisplayTab() {
     [SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING]: syntaxHighlighting.value,
     [SETTINGS_KEYS.DISPLAY_MOBILE_FULLSCREEN_COMPOSER]: fullscreenComposer.value,
   }
+
   const [local, setLocal] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(allToggles.map((toggle) => [toggle.key, localValues[toggle.key] === 'true'])),
+    Object.fromEntries(
+      allToggles.map((toggle) => [toggle.key, (localValues[toggle.key] ?? toggle.defaultValue) === 'true']),
+    ),
   )
 
   useEffect(() => {
-    setLocal(Object.fromEntries(allToggles.map((toggle) => [toggle.key, localValues[toggle.key] === 'true'])))
+    setLocal(
+      Object.fromEntries(
+        allToggles.map((toggle) => [toggle.key, (localValues[toggle.key] ?? toggle.defaultValue) === 'true']),
+      ),
+    )
   }, [JSON.stringify(localValues)])
 
   const handleToggle = (key: string) => {
@@ -428,8 +438,9 @@ function ToggleList({
           </div>
           <button
             type="button"
+            role="button"
+            aria-pressed={local[key] ? 'true' : 'false'}
             onClick={() => onToggle(key)}
-            aria-pressed={local[key]}
             className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
               local[key] ? 'bg-accent-primary' : 'bg-bg-tertiary'
             }`}

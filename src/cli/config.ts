@@ -63,6 +63,8 @@ const providerSchema = z
     authAdapter: z.string().optional(),
     transportAdapter: z.string().optional(),
     credentialRef: z.string().optional(),
+    logo: z.string().optional(),
+    icon: z.string().optional(),
   })
   .transform((provider): Provider => ({
     id: provider.id,
@@ -82,6 +84,8 @@ const providerSchema = z
     ...(provider.authAdapter ? { authAdapter: provider.authAdapter } : {}),
     ...(provider.transportAdapter ? { transportAdapter: provider.transportAdapter } : {}),
     ...(provider.credentialRef ? { credentialRef: provider.credentialRef } : {}),
+    ...(provider.logo ? { logo: provider.logo } : {}),
+    ...(provider.icon ? { icon: provider.icon } : {}),
   }))
 
 const serverSchema = z.object({

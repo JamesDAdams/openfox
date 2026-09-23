@@ -20,16 +20,14 @@ describe('PluginModelMeta', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders pricing and badges', () => {
+  it('renders badges when present', () => {
     render(
       <PluginModelMeta
         metadata={{
-          pricing: { input: 0.15, output: 0.6, currency: 'USD', discountPercent: 50 },
           badges: [{ label: { en: 'Cheap', fr: 'Économique' }, tone: 'success' }],
         }}
       />,
     )
-    expect(screen.getByText('$0.15/0.60 · -50.00%')).toBeDefined()
     expect(screen.getByText('Cheap')).toBeDefined()
   })
 

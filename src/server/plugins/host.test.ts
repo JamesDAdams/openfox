@@ -460,7 +460,7 @@ describe('PluginHost', () => {
       `registry.registerTransitionHandler('always_true', async () => true);
        registry.registerCommand({ id: 'plugin-cmd', name: 'Plugin command', prompt: 'hello' });
        registry.registerSkillSource({ id: 'src', label: { en: 'Skills', fr: 'Compétences' }, load: () => [{ id: 'plugin-skill', name: 'Plugin skill', description: 'd', prompt: 'p' }] });
-       registry.registerModelMetadataProvider({ id: 'pricing', getMetadata: () => ({ pricing: { input: 1, output: 2, currency: 'USD' } }) });`,
+       registry.registerModelMetadataProvider({ id: 'meta-provider', getMetadata: () => ({ nameTone: 'success', badges: [{ label: { en: 'Fast', fr: 'Rapide' } }] }) });`,
     )
     const host = makeHost(configDirectory)
     await host.start()
@@ -559,12 +559,15 @@ describe('PluginHost', () => {
     const host = makeHost(configDirectory)
     await host.start()
 
-    emitPluginHook('llm.completed', { sessionId: 'session-llm', data: { model: 'mock-model' } })
+    emitPluginHook('llm.completed', {
+      sessionId: 'session-llm',
+      data: { providerId: 'openai-provider', model: 'mock-model' },
+    })
     await vi.waitFor(() => {
       expect((globalThis as Record<string, unknown>)['__llmHook']).toMatchObject({
         event: 'llm.completed',
         sessionId: 'session-llm',
-        data: { model: 'mock-model' },
+        data: { providerId: 'openai-provider', model: 'mock-model' },
       })
     })
   })

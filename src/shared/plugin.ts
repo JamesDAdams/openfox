@@ -119,7 +119,7 @@ export interface PluginUiBadge {
 }
 
 export type DeclarativeNode =
-  | { type: 'text'; text: LocalizedString; muted?: boolean }
+  | { type: 'text'; text: LocalizedString; muted?: boolean; className?: string }
   | { type: 'keyValue'; items: { key: LocalizedString; value: string }[] }
   | { type: 'table'; columns: LocalizedString[]; rows: string[][] }
   | { type: 'progress'; label: LocalizedString; value: number; max: number; tone?: PluginBadgeTone }
@@ -127,7 +127,7 @@ export type DeclarativeNode =
   | {
       type: 'button'
       label: LocalizedString
-      variant?: 'default' | 'primary' | 'danger' | 'ghost'
+      variant?: 'default' | 'primary' | 'danger' | 'ghost' | 'pill'
       icon?: string
       onActivate: PluginActivation
     }
@@ -146,6 +146,7 @@ export type DeclarativeNode =
       title?: LocalizedString
       subtitle?: LocalizedString
       tone?: PluginBadgeTone
+      className?: string
       children: DeclarativeNode[]
     }
   | {
@@ -162,12 +163,21 @@ export type DeclarativeNode =
       className?: string
     }
   | {
+      type: 'details'
+      title: LocalizedString
+      defaultOpen?: boolean
+      className?: string
+      children: DeclarativeNode[]
+    }
+  | {
       type: 'input'
       id: string
       placeholder?: LocalizedString
       defaultValue?: string
       label?: LocalizedString
       inputType?: 'text' | 'number' | 'password'
+      onChange?: PluginActivation
+      onBlur?: PluginActivation
     }
   | {
       type: 'select'
@@ -175,6 +185,8 @@ export type DeclarativeNode =
       label?: LocalizedString
       options: { value: string; label: LocalizedString }[]
       defaultValue?: string
+      onChange?: PluginActivation
+      onBlur?: PluginActivation
     }
   | {
       type: 'iframe'
@@ -257,8 +269,10 @@ export interface PluginSettingsOption {
 
 export interface PluginSettingsField {
   key: string
-  type: 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea' | 'path'
+  type: 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea' | 'path' | 'button'
   label: LocalizedString
+  buttonLabel?: LocalizedString
+  rpcMethod?: string
   description?: LocalizedString
   default?: PluginSettingValue
   options?: PluginSettingsOption[]
@@ -266,6 +280,9 @@ export interface PluginSettingsField {
   secret?: boolean
   placeholder?: string
   scope?: PluginSettingScope
+  parentKey?: string
+  width?: 'full' | 'half'
+  section?: LocalizedString
 }
 
 export interface PluginSettingsSchema {
@@ -274,21 +291,42 @@ export interface PluginSettingsSchema {
 
 export type PluginSettingsValues = Record<string, PluginSettingValue>
 
-export interface PluginModelPricingView {
-  input?: number
-  output?: number
-  cacheRead?: number
-  cacheWrite?: number
-  currency?: string
-  discountPercent?: number
+export interface PluginModelPopoverRow {
+  label: LocalizedString
+  value: string
+  strikeThroughValue?: string
+  tone?: PluginBadgeTone
+}
+
+export interface PluginModelPopoverView {
+  title?: LocalizedString
+  badge?: { label: LocalizedString; tone?: PluginBadgeTone }
+  rows?: PluginModelPopoverRow[]
+  footer?: LocalizedString
+}
+
+export interface PluginModelSublineItem {
+  text: string
+  tone?: PluginBadgeTone
+}
+
+export interface PluginModelBadge {
+  label: LocalizedString
+  tooltip?: LocalizedString
+  tone?: PluginBadgeTone
+  icon?: string
 }
 
 export interface PluginModelMetadataView {
-  pricing?: PluginModelPricingView
   contextWindow?: number
   vision?: boolean
   reasoning?: boolean
-  badges?: { label: LocalizedString; tooltip?: LocalizedString; tone?: PluginBadgeTone; icon?: string }[]
+  nameTone?: PluginBadgeTone
+  popover?: PluginModelPopoverView
+  subline?: PluginModelSublineItem[]
+  bottomSubline?: PluginModelSublineItem[]
+  badges?: PluginModelBadge[]
+  extra?: Record<string, unknown>
 }
 
 export interface PluginContributionSummary {
@@ -315,6 +353,8 @@ export interface PluginInfo {
   id: string
   displayName: string
   description?: string
+  icon?: string
+  logo?: string
   version: string
   apiVersion: 1 | 2
   source: string

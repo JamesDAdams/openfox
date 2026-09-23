@@ -112,6 +112,8 @@ export class PluginHost {
       id: record.diagnostic.packageName,
       displayName: record.diagnostic.displayName,
       ...(record.diagnostic.description ? { description: record.diagnostic.description } : {}),
+      ...(record.diagnostic.icon ? { icon: record.diagnostic.icon } : {}),
+      ...(record.diagnostic.logo ? { logo: record.diagnostic.logo } : {}),
       version: record.diagnostic.version ?? '0.0.0',
       apiVersion: (record.diagnostic.apiVersion === 1 ? 1 : 2) as 1 | 2,
       source: record.diagnostic.source,

@@ -51,6 +51,19 @@ describe('PluginSettingsForm', () => {
     expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true')
   })
 
+  it('auto-saves toggles and skips an untouched secret', async () => {
+    render(<PluginSettingsForm pluginId="demo" />)
+    await userEvent.setup().click(screen.getByRole('switch'))
+    await waitFor(() =>
+      expect(savePluginSettings).toHaveBeenCalledWith(
+        'demo',
+        { endpoint: 'https://api.test', limit: 5, verbose: false },
+        'global',
+        undefined,
+      ),
+    )
+  })
+
   it('saves values and skips an untouched secret', async () => {
     render(<PluginSettingsForm pluginId="demo" />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'Save' }))
@@ -115,6 +128,41 @@ describe('PluginSettingsForm', () => {
         'proj-1',
       ),
     )
+  })
+
+  it('renders section headers when section is defined on fields', () => {
+    settingsRef.current = {
+      schema: {
+        fields: [
+          { key: 'general', type: 'boolean', label: { en: 'General Setting', fr: 'Paramètre Général' } },
+          {
+            key: 'usdInput',
+            type: 'number',
+            section: { en: 'USD Thresholds', fr: 'Seuils USD' },
+            label: { en: 'USD Input', fr: 'Entrée USD' },
+          },
+          {
+            key: 'usdOutput',
+            type: 'number',
+            section: { en: 'USD Thresholds', fr: 'Seuils USD' },
+            label: { en: 'USD Output', fr: 'Sortie USD' },
+          },
+          {
+            key: 'eurInput',
+            type: 'number',
+            section: { en: 'EUR Thresholds', fr: 'Seuils EUR' },
+            label: { en: 'EUR Input', fr: 'Entrée EUR' },
+          },
+        ],
+      },
+      values: {},
+      secretsSet: [],
+    }
+    render(<PluginSettingsForm pluginId="demo" />)
+    expect(screen.getByText('USD Thresholds')).toBeDefined()
+    expect(screen.getByText('EUR Thresholds')).toBeDefined()
+    // USD Thresholds should only render once, not twice
+    expect(screen.getAllByText('USD Thresholds')).toHaveLength(1)
   })
 
   it('hides the scope selector without project context', () => {

@@ -2390,6 +2390,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       models: modelConfigs,
       authAdapter,
       transportAdapter,
+      logo,
+      icon,
     } = req.body as {
       name: string
       url: string
@@ -2402,6 +2404,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       models?: Record<string, unknown>[]
       authAdapter?: string
       transportAdapter?: string
+      logo?: string
+      icon?: string
     }
 
     if (!name || !url || !backend) {
@@ -2433,6 +2437,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         ...(sendReasoningInMessages !== undefined ? { sendReasoningInMessages } : {}),
         ...(authAdapter ? { authAdapter } : {}),
         ...(transportAdapter ? { transportAdapter } : {}),
+        ...(logo ? { logo } : {}),
+        ...(icon ? { icon } : {}),
         models: providerModels,
         isActive: true,
       })
@@ -2735,6 +2741,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       models: modelConfigs,
       authAdapter,
       transportAdapter,
+      logo,
+      icon,
     } = req.body as {
       name?: string
       url?: string
@@ -2746,6 +2754,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       models?: Record<string, unknown>[]
       authAdapter?: string | null
       transportAdapter?: string | null
+      logo?: string | null
+      icon?: string | null
     }
     try {
       const { loadGlobalConfig, saveGlobalConfig, updateProvider } = await import('../cli/config.js')
@@ -2764,6 +2774,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       if (sendReasoningInMessages !== undefined) updates['sendReasoningInMessages'] = sendReasoningInMessages
       if (authAdapter !== undefined) updates['authAdapter'] = authAdapter || undefined
       if (transportAdapter !== undefined) updates['transportAdapter'] = transportAdapter || undefined
+      if (logo !== undefined) updates['logo'] = logo || undefined
+      if (icon !== undefined) updates['icon'] = icon || undefined
       if (modelConfigs !== undefined) {
         updates['models'] = buildModelConfigs(modelConfigs as ModelConfigInput[])
       }

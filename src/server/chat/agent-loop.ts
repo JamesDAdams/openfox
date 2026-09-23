@@ -453,6 +453,8 @@ export async function runTopLevelAgentLoop(
         emitPluginHook('llm.completed', {
           sessionId,
           data: {
+            providerId:
+              config.providerManager?.getActiveProviderId?.() ?? config.providerManager?.getActiveProvider?.()?.id,
             model: attemptClient.getModel(),
             finishReason: attemptResult.finishReason,
             promptTokens: usage.promptTokens,

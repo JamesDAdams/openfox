@@ -1651,4 +1651,41 @@ describe('ProviderModal - plugins and proxy informational banners (Step 1)', () 
     // Reset providers resource cache after test
     providersResource.write({ providers: [], activeProviderId: null })
   })
+
+  it('hides Logo URL input when provider has an inherent logo and displays it for custom providers', async () => {
+    // By default with initialStep=1 and default unknown backend, Logo URL is displayed
+    await renderProviderModal({ initialStep: 1 }, 100)
+    const logoInput = document.body.querySelector('input[placeholder="https://example.com/logo.png"]')
+    expect(logoInput).toBeTruthy()
+
+    // When selecting a built-in provider with an inherent logo (e.g. Ollama)
+    const ollamaBtn = Array.from(document.body.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Ollama'),
+    )
+    ollamaBtn?.click()
+    await tick(50)
+
+    const hiddenLogoInput = document.body.querySelector('input[placeholder="https://example.com/logo.png"]')
+    expect(hiddenLogoInput).toBeNull()
+  })
+
+  it('hides Logo URL input when editProvider has a saved logo', async () => {
+    await renderProviderModal(
+      {
+        initialStep: 1,
+        editProvider: {
+          id: 'google-antigravity',
+          name: 'Google Antigravity',
+          url: 'https://cloudcode-pa.googleapis.com',
+          backend: 'unknown',
+          logo: 'https://brandlogos.net/wp-content/uploads/2025/12/google_antigravity-logo_brandlogos.net_qu4jc.png',
+          models: [],
+        },
+      },
+      100,
+    )
+
+    const logoInput = document.body.querySelector('input[placeholder="https://example.com/logo.png"]')
+    expect(logoInput).toBeNull()
+  })
 })

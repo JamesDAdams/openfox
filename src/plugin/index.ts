@@ -76,6 +76,8 @@ export const pluginManifestSchema = z.object({
     plugin: z.string().min(1).optional(),
     displayName: z.string().min(1).optional(),
     description: z.string().optional(),
+    icon: z.string().optional(),
+    logo: z.string().optional(),
     capabilities: z.array(z.string()).optional(),
     timeoutMs: z.number().int().positive().optional(),
   }),
@@ -90,6 +92,8 @@ export interface PluginManifest {
     plugin?: string
     displayName?: string
     description?: string
+    icon?: string
+    logo?: string
     capabilities?: PluginCapability[]
     timeoutMs?: number
   }
@@ -141,24 +145,25 @@ export interface PluginSkillSource {
   load(): Promise<PluginSkill[]> | PluginSkill[]
 }
 
-export interface PluginModelPricing {
-  input?: number
-  output?: number
-  cacheRead?: number
-  cacheWrite?: number
-  currency?: string
-  discountPercent?: number
-}
-
 export interface PluginModelMetadata {
-  pricing?: PluginModelPricing
   contextWindow?: number
   vision?: boolean
   reasoning?: boolean
+  nameTone?: PluginBadgeTone
+  popover?: import('../shared/plugin.js').PluginModelPopoverView
+  subline?: import('../shared/plugin.js').PluginModelSublineItem[]
+  bottomSubline?: import('../shared/plugin.js').PluginModelSublineItem[]
   badges?: { label: LocalizedString; tone?: PluginBadgeTone }[]
+  extra?: Record<string, unknown>
 }
 
-export type { PluginModelMetadataView, PluginModelPricingView } from '../shared/plugin.js'
+export type {
+  PluginModelMetadataView,
+  PluginModelPopoverRow,
+  PluginModelPopoverView,
+  PluginModelSublineItem,
+  PluginModelBadge,
+} from '../shared/plugin.js'
 
 export interface PluginModelMetadataProvider {
   id: string
@@ -183,6 +188,7 @@ export type PluginHookEvent =
   | 'tool.completed'
   | 'llm.completed'
   | 'criterion.updated'
+  | 'provider.changed'
   | 'devserver.started'
   | 'devserver.stopped'
   | 'devserver.state.changed'
@@ -193,7 +199,7 @@ export type PluginHookEvent =
   //
   // Sub-agent activity is derived server-side from `message.start` and
   // `message.done` events carrying `subAgentId`/`subAgentType` — exposed
-  // via `SessionStatsEventRollup.subAgentCalls` rather than as a separate
+  // via `SessionStatsEventRollup.subAgentCalls` rather than a separate
   // plugin hook. This keeps the hook surface small.
   | 'context.compacted'
   | 'retry.triggered'

@@ -16,6 +16,8 @@ import { isSmallContext } from '../../lib/context-warning'
 import { groupModeFamilies, MODE_SUFFIXES, splitModeSuffix } from '@shared/reasoning-effort.js'
 import { openSettings } from '../settings/GlobalSettingsModal'
 import { useProviders } from '../../hooks/useProviders'
+import { usePlugins } from '../../hooks/usePlugins'
+import { PluginLogo, findPluginLogoForProvider } from './PluginLogo'
 
 const COMMON_PORTS = [8080, 11434, 8000, 1234, 8888]
 
@@ -105,6 +107,7 @@ export interface ProviderFormData {
   sendReasoningInMessages?: boolean
   authAdapter?: string
   transportAdapter?: string
+  logo?: string
   models: Array<Omit<SharedModelConfig, 'source'>>
 }
 
@@ -119,6 +122,7 @@ export function providerFormPayload(formData: ProviderFormData) {
     sendReasoningInMessages: formData.sendReasoningInMessages,
     authAdapter: formData.authAdapter,
     transportAdapter: formData.transportAdapter,
+    logo: formData.logo,
     models: formData.models,
   }
 }
@@ -139,6 +143,7 @@ interface ProviderModalProps {
     sendReasoningInMessages?: boolean
     authAdapter?: string
     transportAdapter?: string
+    logo?: string
     models?: Array<Omit<SharedModelConfig, 'source'>>
   }
   editModelId?: string
@@ -561,6 +566,8 @@ function ModelConfigPanel({
           />
         </div>
       </details>
+
+      <PluginZone id="provider.modal.model_config" context={{ modelId: model.id }} />
     </div>
   )
 }
@@ -722,6 +729,7 @@ export function ProviderModal({
   const [formIsLocal, setFormIsLocal] = useState(false)
   const [formAuthAdapter, setFormAuthAdapter] = useState<string | undefined>()
   const [formTransportAdapter, setFormTransportAdapter] = useState<string | undefined>()
+  const [formLogo, setFormLogo] = useState('')
   const [fetchingModels, setFetchingModels] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -763,7 +771,23 @@ export function ProviderModal({
   const manualModelInputRef = useRef<HTMLInputElement>(null)
 
   const { providers } = useProviders()
+  const { plugins } = usePlugins()
   const hasConfiguredProviders = providers.length > 0
+  const inherentLogo = useMemo(
+    () =>
+      findPluginLogoForProvider(
+        {
+          backend: formBackend,
+          transportAdapter: formTransportAdapter,
+          authAdapter: formAuthAdapter,
+          name: formName,
+          id: editProvider?.id,
+        },
+        plugins,
+      ),
+    [formBackend, formTransportAdapter, formAuthAdapter, formName, editProvider?.id, plugins],
+  )
+  const hasLogo = Boolean(formLogo || editProvider?.logo || inherentLogo)
   const mergedModeModels = useMemo(() => models.filter((m) => m.modes?.length), [models])
   // Families of suffixed variants still present in the list — only non-empty
   // after an Unmerge re-expands a merged model, so a Merge button appears then
@@ -943,6 +967,7 @@ export function ProviderModal({
       setFormIsLocal(editProvider?.isLocal ?? false)
       setFormAuthAdapter(editProvider?.authAdapter)
       setFormTransportAdapter(editProvider?.transportAdapter)
+      setFormLogo(editProvider?.logo ?? '')
       setFetchError(null)
       setThinkingField(editProvider?.thinkingField ?? '')
       setSendReasoningInMessages(editProvider?.sendReasoningInMessages ?? true)
@@ -1058,6 +1083,7 @@ export function ProviderModal({
         backend: formBackend,
         authAdapter: formAuthAdapter,
         transportAdapter: formTransportAdapter,
+        logo: formLogo.trim() || undefined,
         isLocal: false,
         models: [],
       }),
@@ -1371,6 +1397,7 @@ export function ProviderModal({
       sendReasoningInMessages,
       authAdapter: formAuthAdapter,
       transportAdapter: formTransportAdapter,
+      logo: formLogo.trim() || undefined,
       models: models.map((m) => ({
         id: m.id,
         name: m.name,
@@ -1490,30 +1517,34 @@ export function ProviderModal({
                 {/* Engine cards share one row on wide screens and wrap into equal-width
                   rows when the viewport narrows, so labels never truncate. */}
                 <div className="flex flex-wrap gap-2">
-                  {providerPresets.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => {
-                        setFormName(preset.defaults.name ?? preset.name)
-                        setFormUrl(preset.defaults.url)
-                        setFormBackend(preset.defaults.backend)
-                        setFormIsLocal(false)
-                        setFormApiKey('')
-                        setFormAuthAdapter(preset.authAdapter)
-                        setFormTransportAdapter(preset.transportAdapter)
-                        setFetchError(null)
-                        resetStep2()
-                      }}
-                      className={`flex-1 min-w-fit px-2 py-2 whitespace-nowrap rounded border text-center text-sm transition-colors ${
-                        formTransportAdapter && formTransportAdapter === preset.transportAdapter
-                          ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
-                          : 'border-border hover:border-text-muted text-text-secondary'
-                      }`}
-                    >
-                      {preset.name}
-                    </button>
-                  ))}
+                  {providerPresets.map((preset) => {
+                    const logo = findPluginLogoForProvider(preset, plugins)
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setFormName(preset.defaults.name ?? preset.name)
+                          setFormUrl(preset.defaults.url)
+                          setFormBackend(preset.defaults.backend)
+                          setFormIsLocal(false)
+                          setFormApiKey('')
+                          setFormAuthAdapter(preset.authAdapter)
+                          setFormTransportAdapter(preset.transportAdapter)
+                          setFetchError(null)
+                          resetStep2()
+                        }}
+                        className={`flex-1 min-w-fit px-2.5 py-2 whitespace-nowrap rounded border text-center text-sm inline-flex items-center justify-center gap-1.5 transition-colors ${
+                          formTransportAdapter && formTransportAdapter === preset.transportAdapter
+                            ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
+                            : 'border-border hover:border-text-muted text-text-secondary'
+                        }`}
+                      >
+                        {logo && <PluginLogo icon={logo} className="w-4 h-4" />}
+                        <span>{preset.name}</span>
+                      </button>
+                    )
+                  })}
                   <button
                     key="other"
                     type="button"
@@ -1548,6 +1579,7 @@ export function ProviderModal({
                       1234: 'LM Studio',
                       8888: 'Unsloth',
                     }
+                    const logo = findPluginLogoForProvider({ backend: backendMap[port], name: nameMap[port] }, plugins)
                     return (
                       <button
                         key={port}
@@ -1562,13 +1594,14 @@ export function ProviderModal({
                           setFetchError(null)
                           resetStep2()
                         }}
-                        className={`flex-1 min-w-fit px-2 py-2 whitespace-nowrap rounded border text-center text-sm transition-colors ${
+                        className={`flex-1 min-w-fit px-2.5 py-2 whitespace-nowrap rounded border text-center text-sm inline-flex items-center justify-center gap-1.5 transition-colors ${
                           formBackend === backendMap[port]
                             ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
                             : 'border-border hover:border-text-muted text-text-secondary'
                         }`}
                       >
-                        {nameMap[port] ?? `localhost:${port}`}
+                        {logo && <PluginLogo icon={logo} className="w-4 h-4" />}
+                        <span>{nameMap[port] ?? `localhost:${port}`}</span>
                       </button>
                     )
                   })}
@@ -1665,6 +1698,31 @@ export function ProviderModal({
                   className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
                 />
               </div>
+
+              {!hasLogo && (
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">
+                    {t({ en: 'Logo URL', fr: 'URL du logo' })}{' '}
+                    <span className="text-text-muted">{t({ en: '(optional)', fr: '(facultatif)' })}</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {(formLogo || inherentLogo) && (
+                      <PluginLogo
+                        icon={formLogo || inherentLogo}
+                        className="w-7 h-7 rounded border border-border bg-bg-secondary p-1 shrink-0"
+                      />
+                    )}
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={formLogo}
+                      onChange={(e) => setFormLogo(e.target.value)}
+                      placeholder={inherentLogo || 'https://example.com/logo.png'}
+                      className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
+                    />
+                  </div>
+                </div>
+              )}
 
               {!formAuthAdapter && (
                 <div>
@@ -2301,6 +2359,30 @@ export function ProviderModal({
           }
         >
           <div className="space-y-4">
+            {!hasLogo && (
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">
+                  {t({ en: 'Logo URL', fr: 'URL du logo' })}{' '}
+                  <span className="text-text-muted">{t({ en: '(optional)', fr: '(facultatif)' })}</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  {(formLogo || inherentLogo) && (
+                    <PluginLogo
+                      icon={formLogo || inherentLogo}
+                      className="w-7 h-7 rounded border border-border bg-bg-secondary p-1 shrink-0"
+                    />
+                  )}
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    value={formLogo}
+                    onChange={(e) => setFormLogo(e.target.value)}
+                    placeholder={inherentLogo || 'https://example.com/logo.png'}
+                    className="flex-1 px-3 py-2 bg-bg-primary border border-border rounded text-sm text-text-primary"
+                  />
+                </div>
+              </div>
+            )}
             <p className="text-xs text-text-muted">
               {t({
                 en: 'Thinking and reasoning effort are configured per model, in each model’s Advanced section.',

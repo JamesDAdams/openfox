@@ -71,7 +71,7 @@ describe('plugin contributions integration', () => {
     await writePlugin(
       configDirectory,
       'pricing-plugin',
-      `registry.registerModelMetadataProvider({ id: 'pricing', getMetadata: (ctx) => ctx.modelId === 'cheap-model' ? { pricing: { input: 0.1, output: 0.2, currency: 'USD', discountPercent: 50 }, badges: [{ label: { en: 'Cheap', fr: 'Pas cher' }, tone: 'success' }] } : undefined });`,
+      `registry.registerModelMetadataProvider({ id: 'pricing', getMetadata: (ctx) => ctx.modelId === 'cheap-model' ? { nameTone: 'success', badges: [{ label: { en: 'Cheap', fr: 'Pas cher' }, tone: 'success' }] } : undefined });`,
     )
     const host = new PluginHost({
       configDirectory,
@@ -97,7 +97,7 @@ describe('plugin contributions integration', () => {
     ]
     const enriched = await enrichProvidersWithPluginMetadata(providers)
 
-    expect(enriched[0]!.models[0]!.pluginMetadata?.pricing?.input).toBe(0.1)
+    expect(enriched[0]!.models[0]!.pluginMetadata?.nameTone).toBe('success')
     expect(enriched[0]!.models[0]!.pluginMetadata?.badges?.[0]!.tone).toBe('success')
     expect(enriched[0]!.models[1]!.pluginMetadata).toBeUndefined()
     expect(providers[0]!.models[0]!.pluginMetadata).toBeUndefined()
