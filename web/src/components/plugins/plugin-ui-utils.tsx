@@ -123,6 +123,23 @@ export function badgeToneClasses(tone: PluginBadgeTone | undefined): string {
   }
 }
 
+export function badgeToneTextClass(tone: PluginBadgeTone | undefined): string {
+  switch (tone) {
+    case 'info':
+      return 'text-accent-primary'
+    case 'success':
+      return 'text-accent-success'
+    case 'warning':
+      return 'text-accent-warning'
+    case 'danger':
+      return 'text-accent-error'
+    case 'neutral':
+      return 'text-text-muted'
+    default:
+      return ''
+  }
+}
+
 export function isContributionVisible(
   condition: PluginVisibilityCondition | undefined,
   context: PluginActionContext,
@@ -168,7 +185,14 @@ export async function activatePluginAction(
   if (!pluginId) return
   try {
     if (activation.kind === 'rpc') {
-      await invokePluginRpc(pluginId, activation.method, activation.params ?? {}, pluginRpcContext(context))
+      const mergedParams = {
+        ...(activation.params ?? {}),
+        ...(context['fieldId'] ? { fieldId: context['fieldId'] } : {}),
+        ...(context['value'] !== undefined ? { value: context['value'] } : {}),
+        ...(context['modelId'] ? { modelId: context['modelId'] } : {}),
+        ...(context['providerId'] ? { providerId: context['providerId'] } : {}),
+      }
+      await invokePluginRpc(pluginId, activation.method, mergedParams, pluginRpcContext(context))
 
       // If active panel is currently open and belongs to this plugin, refresh dynamic content if supported
       const activePanel = usePluginUiStore.getState().activePanel

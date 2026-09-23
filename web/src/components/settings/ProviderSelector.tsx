@@ -18,6 +18,7 @@ import { useKeybindings, useBinding } from '../../hooks/useKeybindings'
 import { focusChatTextarea } from '../../lib/focusChatTextarea'
 import { shouldAutofocus } from '../../lib/device'
 import { useModelSearch, ModelEntryRow, type ModelWithConfig } from './model-list'
+import { badgeToneTextClass } from '../plugins/plugin-ui-utils'
 import { parseModelValue } from '../../lib/model-value'
 import { shouldGateEffortChange, resolveDisplayEffort } from '../../lib/effort-gate'
 import { useEffortChangeGate } from '../plan/EffortChangeGate'
@@ -39,6 +40,7 @@ type ProviderLabelProps = {
   agentName?: string
   /** The displayed effort comes from a session pin ("Keep current reasoning effort"). */
   pinned?: boolean
+  pluginMetadata?: ModelWithConfig['pluginMetadata']
 }
 
 function ProviderLabel({
@@ -49,55 +51,71 @@ function ProviderLabel({
   agentColor,
   agentName,
   pinned,
+  pluginMetadata,
 }: ProviderLabelProps) {
   const t = useT()
+  const subline = pluginMetadata?.bottomSubline ?? pluginMetadata?.subline
+  const nameToneClass = pluginMetadata?.nameTone ? badgeToneTextClass(pluginMetadata.nameTone) : ''
+
   return (
-    <>
-      <span className="text-sm text-accent-primary flex items-center gap-1">
-        {agentOverrideActive && (
-          <span
-            className="w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-border"
-            style={{ backgroundColor: agentColor ?? '#6b7280' }}
-            title={t({
-              en: `Model set by agent "${agentName ?? 'unknown'}". Change it in Settings > Agents.`,
-              fr: `Modèle défini par l’agent « ${agentName ?? 'inconnu'} ». Modifiez-le dans Paramètres > Agents.`,
-            })}
-          />
-        )}
-        {activeProvider ? (
-          <>
-            <span className="hidden @sm:inline">{`${activeProvider.name} • `}</span>
-            <span className="truncate min-w-0">{shortModelName}</span>
-            {effort && <span className="text-text-muted flex-shrink-0">:{effort}</span>}
-          </>
-        ) : (
-          <>
-            <span className="truncate min-w-0">{shortModelName}</span>
-            {effort && <span className="text-text-muted flex-shrink-0">:{effort}</span>}
-          </>
-        )}
-        {pinned && (
-          <span
-            className="flex-shrink-0 text-text-muted"
-            title={t({
-              en: 'Reasoning effort pinned for this session (chosen via "Keep current reasoning effort").',
-              fr: 'Niveau de raisonnement épinglé pour cette session (choisi via « Conserver le niveau de raisonnement actuel »).',
-            })}
-          >
-            <PinIcon className="w-3 h-3" />
-          </span>
-        )}
-      </span>
-      <span
-        className={`text-xs px-1.5 py-0.5 rounded-full ${
-          activeProvider?.isLocal
-            ? 'text-accent-success bg-accent-success/10'
-            : 'text-accent-warning bg-accent-warning/10'
-        }`}
-      >
-        {activeProvider?.isLocal ? t({ en: 'local', fr: 'local' }) : t({ en: 'api', fr: 'api' })}
-      </span>
-    </>
+    <div className="flex flex-col text-right items-end min-w-0">
+      <div className="flex items-center gap-1 justify-end min-w-0 max-w-full">
+        <span className={`text-sm flex items-center gap-1 min-w-0 truncate ${nameToneClass || 'text-accent-primary'}`}>
+          {agentOverrideActive && (
+            <span
+              className="w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-border"
+              style={{ backgroundColor: agentColor ?? '#6b7280' }}
+              title={t({
+                en: `Model set by agent "${agentName ?? 'unknown'}". Change it in Settings > Agents.`,
+                fr: `Modèle défini par l’agent « ${agentName ?? 'inconnu'} ». Modifiez-le dans Paramètres > Agents.`,
+              })}
+            />
+          )}
+          {activeProvider ? (
+            <>
+              <span className="hidden @sm:inline shrink-0">{`${activeProvider.name} • `}</span>
+              <span className="truncate min-w-0">{shortModelName}</span>
+              {effort && <span className="text-text-muted flex-shrink-0">:{effort}</span>}
+            </>
+          ) : (
+            <>
+              <span className="truncate min-w-0">{shortModelName}</span>
+              {effort && <span className="text-text-muted flex-shrink-0">:{effort}</span>}
+            </>
+          )}
+          {pinned && (
+            <span
+              className="flex-shrink-0 text-text-muted"
+              title={t({
+                en: 'Reasoning effort pinned for this session (chosen via "Keep current reasoning effort").',
+                fr: 'Niveau de raisonnement épinglé pour cette session (choisi via « Conserver le niveau de raisonnement actuel »).',
+              })}
+            >
+              <PinIcon className="w-3 h-3" />
+            </span>
+          )}
+        </span>
+        <span
+          className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${
+            activeProvider?.isLocal
+              ? 'text-accent-success bg-accent-success/10'
+              : 'text-accent-warning bg-accent-warning/10'
+          }`}
+        >
+          {activeProvider?.isLocal ? t({ en: 'local', fr: 'local' }) : t({ en: 'api', fr: 'api' })}
+        </span>
+      </div>
+      {subline && subline.length > 0 && (
+        <div className="text-[10px] font-mono flex items-center justify-end gap-1 whitespace-nowrap overflow-hidden text-ellipsis -mt-0.5 leading-tight">
+          {subline.map((part, index) => (
+            <span key={index} className="inline-flex items-center shrink-0">
+              <span className={badgeToneTextClass(part.tone)}>{part.text}</span>
+              {index < subline.length - 1 && <span className="text-text-muted ml-1">·</span>}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -258,7 +276,16 @@ export function ProviderSelector() {
   // reflects what will actually be sent even without an explicit session pick.
   // The override (raw value, any string) takes precedence over thinkingLevel.
   const activeProvider = providers.find((p) => p.id === effectiveProviderId)
-  const effectiveModelConfig = activeProvider?.models.find((m) => m.id === effectiveModel)
+  const effectiveModelConfig =
+    activeProvider?.models.find((m) => m.id === effectiveModel) ??
+    (effectiveModel
+      ? activeProvider?.models.find(
+          (m) =>
+            m.id === effectiveModel.replace(/:(low|medium|high|xhigh|max)$/, '') ||
+            m.id.toLowerCase() === effectiveModel.toLowerCase() ||
+            (m.modes && m.modes.some((mode) => mode.apiModelId === effectiveModel)),
+        )
+      : undefined)
   // Display the effort the server will actually send (explicit effort clamped to
   // the model's preset list, else override verbatim, else thinkingLevel if
   // advertised) — never a raw value that gets silently replaced at request time.
@@ -729,6 +756,7 @@ export function ProviderSelector() {
             agentColor={agentColor}
             agentName={currentAgent?.name}
             pinned={isEffortPinned}
+            pluginMetadata={effectiveModelConfig?.pluginMetadata}
           />
         )}
         <span className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity">↻</span>
@@ -755,6 +783,7 @@ export function ProviderSelector() {
             agentColor={agentColor}
             agentName={currentAgent?.name}
             pinned={isEffortPinned}
+            pluginMetadata={effectiveModelConfig?.pluginMetadata}
           />
         )}
         <ChevronDownIcon className={`w-3 h-3 text-text-muted transition-transform`} rotate={isOpen ? 180 : 0} />
@@ -762,6 +791,7 @@ export function ProviderSelector() {
 
       {isOpen && (
         <DropdownPanel
+          data-dropdown-container
           isModal={isModalPanel}
           testId="provider-dropdown"
           fillViewport
@@ -865,7 +895,7 @@ export function ProviderSelector() {
                         onClick={() => !activating && handleProviderClick(group.provider)}
                         className="flex flex-col min-w-0 flex-1 cursor-pointer"
                       >
-                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-nowrap">
                           {findPluginLogoForProvider(group.provider, plugins) && (
                             <PluginLogo
                               icon={findPluginLogoForProvider(group.provider, plugins)}
@@ -873,13 +903,15 @@ export function ProviderSelector() {
                             />
                           )}
                           <span
-                            className={`text-sm font-medium truncate ${
+                            className={`text-sm font-medium truncate shrink-0 max-w-[280px] ${
                               group.provider.id === effectiveProviderId ? 'text-accent-primary' : 'text-text-primary'
                             }`}
                           >
                             {group.provider.name}
                           </span>
-                          <PluginModelMeta metadata={group.provider.pluginMetadata} />
+                          <div className="flex items-center gap-1 shrink-0">
+                            <PluginModelMeta metadata={group.provider.pluginMetadata} />
+                          </div>
                         </div>
                         {!group.provider.authAdapter &&
                           !group.provider.transportAdapter &&

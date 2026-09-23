@@ -153,7 +153,8 @@ describe('getVisibleModels mode derivation', () => {
           contextWindow: 4096,
           source: 'backend',
           pluginMetadata: {
-            pricing: { input: 0.15, output: 0.6, currency: 'USD' },
+            nameTone: 'success',
+            subline: [{ text: 'In: $0.15/M', tone: 'success' }],
             badges: [{ label: { en: 'Cheap', fr: 'Économique' }, tone: 'success' }],
           },
         },
@@ -163,12 +164,12 @@ describe('getVisibleModels mode derivation', () => {
     } as unknown as Provider
 
     const visible = getVisibleModels(provider)
-    expect(visible[0]?.pluginMetadata?.pricing?.input).toBe(0.15)
+    expect(visible[0]?.pluginMetadata?.nameTone).toBe('success')
     expect(visible[0]?.pluginMetadata?.badges?.[0]?.tone).toBe('success')
 
     const rendered = renderRow(visible[0]!)
     try {
-      expect(rendered.container.querySelector('[data-plugin-price]')?.textContent).toContain('$0.15/0.60')
+      expect(rendered.container.querySelector('[data-model-subline]')?.textContent).toContain('In: $0.15/M')
       expect(rendered.container.textContent).toContain('Cheap')
     } finally {
       cleanup(rendered)

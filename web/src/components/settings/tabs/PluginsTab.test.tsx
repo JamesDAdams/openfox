@@ -136,6 +136,19 @@ describe('PluginsTab', () => {
     vi.restoreAllMocks()
   })
 
+  it('renders html in plugin description', () => {
+    pluginsRef.current = [
+      makePlugin({
+        description: 'Using this plugin.\n<span class="text-accent-error font-medium">⚠️ Warning Terms</span>',
+      }),
+    ]
+
+    const { container } = render(<PluginsTab />)
+    const warningSpan = container.querySelector('.text-accent-error')
+    expect(warningSpan).not.toBeNull()
+    expect(warningSpan?.textContent).toBe('⚠️ Warning Terms')
+  })
+
   it('renders installed plugins with status, capabilities and contribution summary', () => {
     render(<PluginsTab />)
     expect(screen.getByText('Demo plugin')).toBeDefined()

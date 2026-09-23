@@ -141,25 +141,25 @@ export interface PluginSkillSource {
   load(): Promise<PluginSkill[]> | PluginSkill[]
 }
 
-export interface PluginModelPricing {
-  input?: number
-  output?: number
-  cacheRead?: number
-  cacheWrite?: number
-  currency?: string
-  discountPercent?: number
-  lastUpdatedAt?: string
-}
-
 export interface PluginModelMetadata {
-  pricing?: PluginModelPricing
   contextWindow?: number
   vision?: boolean
   reasoning?: boolean
+  nameTone?: PluginBadgeTone
+  popover?: import('../shared/plugin.js').PluginModelPopoverView
+  subline?: import('../shared/plugin.js').PluginModelSublineItem[]
+  bottomSubline?: import('../shared/plugin.js').PluginModelSublineItem[]
   badges?: { label: LocalizedString; tone?: PluginBadgeTone }[]
+  extra?: Record<string, unknown>
 }
 
-export type { PluginModelMetadataView, PluginModelPricingView } from '../shared/plugin.js'
+export type {
+  PluginModelMetadataView,
+  PluginModelPopoverRow,
+  PluginModelPopoverView,
+  PluginModelSublineItem,
+  PluginModelBadge,
+} from '../shared/plugin.js'
 
 export interface PluginModelMetadataProvider {
   id: string

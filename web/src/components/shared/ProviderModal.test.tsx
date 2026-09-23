@@ -1668,4 +1668,24 @@ describe('ProviderModal - plugins and proxy informational banners (Step 1)', () 
     const hiddenLogoInput = document.body.querySelector('input[placeholder="https://example.com/logo.png"]')
     expect(hiddenLogoInput).toBeNull()
   })
+
+  it('hides Logo URL input when editProvider has a saved logo', async () => {
+    await renderProviderModal(
+      {
+        initialStep: 1,
+        editProvider: {
+          id: 'google-antigravity',
+          name: 'Google Antigravity',
+          url: 'https://cloudcode-pa.googleapis.com',
+          backend: 'unknown',
+          logo: 'https://brandlogos.net/wp-content/uploads/2025/12/google_antigravity-logo_brandlogos.net_qu4jc.png',
+          models: [],
+        },
+      },
+      100,
+    )
+
+    const logoInput = document.body.querySelector('input[placeholder="https://example.com/logo.png"]')
+    expect(logoInput).toBeNull()
+  })
 })

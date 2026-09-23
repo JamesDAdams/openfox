@@ -76,6 +76,16 @@ function PluginTitle({
   )
 }
 
+function PluginDescription({ description }: { description?: string }) {
+  if (!description) return null
+  return (
+    <div
+      className="text-xs text-text-muted mt-1 whitespace-pre-line leading-relaxed"
+      dangerouslySetInnerHTML={{ __html: description }}
+    />
+  )
+}
+
 function PluginCardLayout({ header, right, children }: { header: ReactNode; right: ReactNode; children?: ReactNode }) {
   return (
     <div className="border border-border rounded-lg p-4">
@@ -160,9 +170,7 @@ function InstalledPluginCard({ plugin }: { plugin: PluginInfo }) {
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusClass}`}>{statusLabel}</span>
             <span className="text-[10px] text-text-muted">{`API v${plugin.apiVersion}`}</span>
           </PluginTitle>
-          {plugin.description ? (
-            <p className="text-xs text-text-muted mt-1 whitespace-pre-line leading-relaxed">{plugin.description}</p>
-          ) : null}
+          <PluginDescription description={plugin.description} />
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             {CAPABILITY_ORDER.filter((capability) => plugin.capabilities.includes(capability)).map((capability) => (
               <span
@@ -252,9 +260,7 @@ function RegistryPluginCard({ plugin, installed }: { plugin: RegistryPlugin; ins
       header={
         <>
           <PluginTitle title={plugin.displayName} subtitle={plugin.name} />
-          {plugin.description ? (
-            <p className="text-xs text-text-muted mt-1 whitespace-pre-line leading-relaxed">{plugin.description}</p>
-          ) : null}
+          <PluginDescription description={plugin.description} />
           <a
             href={plugin.githubUrl}
             target="_blank"

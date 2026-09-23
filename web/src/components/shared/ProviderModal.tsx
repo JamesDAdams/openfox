@@ -566,6 +566,8 @@ function ModelConfigPanel({
           />
         </div>
       </details>
+
+      <PluginZone id="provider.modal.model_config" context={{ modelId: model.id }} />
     </div>
   )
 }
@@ -785,6 +787,7 @@ export function ProviderModal({
       ),
     [formBackend, formTransportAdapter, formAuthAdapter, formName, editProvider?.id, plugins],
   )
+  const hasLogo = Boolean(formLogo || editProvider?.logo || inherentLogo)
   const mergedModeModels = useMemo(() => models.filter((m) => m.modes?.length), [models])
   // Families of suffixed variants still present in the list — only non-empty
   // after an Unmerge re-expands a merged model, so a Merge button appears then
@@ -1696,28 +1699,30 @@ export function ProviderModal({
                 />
               </div>
 
-              <div>
-                <label className="block text-sm text-text-secondary mb-1">
-                  {t({ en: 'Logo URL', fr: 'URL du logo' })}{' '}
-                  <span className="text-text-muted">{t({ en: '(optional)', fr: '(facultatif)' })}</span>
-                </label>
-                <div className="flex items-center gap-2">
-                  {(formLogo || inherentLogo) && (
-                    <PluginLogo
-                      icon={formLogo || inherentLogo}
-                      className="w-7 h-7 rounded border border-border bg-bg-secondary p-1 shrink-0"
+              {!hasLogo && (
+                <div>
+                  <label className="block text-sm text-text-secondary mb-1">
+                    {t({ en: 'Logo URL', fr: 'URL du logo' })}{' '}
+                    <span className="text-text-muted">{t({ en: '(optional)', fr: '(facultatif)' })}</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {(formLogo || inherentLogo) && (
+                      <PluginLogo
+                        icon={formLogo || inherentLogo}
+                        className="w-7 h-7 rounded border border-border bg-bg-secondary p-1 shrink-0"
+                      />
+                    )}
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={formLogo}
+                      onChange={(e) => setFormLogo(e.target.value)}
+                      placeholder={inherentLogo || 'https://example.com/logo.png'}
+                      className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
                     />
-                  )}
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    value={formLogo}
-                    onChange={(e) => setFormLogo(e.target.value)}
-                    placeholder={inherentLogo || 'https://example.com/logo.png'}
-                    className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
-                  />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {!formAuthAdapter && (
                 <div>
@@ -2354,28 +2359,30 @@ export function ProviderModal({
           }
         >
           <div className="space-y-4">
-            <div>
-              <label className="text-xs text-text-secondary block mb-1">
-                {t({ en: 'Logo URL', fr: 'URL du logo' })}{' '}
-                <span className="text-text-muted">{t({ en: '(optional)', fr: '(facultatif)' })}</span>
-              </label>
-              <div className="flex items-center gap-2">
-                {(formLogo || inherentLogo) && (
-                  <PluginLogo
-                    icon={formLogo || inherentLogo}
-                    className="w-7 h-7 rounded border border-border bg-bg-secondary p-1 shrink-0"
+            {!hasLogo && (
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">
+                  {t({ en: 'Logo URL', fr: 'URL du logo' })}{' '}
+                  <span className="text-text-muted">{t({ en: '(optional)', fr: '(facultatif)' })}</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  {(formLogo || inherentLogo) && (
+                    <PluginLogo
+                      icon={formLogo || inherentLogo}
+                      className="w-7 h-7 rounded border border-border bg-bg-secondary p-1 shrink-0"
+                    />
+                  )}
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    value={formLogo}
+                    onChange={(e) => setFormLogo(e.target.value)}
+                    placeholder={inherentLogo || 'https://example.com/logo.png'}
+                    className="flex-1 px-3 py-2 bg-bg-primary border border-border rounded text-sm text-text-primary"
                   />
-                )}
-                <input
-                  type="text"
-                  autoComplete="off"
-                  value={formLogo}
-                  onChange={(e) => setFormLogo(e.target.value)}
-                  placeholder={inherentLogo || 'https://example.com/logo.png'}
-                  className="flex-1 px-3 py-2 bg-bg-primary border border-border rounded text-sm text-text-primary"
-                />
+                </div>
               </div>
-            </div>
+            )}
             <p className="text-xs text-text-muted">
               {t({
                 en: 'Thinking and reasoning effort are configured per model, in each model’s Advanced section.',

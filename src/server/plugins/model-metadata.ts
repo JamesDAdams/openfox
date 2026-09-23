@@ -23,10 +23,14 @@ export async function enrichModelWithPluginMetadata(providerId: string, model: M
       continue
     }
     if (!metadata) continue
-    if (metadata.pricing) merged.pricing = { ...merged.pricing, ...metadata.pricing }
     if (metadata.contextWindow !== undefined) merged.contextWindow = metadata.contextWindow
     if (metadata.vision !== undefined) merged.vision = metadata.vision
     if (metadata.reasoning !== undefined) merged.reasoning = metadata.reasoning
+    if (metadata.nameTone !== undefined) merged.nameTone = metadata.nameTone
+    if (metadata.popover !== undefined) merged.popover = metadata.popover
+    if (metadata.subline !== undefined) merged.subline = metadata.subline
+    if (metadata.bottomSubline !== undefined) merged.bottomSubline = metadata.bottomSubline
+    if (metadata.extra !== undefined) merged.extra = { ...(merged.extra ?? {}), ...metadata.extra }
     if (metadata.badges) badges.push(...metadata.badges)
   }
   if (badges.length > 0) merged.badges = badges
@@ -48,7 +52,7 @@ export async function enrichProviderWithPluginMetadata(provider: Provider): Prom
       continue
     }
     if (!metadata) continue
-    if (metadata.pricing) merged.pricing = { ...merged.pricing, ...metadata.pricing }
+    if (metadata.extra !== undefined) merged.extra = { ...(merged.extra ?? {}), ...metadata.extra }
     if (metadata.badges) badges.push(...metadata.badges)
   }
 

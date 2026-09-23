@@ -150,9 +150,22 @@ function runMigrations(db: Database.Database): void {
   `)
 
   const notificationColumns = db.prepare(`PRAGMA table_info(notifications)`).all() as { name: string }[]
-  if (!notificationColumns.some((column) => column.name === 'actions')) {
+  const notificationColumnNames = new Set(notificationColumns.map((column) => column.name))
+  if (!notificationColumnNames.has('plugin_id')) {
+    logger.info('Migrating notifications table: adding plugin_id column')
+    db.exec(`ALTER TABLE notifications ADD COLUMN plugin_id TEXT NOT NULL DEFAULT 'system'`)
+  }
+  if (!notificationColumnNames.has('level')) {
+    logger.info('Migrating notifications table: adding level column')
+    db.exec(`ALTER TABLE notifications ADD COLUMN level TEXT NOT NULL DEFAULT 'info'`)
+  }
+  if (!notificationColumnNames.has('actions')) {
     logger.info('Migrating notifications table: adding actions column')
     db.exec(`ALTER TABLE notifications ADD COLUMN actions TEXT`)
+  }
+  if (!notificationColumnNames.has('read_at')) {
+    logger.info('Migrating notifications table: adding read_at column')
+    db.exec(`ALTER TABLE notifications ADD COLUMN read_at TEXT`)
   }
 
   // Migration: Add custom_instructions column to projects table

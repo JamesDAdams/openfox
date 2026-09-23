@@ -1,6 +1,7 @@
 import { useLocalizedString } from '../../hooks/useLocalizedString'
 import { activatePluginAction, badgeToneClasses, pluginIcon, type PluginActionContext } from './plugin-ui-utils'
 import type { DeclarativeNode, PluginBadgeTone } from '@shared/plugin.js'
+import { ChevronDownIcon } from '../shared/icons'
 
 const PROGRESS_COLORS: Record<string, string> = {
   neutral: 'bg-text-muted',
@@ -15,7 +16,7 @@ const BUTTON_VARIANT_CLASSES: Record<'default' | 'primary' | 'danger' | 'ghost' 
   primary: 'bg-accent-primary text-white hover:bg-accent-primary/80',
   danger: 'bg-accent-error text-white hover:bg-accent-error/80',
   ghost: 'p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary',
-  pill: 'px-2.5 py-0.5 rounded-full border border-accent-primary/40 bg-accent-primary/10 text-accent-primary text-xs font-mono font-medium hover:bg-accent-primary/20',
+  pill: 'px-1.5 py-0.5 shrink-0 rounded-full border border-accent-primary/40 bg-accent-primary/10 text-accent-primary text-[10px] font-mono font-medium hover:bg-accent-primary/20',
 }
 
 const GAP_CLASSES: Record<'none' | 'xs' | 'sm' | 'md' | 'lg', string> = {
@@ -48,7 +49,8 @@ const CALLOUT_CLASSES: Record<PluginBadgeTone, string> = {
   danger: 'bg-accent-error/10 border-accent-error/30 text-text-primary',
 }
 
-export function interpolate(text: string, values: Record<string, unknown>): string {
+export function interpolate(text: string, values?: Record<string, unknown>): string {
+  if (!values) return text
   return text.replace(/\{\{(\w+)\}\}/g, (match, key: string) => (key in values ? String(values[key]) : match))
 }
 
@@ -64,9 +66,9 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
   switch (node.type) {
     case 'text':
       return (
-        <p className={node.className ?? (node.muted ? 'text-sm text-text-muted' : 'text-sm text-text-primary')}>
+        <div className={node.className ?? (node.muted ? 'text-sm text-text-muted' : 'text-sm text-text-primary')}>
           {interpolate(localize(node.text), values)}
-        </p>
+        </div>
       )
 
     case 'keyValue':
@@ -85,7 +87,7 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
       return (
         <table className="w-full text-sm">
           <thead>
-            <tr>
+            <tr className="border-b border-border">
               {node.columns.map((column, index) => (
                 <th key={index} className="text-left text-text-muted font-medium pb-1">
                   {localize(column)}
@@ -95,7 +97,7 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
           </thead>
           <tbody>
             {node.rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
+              <tr key={rowIndex} className="border-b border-border/50">
                 {row.map((cell, cellIndex) => (
                   <td key={cellIndex} className="py-0.5 text-text-primary">
                     {interpolate(cell, values)}
@@ -172,19 +174,14 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
       return <hr className="border-border my-2" />
 
     case 'stack': {
-      const directionClass = node.direction === 'row' ? 'flex flex-row' : 'flex flex-col'
+      const directionClass = node.direction === 'row' ? 'flex flex-row w-full' : 'flex flex-col'
       const gapClass = GAP_CLASSES[node.gap ?? 'sm']
       const alignClass = ALIGN_CLASSES[node.align ?? 'start']
       const justifyClass = JUSTIFY_CLASSES[node.justify ?? 'start']
       return (
         <div className={`${directionClass} ${gapClass} ${alignClass} ${justifyClass} ${node.className ?? ''}`}>
           {node.children.map((child, index) => (
-            <DeclarativeRenderer
-              key={`${index}-${child.type}-${child.type === 'button' ? child.label.en : ''}`}
-              node={child}
-              values={values}
-              context={context}
-            />
+            <DeclarativeRenderer key={`stack-${index}-${child.type}`} node={child} values={values} context={context} />
           ))}
         </div>
       )
@@ -192,7 +189,11 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
 
     case 'card': {
       return (
-        <div className="rounded-lg border border-border bg-bg-secondary p-3 shadow-sm space-y-2">
+        <div
+          className={`rounded-lg border border-border bg-bg-secondary p-3 shadow-sm space-y-2 flex-1 min-w-0 ${
+            node.className ?? ''
+          }`}
+        >
           {(node.title || node.subtitle) && (
             <div className="space-y-0.5">
               {node.title && <h4 className="text-sm font-semibold text-text-primary">{localize(node.title)}</h4>}
@@ -201,15 +202,26 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
           )}
           <div className="space-y-2">
             {node.children.map((child, index) => (
-              <DeclarativeRenderer
-                key={`${index}-${child.type}-${child.type === 'button' ? child.label.en : ''}`}
-                node={child}
-                values={values}
-                context={context}
-              />
+              <DeclarativeRenderer key={`card-${index}-${child.type}`} node={child} values={values} context={context} />
             ))}
           </div>
         </div>
+      )
+    }
+
+    case 'details': {
+      return (
+        <details className={`group mt-2 ${node.className ?? ''}`} open={node.defaultOpen}>
+          <summary className="text-xs text-text-muted cursor-pointer hover:text-text-secondary list-none flex items-center gap-1 select-none">
+            <ChevronDownIcon className="w-3 h-3 transition-transform group-open:rotate-180" />
+            {interpolate(localize(node.title), values)}
+          </summary>
+          <div className="mt-3 space-y-2">
+            {node.children.map((child, index) => (
+              <DeclarativeRenderer key={`${index}-${child.type}`} node={child} values={values} context={context} />
+            ))}
+          </div>
+        </details>
       )
     }
 
@@ -234,17 +246,26 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
     }
 
     case 'input': {
+      const triggerAction = (action: typeof node.onChange, value: string) => {
+        if (action) {
+          void activatePluginAction(context.pluginId, action, { ...context, fieldId: node.id, value })
+        }
+      }
       return (
-        <div className="space-y-1">
-          {node.label && (
-            <label className="block text-xs font-medium text-text-secondary">{localize(node.label)}</label>
-          )}
+        <div className="flex-1 min-w-0">
+          {node.label && <label className="text-xs text-text-secondary block mb-0.5">{localize(node.label)}</label>}
           <input
             id={node.id}
             type={node.inputType ?? 'text'}
-            defaultValue={node.defaultValue}
+            defaultValue={interpolate(node.defaultValue ?? '', values)}
             placeholder={node.placeholder ? localize(node.placeholder) : undefined}
-            className="w-full px-2.5 py-1.5 text-sm rounded bg-bg-tertiary border border-border text-text-primary focus:outline-none focus:border-accent-primary"
+            onChange={(e) => {
+              triggerAction(node.onChange, e.target.value)
+            }}
+            onBlur={(e) => {
+              triggerAction(node.onBlur, e.target.value)
+            }}
+            className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary focus:outline-none focus:border-accent-primary"
           />
         </div>
       )
@@ -252,14 +273,21 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
 
     case 'select': {
       return (
-        <div className="space-y-1">
-          {node.label && (
-            <label className="block text-xs font-medium text-text-secondary">{localize(node.label)}</label>
-          )}
+        <div className="flex-1 min-w-0">
+          {node.label && <label className="text-xs text-text-secondary block mb-0.5">{localize(node.label)}</label>}
           <select
             id={node.id}
             defaultValue={node.defaultValue}
-            className="w-full px-2.5 py-1.5 text-sm rounded bg-bg-tertiary border border-border text-text-primary focus:outline-none focus:border-accent-primary"
+            onChange={(e) => {
+              if (node.onChange) {
+                void activatePluginAction(context.pluginId, node.onChange, {
+                  ...context,
+                  fieldId: node.id,
+                  value: e.target.value,
+                })
+              }
+            }}
+            className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary focus:outline-none focus:border-accent-primary cursor-pointer"
           >
             {node.options.map((option) => (
               <option key={option.value} value={option.value}>
