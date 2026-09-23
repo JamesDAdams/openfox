@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { useT } from '../../hooks/useT'
 import { ThinkingBlock } from './ThinkingBlock'
 import { ThinkingSummary } from './ThinkingSummary'
@@ -28,8 +28,21 @@ export const ThinkingBlockToggle = memo(function ThinkingBlockToggle({
   showThinking,
 }: ThinkingBlockToggleProps) {
   const t = useT()
+  const containerRef = useRef<HTMLDivElement>(null)
   const [, forceRender] = useState(0)
   const expanded = expandOverrides.get(messageId) ?? showThinking
+
+  // A click that ends a text selection inside the block is a selection
+  // gesture, not a collapse gesture — skip the toggle. A selection anchored
+  // outside (e.g. from a previous copy) must not block collapsing.
+  const handleClick = () => {
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed) {
+      const anchor = selection.anchorNode
+      if (anchor && containerRef.current?.contains(anchor)) return
+    }
+    toggle()
+  }
 
   const toggle = () => {
     if (!expandOverrides.has(messageId) && expandOverrides.size >= MAX_EXPAND_OVERRIDES) {
@@ -42,8 +55,9 @@ export const ThinkingBlockToggle = memo(function ThinkingBlockToggle({
 
   return (
     <div
+      ref={containerRef}
       className="cursor-pointer"
-      onClick={toggle}
+      onClick={handleClick}
       title={t({ en: 'Click to toggle thinking', fr: 'Cliquer pour afficher/masquer la réflexion' })}
       aria-expanded={expanded}
     >

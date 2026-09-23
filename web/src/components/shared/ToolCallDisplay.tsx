@@ -172,6 +172,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const config = statusConfig[status]
   const remoteProtocol = detectRemoteExecution(tool, args)
   const showEditorLink = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR).value === 'true'
+  const vscodeRemotePrefix = useSetting(SETTINGS_KEYS.VSCODE_REMOTE_PREFIX).value
   const argsLabel = formatToolArgsWithMetadata(tool, args, metadata)
 
   const editorLine =
@@ -456,7 +457,12 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
                 (tool === 'read_file' || tool === 'write_file' || tool === 'edit_file') &&
                 String(metadata?.path ?? args.path ?? '') && (
                   <a
-                    href={buildEditorUrl(String(metadata?.path ?? args.path), editorLine)}
+                    href={buildEditorUrl(
+                      String(metadata?.path ?? args.path),
+                      editorLine,
+                      undefined,
+                      vscodeRemotePrefix,
+                    )}
                     className="text-accent-primary hover:underline"
                   >
                     {t({ en: 'Open in VSCode', fr: 'Ouvrir dans VSCode' })}

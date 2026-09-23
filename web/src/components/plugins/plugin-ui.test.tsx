@@ -129,6 +129,37 @@ describe('plugin UI slots', () => {
     expect(usePluginUiStore.getState().activePanel).toEqual({ pluginId: 'demo', panelId: 'quota' })
   })
 
+  it('preserves session context when opening a panel', async () => {
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      actions: [
+        {
+          id: 'open-session-panel',
+          pluginId: 'demo',
+          slot: 'session.header.actions',
+          label: { en: 'Open session panel', fr: 'Ouvrir le panneau de session' },
+          onActivate: { kind: 'openPanel', panelId: 'session-panel' },
+        },
+      ],
+    }
+    render(
+      <PluginSlot
+        slot="session.header.actions"
+        context={{ sessionId: 's1', projectId: 'p1', workdir: '/workspace/project' }}
+      />,
+    )
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open session panel' }))
+    expect(usePluginUiStore.getState().activePanel).toEqual({
+      pluginId: 'demo',
+      panelId: 'session-panel',
+      context: {
+        sessionId: 's1',
+        projectId: 'p1',
+        workdir: '/workspace/project',
+      },
+    })
+  })
+
   it('renders static and RPC-sourced badges', async () => {
     invokePluginRpc.mockResolvedValue(42)
     contributionsRef.current = {
@@ -178,6 +209,111 @@ describe('plugin UI slots', () => {
         <PluginBadges slot="session.row.badges" context={{ sessionId: 's1' }} />
       </>,
     )
+    await waitFor(() => expect(screen.getAllByText('Quota 7')).toHaveLength(2))
+    expect(invokePluginRpc).toHaveBeenCalledTimes(1)
+  })
+
+  it('applies dynamic badge visibility, tone, tooltip and icon overrides', async () => {
+    clearBadgeCache()
+    invokePluginRpc.mockResolvedValue({
+      visible: true,
+      tone: 'success',
+      tooltip: { en: 'Dev server running', fr: 'Serveur dev actif' },
+      icon: 'M3 4h18v6H3z M3 14h18v6H3z',
+    })
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      badges: [
+        {
+          id: 'status',
+          pluginId: 'demo',
+          slot: 'session.row.badges',
+          label: { en: 'Dev server', fr: 'Serveur dev' },
+          appearance: 'icon',
+          source: { kind: 'rpc', method: 'status' },
+        },
+      ],
+    }
+
+    render(<PluginBadges slot="session.row.badges" context={{ sessionId: 's1', workdir: '/tmp/a' }} />)
+
+    await waitFor(() => expect(screen.getByTitle('Dev server running')).toBeDefined())
+    const badge = screen.getByTestId('plugin-badge')
+    expect(badge.className).toContain('text-accent-success')
+  })
+
+  it('does not flash an unresolved RPC badge before its first result', async () => {
+    clearBadgeCache()
+    let resolveRpc: ((value: unknown) => void) | undefined
+    invokePluginRpc.mockImplementation(
+      () =>
+        new Promise<unknown>((resolve) => {
+          resolveRpc = resolve
+        }),
+    )
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      badges: [
+        {
+          id: 'status',
+          pluginId: 'demo',
+          slot: 'session.row.badges',
+          label: { en: 'Dev server', fr: 'Serveur dev' },
+          source: { kind: 'rpc', method: 'status' },
+        },
+      ],
+    }
+
+    const view = render(<PluginBadges slot="session.row.badges" context={{ sessionId: 's1', workdir: '/tmp/a' }} />)
+    expect(view.container.innerHTML).toBe('')
+
+    resolveRpc?.({ visible: true, tone: 'success' })
+    await waitFor(() => expect(view.container.textContent).toContain('Dev server'))
+  })
+
+  it('hides a dynamic badge when its RPC result sets visible false', async () => {
+    clearBadgeCache()
+    invokePluginRpc.mockResolvedValue({ visible: false })
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      badges: [
+        {
+          id: 'status',
+          pluginId: 'demo',
+          slot: 'session.row.badges',
+          label: { en: 'Dev server', fr: 'Serveur dev' },
+          source: { kind: 'rpc', method: 'status' },
+        },
+      ],
+    }
+
+    const view = render(<PluginBadges slot="session.row.badges" context={{ sessionId: 's1', workdir: '/tmp/a' }} />)
+    await waitFor(() => expect(view.container.innerHTML).toBe(''))
+  })
+
+  it('dedupes RPC badges by workdir when cacheScope is workdir', async () => {
+    clearBadgeCache()
+    invokePluginRpc.mockResolvedValue(7)
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      badges: [
+        {
+          id: 'dynamic',
+          pluginId: 'demo',
+          slot: 'session.row.badges',
+          label: { en: 'Quota', fr: 'Quota' },
+          source: { kind: 'rpc', method: 'quota', cacheScope: 'workdir' },
+        },
+      ],
+    }
+
+    render(
+      <>
+        <PluginBadges slot="session.row.badges" context={{ sessionId: 's1', workdir: '/tmp/shared' }} />
+        <PluginBadges slot="session.row.badges" context={{ sessionId: 's2', workdir: '/tmp/shared' }} />
+      </>,
+    )
+
     await waitFor(() => expect(screen.getAllByText('Quota 7')).toHaveLength(2))
     expect(invokePluginRpc).toHaveBeenCalledTimes(1)
   })
@@ -338,10 +474,22 @@ describe('plugin UI slots', () => {
         },
       ],
     }
-    usePluginUiStore.setState({ activePanel: { pluginId: 'demo', panelId: 'board' }, values: {} })
+    usePluginUiStore.setState({
+      activePanel: {
+        pluginId: 'demo',
+        panelId: 'board',
+        context: { sessionId: 's1', projectId: 'p1', workdir: '/workspace/project' },
+      },
+      values: {},
+    })
     render(<PluginPanelHost />)
     const iframe = screen.getByTitle('Board')
-    expect(iframe.getAttribute('src')).toBe('/api/plugins/demo/assets/board.html')
+    const src = iframe.getAttribute('src') ?? ''
+    const url = new URL(src, 'http://localhost')
+    expect(url.pathname).toBe('/api/plugins/demo/assets/board.html')
+    expect(url.searchParams.get('sessionId')).toBe('s1')
+    expect(url.searchParams.get('projectId')).toBe('p1')
+    expect(url.searchParams.get('workdir')).toBe('/workspace/project')
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-forms')
   })
 })

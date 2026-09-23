@@ -77,6 +77,15 @@ const FEED_TOGGLES: ToggleDefinition[] = [
       fr: 'Affiche les marqueurs de début et de fin de workflow',
     },
   },
+  {
+    key: SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND,
+    label: { en: 'Fullscreen slash commands view', fr: 'Vue plein écran des commandes slash' },
+    description: {
+      en: 'Choose whether the commands view uses default sizing or fills the available screen height.',
+      fr: 'Choisissez si la vue des commandes utilise la taille par défaut ou remplit la hauteur d’écran disponible.',
+    },
+    defaultValue: 'false',
+  },
 ]
 
 const PERF_TOGGLES: ToggleDefinition[] = [
@@ -129,10 +138,10 @@ const PERF_TOGGLES: ToggleDefinition[] = [
     key: SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION,
     label: { en: 'Virtualize long feeds', fr: 'Virtualiser les longs fils' },
     description: {
-      en: 'Mount only the most recent items and reveal older ones as you scroll up. Faster on very long sessions, but older history loading is experimental.',
-      fr: 'Ne monte que les éléments les plus récents et révèle les plus anciens en remontant. Plus rapide sur les très longues sessions, mais le chargement de l’historique ancien est expérimental.',
+      en: 'Show only the most recent items and load older ones as you scroll up. Keeps long sessions fast — the most recent messages are always retained.',
+      fr: 'N’affiche que les éléments les plus récents et charge les plus anciens en remontant. Garde les longues sessions fluides — les messages les plus récents sont toujours conservés.',
     },
-    defaultValue: 'false',
+    defaultValue: 'true',
   },
   {
     key: SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING,
@@ -169,6 +178,7 @@ export function DisplayTab() {
   const showAgentDefinitions = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS, 'true')
   const showWorkflowBars = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS, 'true')
   const showToolCallStreaming = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_TOOL_CALL_STREAMING, 'false')
+  const fullscreenSlashCommand = useSetting(SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND, 'false')
   const nativeScrollbars = useSetting(SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS, 'false')
   const nativeScrollbarsCodeBlocks = useSetting(SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS_CODE_BLOCKS, 'false')
   const collapseLargeToolCalls = useSetting(SETTINGS_KEYS.DISPLAY_COLLAPSE_LARGE_TOOL_CALLS, 'false')
@@ -176,7 +186,7 @@ export function DisplayTab() {
     SETTINGS_KEYS.DISPLAY_DEFER_CODE_HIGHLIGHT_WHILE_STREAMING,
     'false',
   )
-  const feedVirtualization = useSetting(SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION, 'false')
+  const feedVirtualization = useSetting(SETTINGS_KEYS.DISPLAY_FEED_VIRTUALIZATION, 'true')
   const syntaxHighlighting = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING, 'true')
   const maxVisibleItems = useSetting(SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS, '300')
   const storedLocale = useSetting(SETTINGS_KEYS.DISPLAY_LOCALE, 'automatic')
@@ -205,6 +215,7 @@ export function DisplayTab() {
     [SETTINGS_KEYS.DISPLAY_SHOW_STATS]: showStats.value,
     [SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS]: showAgentDefinitions.value,
     [SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS]: showWorkflowBars.value,
+    [SETTINGS_KEYS.DISPLAY_FULLSCREEN_SLASH_COMMAND]: fullscreenSlashCommand.value,
     [SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS]: nativeScrollbars.value,
     [SETTINGS_KEYS.DISPLAY_USE_NATIVE_SCROLLBARS_CODE_BLOCKS]: nativeScrollbarsCodeBlocks.value,
     [SETTINGS_KEYS.DISPLAY_COLLAPSE_LARGE_TOOL_CALLS]: collapseLargeToolCalls.value,

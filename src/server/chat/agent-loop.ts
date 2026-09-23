@@ -30,7 +30,7 @@ import {
   recordLLMFailure,
   clearLLMFailure,
 } from './stream-pure.js'
-import { computeLiveEditContext } from './edit-file-preview.js'
+import { LiveEditContextTracker } from './edit-file-preview.js'
 import { preflightPathTool } from './tool-preflight.js'
 import { getCurrentContextWindowId, getCurrentWindowMessageOptions } from '../events/index.js'
 import { getAllInstructions } from '../context/instructions.js'
@@ -422,17 +422,25 @@ export async function runTopLevelAgentLoop(
       })
 
       // Per-turn cache of file contents read to build live edit context for
-      // streaming edit_file preparing events.
+      // streaming edit_file preparing events. The tracker dedupes recomputes
+      // and WebSocket payloads across the many partial chunks of a call.
       const editFileContentCache = new Map<string, string>()
+      const liveEditTracker = new LiveEditContextTracker()
 
       const attemptResult = await consumeStreamGenerator(streamGen, async (event) => {
         ensureAssistantMessage()
         // While the LLM streams an edit_file call, enrich its preparing events
         // with a live edit context (surrounding lines) computed from the file —
         // the same shape the final tool result carries. The file content is
-        // read once per path for the whole turn.
+        // read once per path for the whole turn, and the context is recomputed
+        // only when the parsed edit spec changes.
         if (event.type === 'tool.preparing' && event.data.name === 'edit_file') {
-          const editContext = await computeLiveEditContext(event.data.arguments, session.workdir, editFileContentCache)
+          const editContext = await liveEditTracker.next(
+            event.data.index,
+            event.data.arguments,
+            session.workdir,
+            editFileContentCache,
+          )
           append(editContext && editContext.length > 0 ? { ...event, data: { ...event.data, editContext } } : event)
           return
         }
@@ -441,6 +449,7 @@ export async function runTopLevelAgentLoop(
 
       if (!attemptResult.error) {
         result = attemptResult
+        const usage = attemptResult.usage
         emitPluginHook('llm.completed', {
           sessionId,
           data: {
@@ -448,8 +457,16 @@ export async function runTopLevelAgentLoop(
               config.providerManager?.getActiveProviderId?.() ?? config.providerManager?.getActiveProvider?.()?.id,
             model: attemptClient.getModel(),
             finishReason: attemptResult.finishReason,
-            promptTokens: attemptResult.usage.promptTokens,
-            completionTokens: attemptResult.usage.completionTokens,
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+            ...(usage.cachedPromptTokens !== undefined && {
+              cachedPromptTokens: usage.cachedPromptTokens,
+            }),
+            ...(usage.cacheWriteTokens !== undefined && {
+              cacheWriteTokens: usage.cacheWriteTokens,
+            }),
+            ...(usage.cacheSource !== undefined && { cacheSource: usage.cacheSource }),
             toolCalls: attemptResult.toolCalls.length,
           },
         })
@@ -585,6 +602,7 @@ export async function runTopLevelAgentLoop(
       result.usage.completionTokens,
       previousContextTokens,
       result.modelParams,
+      result.usage,
     )
     // Accumulate wall-clock thinking time across LLM attempts in this turn.
     if (result.thinkingDurationMs !== undefined) {

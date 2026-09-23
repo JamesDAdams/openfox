@@ -51,6 +51,57 @@ describe('ThinkingBlockToggle', () => {
     expect(container.textContent).toContain('block:thoughts')
   })
 
+  it('does not collapse when a text selection inside the block is active', () => {
+    const { container } = render(
+      <ThinkingBlockToggle messageId="t-sel" content="thoughts" isStreaming={false} thinkingFinished showThinking />,
+    )
+    const root = container.firstElementChild!
+    const text = [...root.querySelectorAll('*')]
+      .flatMap((el) => [...el.childNodes])
+      .find((n) => n.textContent?.includes('thoughts'))!
+
+    const range = document.createRange()
+    range.selectNodeContents(text as Node)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    expect(selection.isCollapsed).toBe(false)
+
+    fireEvent.click(root)
+
+    // Selecting text is not a collapse gesture: the block stays expanded.
+    expect(container.textContent).toContain('block:thoughts')
+    expect(container.textContent).not.toContain('summary')
+  })
+
+  it('still collapses when the selection was made outside the block', () => {
+    const { container } = render(
+      <ThinkingBlockToggle
+        messageId="t-sel-out"
+        content="thoughts"
+        isStreaming={false}
+        thinkingFinished
+        showThinking
+      />,
+    )
+    const root = container.firstElementChild!
+    const outside = document.createElement('div')
+    outside.textContent = 'somewhere else'
+    document.body.appendChild(outside)
+
+    const range = document.createRange()
+    range.selectNodeContents(outside)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    fireEvent.click(root)
+
+    // A stale selection elsewhere must not block the collapse gesture.
+    expect(container.textContent).toContain('summary')
+    expect(container.textContent).not.toContain('block:thoughts')
+  })
+
   it('keeps a manual toggle across remounts', () => {
     const { container } = render(
       <ThinkingBlockToggle messageId="t-keep" content="thoughts" isStreaming={false} thinkingFinished showThinking />,

@@ -1,5 +1,46 @@
 # Changelog
 
+## 2.0.156 - 2026-09-23
+
+### Features
+
+- **Cache-token attribution in session stats** — provider-reported cached and cache-write tokens now shown alongside token counts.
+- **Event-derived stats rollup** — the stats API exposes compactions, retries, tool errors, and sub-agent activity.
+- **New plugin hooks** — `context.compacted` and `retry.triggered` fire live from the session event stream.
+- **Plugin iframe session context** — plugin panels receive `sessionId`, `projectId`, and `workdir` as query params.
+- **Dynamic plugin badges** — badge RPC can drive state, live refresh intervals, and icon-only tone styling.
+- **Workdir-scoped badges** — badge state is scoped per workdir, and sessions pass their workdir to plugins.
+- **Dev-server lifecycle hooks** — plugins observe started/stopped events with reason and exit info.
+- **Dev-server state hook** — `devserver.state.changed` reports state plus the inspect-proxy port.
+
+### Enhancements
+
+- **llm.completed hook enriched** — now includes total tokens and provider cache-token fields.
+- **No stale badge flash** — dynamic badges stay hidden until the RPC value resolves.
+
+## 2.0.155 - 2026-09-22
+
+### Features
+
+- **Skills join slash commands** — enabled skills appear in autocomplete, and skill folders load recursively with group labels.
+- **Fullscreen slash command view** — a new Display setting opens the slash picker fullscreen.
+- **Skills manager groups by folder** — collapsible folders, bulk enable toggles, and per-skill token estimates.
+- **Thinking blocks collapse to a summary** — expanded reasoning shrinks to "Thought for Xs" with a live timer while streaming.
+- **Option to skip git init on non-git projects** — new setting decides whether new projects get a git repository.
+- **Custom VSCode remote prefix** — "Open in VSCode" links now respect a configurable remote prefix.
+- **Plugin panels reach xl and full sizes** — provider badges and pricing from plugin metadata render in the provider selector.
+- **Plugin secrets stay masked** — settings forms never show saved secret values in plaintext.
+
+### Enhancements
+
+- **Faster edit live previews** — LSP diagnostics coalesce during same-file edit bursts and preview payloads are deduped.
+- **Feed virtualization on by default** — long sessions render faster with lazy scroll panes and bounded history.
+
+### Bug Fixes
+
+- **Full-history view shows no more gaps** — virtualization is off in readonly view, fixing placeholder jumps.
+- **Provider chip keeps the model name visible** — truncation now shrinks the provider name first.
+
 ## 2.0.154 - 2026-09-21
 
 ### Features

@@ -73,30 +73,39 @@ function ProviderLabel({
           )}
           {activeProvider ? (
             <>
-              <span className="hidden @sm:inline shrink-0">{`${activeProvider.name} • `}</span>
-              <span className="truncate min-w-0">{shortModelName}</span>
-              {effort && <span className="text-text-muted flex-shrink-0">:{effort}</span>}
+              <span
+                data-testid="provider-label-provider"
+                title={activeProvider.name}
+                className="hidden @sm:inline truncate shrink-[100]"
+              >{`${activeProvider.name} • `}</span>
+              <span
+                data-testid="provider-label-model"
+                title={activeProvider ? `${activeProvider.name} • ${shortModelName}` : shortModelName}
+                className="truncate min-w-0"
+              >
+                {shortModelName}
+              </span>
+              {effort && <span className="text-text-muted truncate shrink-[100]">:{effort}</span>}
             </>
           ) : (
             <>
-              <span className="truncate min-w-0">{shortModelName}</span>
-              {effort && <span className="text-text-muted flex-shrink-0">:{effort}</span>}
+              <span data-testid="provider-label-model" title={shortModelName} className="truncate min-w-0">
+                {shortModelName}
+              </span>
+              {effort && <span className="text-text-muted truncate shrink-[100]">:{effort}</span>}
             </>
           )}
           {pinned && (
             <span
+              title={t({ en: 'Model pinned for this session', fr: 'Modèle épinglé pour cette session' })}
               className="flex-shrink-0 text-text-muted"
-              title={t({
-                en: 'Reasoning effort pinned for this session (chosen via "Keep current reasoning effort").',
-                fr: 'Niveau de raisonnement épinglé pour cette session (choisi via « Conserver le niveau de raisonnement actuel »).',
-              })}
             >
               <PinIcon className="w-3 h-3" />
             </span>
           )}
         </span>
         <span
-          className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${
+          className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 flex-shrink-0 ${
             activeProvider?.isLocal
               ? 'text-accent-success bg-accent-success/10'
               : 'text-accent-warning bg-accent-warning/10'
