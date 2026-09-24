@@ -8,11 +8,13 @@ import { DeclarativeRenderer } from './DeclarativeRenderer'
 import type { PluginActionContext } from './plugin-ui-utils'
 import type { DeclarativeNode, PluginUiPanel } from '@shared/plugin.js'
 
-const PANEL_SIZES: Record<NonNullable<PluginUiPanel['size']>, 'sm' | 'md' | 'lg' | 'xl' | 'full'> = {
+const PANEL_SIZES: Record<NonNullable<PluginUiPanel['size']>, 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full'> = {
   sm: 'sm',
   md: 'md',
   lg: 'lg',
   xl: 'xl',
+  '2xl': '2xl',
+  '3xl': '3xl',
   full: 'full',
 }
 
@@ -49,6 +51,9 @@ export function PluginPanelHost() {
 
   const iframeUrl = (() => {
     if (panel.kind !== 'iframe' || !panel.url) return undefined
+    if (panel.url.startsWith('http://') || panel.url.startsWith('https://')) {
+      return `/api/plugins/${encodeURIComponent(targetPluginId)}/proxy?url=${encodeURIComponent(panel.url)}`
+    }
     const params = new URLSearchParams()
     if (token) params.set('token', token)
     if (panelContext.sessionId) params.set('sessionId', panelContext.sessionId)

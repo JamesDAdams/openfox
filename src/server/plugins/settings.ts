@@ -49,6 +49,7 @@ export function readPluginSettings(
   const stored = getAllSettings()
   const values: PluginSettingsValues = {}
   for (const field of schema.fields) {
+    if (field.type === 'button' || field.type === 'status') continue
     const raw = stored[pluginSettingKey(pluginId, field.scope ?? scope, projectId, field.key)]
     const value = coerce(field, raw)
     if (value !== undefined) values[field.key] = value
@@ -66,6 +67,7 @@ export function readPluginSettingsView(
   const values: PluginSettingsValues = {}
   const secretsSet: string[] = []
   for (const field of schema.fields) {
+    if (field.type === 'button' || field.type === 'status') continue
     const raw = stored[pluginSettingKey(pluginId, field.scope ?? scope, projectId, field.key)]
     if (isSecret(field)) {
       if (raw !== undefined && raw !== '') secretsSet.push(field.key)
@@ -88,6 +90,7 @@ export function validatePluginSettings(
 ): string[] {
   const errors: string[] = []
   for (const field of schema.fields) {
+    if (field.type === 'button' || field.type === 'status') continue
     if (!(field.key in values)) {
       if (field.required) {
         if (isSecret(field) && isExistingSecret && isExistingSecret(field.key)) {

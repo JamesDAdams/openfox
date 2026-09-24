@@ -158,7 +158,7 @@ describe('PluginMenu', () => {
     expect(screen.getByText('Always')).toBeDefined()
   })
 
-  it('lists a plugin with no visible actions', async () => {
+  it('lists enabled plugins even when having no actions', async () => {
     dataRef.current = {
       plugins: [DEMO_PLUGIN],
       contributions: {

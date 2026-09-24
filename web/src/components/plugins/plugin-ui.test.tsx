@@ -734,6 +734,66 @@ describe('PluginZone and DeclarativeRenderer', () => {
     const svgEl = container.querySelector('svg')
     expect(svgEl).toBeTruthy()
   })
+
+  it('updates dynamic PluginZone components when plugin publishes reactive values', () => {
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      components: [
+        {
+          id: 'stats-cost-card',
+          pluginId: 'model-pricing',
+          zone: 'stats.modal.summary',
+          position: 'after',
+          component: {
+            type: 'card',
+            title: { en: 'Price', fr: 'Prix' },
+            children: [{ type: 'text', text: { en: 'Cost: {{cost}}', fr: 'Coût: {{cost}}' } }],
+          },
+        },
+      ],
+    }
+
+    usePluginUiStore.getState().setState('model-pricing', 'stats-cost-card', 'cost', '$0.42')
+
+    render(
+      <PluginZone id="stats.modal.summary">
+        <span data-testid="native-summary">Native Summary</span>
+      </PluginZone>,
+    )
+
+    expect(screen.getByTestId('native-summary')).toBeDefined()
+    expect(screen.getByText('Price')).toBeDefined()
+    expect(screen.getByText('Cost: $0.42')).toBeDefined()
+  })
+
+  it('resolves session-scoped reactive values in PluginZone when sessionId is present', () => {
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      components: [
+        {
+          id: 'headroom-stats-summary',
+          pluginId: 'openfox-headroom',
+          zone: 'stats.modal.summary',
+          component: {
+            type: 'card',
+            title: { en: 'Headroom Token Optimization', fr: 'Optimisation des tokens Headroom' },
+            children: [{ type: 'text', text: { en: 'Tokens Saved: {{saved}}', fr: 'Jetons économisés : {{saved}}' } }],
+          },
+        },
+      ],
+    }
+
+    usePluginUiStore.getState().setState('openfox-headroom', 'headroom-stats-summary', 'sess-abc:saved', '1,250 tokens')
+
+    render(
+      <PluginZone id="stats.modal.summary" context={{ sessionId: 'sess-abc' }}>
+        <span data-testid="native-summary">Native Summary</span>
+      </PluginZone>,
+    )
+
+    expect(screen.getByText('Headroom Token Optimization')).toBeDefined()
+    expect(screen.getByText('Tokens Saved: 1,250 tokens')).toBeDefined()
+  })
 })
 
 describe('EMPTY_PLUGIN_CONTRIBUTIONS', () => {

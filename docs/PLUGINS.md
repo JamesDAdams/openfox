@@ -105,14 +105,14 @@ header.
 
 ### Manifest reference
 
-| Field                  | Required   | Description                                                                                                                    |
-| ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `openfox.apiVersion`   | yes        | `1` (providers only, legacy) or `2` (full plugin API)                                                                          |
-| `openfox.entry`        | yes for v2 | Path to the ESM entry point, relative to the package root. `openfox.plugin` is accepted for v1 packages                        |
-| `openfox.displayName`  | no         | Shown in the Plugins tab. Defaults to the package name                                                                         |
-| `openfox.description`  | no         | Shown in the Plugins tab                                                                                                       |
-| `openfox.capabilities` | no         | `providers`, `models`, `settings`, `tools`, `commands`, `skills`, `ui`, `hooks`, `notifications`, `workflows`, `rpc`, `assets` |
-| `openfox.timeoutMs`    | no         | Per-plugin RPC timeout in ms (default 30 000)                                                                                  |
+| Field                  | Required   | Description                                                                                                                                  |
+| ---------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openfox.apiVersion`   | yes        | `1` (providers only, legacy) or `2` (full plugin API)                                                                                        |
+| `openfox.entry`        | yes for v2 | Path to the ESM entry point, relative to the package root. `openfox.plugin` is accepted for v1 packages                                      |
+| `openfox.displayName`  | no         | Shown in the Plugins tab. Defaults to the package name                                                                                       |
+| `openfox.description`  | no         | Shown in the Plugins tab                                                                                                                     |
+| `openfox.capabilities` | no         | `providers`, `models`, `settings`, `tools`, `commands`, `skills`, `ui`, `hooks`, `notifications`, `workflows`, `rpc`, `assets`, `transforms` |
+| `openfox.timeoutMs`    | no         | Per-plugin RPC timeout in ms (default 30 000)                                                                                                |
 
 ### Discovery and lifecycle
 
@@ -455,6 +455,28 @@ registry.registerAsset('board.html')
 
 Files are served read-only from `/api/plugins/<id>/assets/<path>`; only
 registered relative paths are reachable, and path traversal is rejected.
+
+### Message transforms (`transforms`)
+
+```ts
+registry.registerMessageTransform({
+  id: 'compressor',
+  priority: 50, // optional ordering (lower runs first, default: 100)
+  transform: async (messages, context) => {
+    // context: { sessionId, projectId?, workdir, model, systemPrompt, mode?, signal? }
+    const compressed = await compress(messages, context.model)
+    return {
+      messages: compressed,
+      systemPrompt: context.systemPrompt,
+      metadata: { tokensSaved: 150 },
+    }
+  },
+})
+```
+
+- Transforms intercept and mutate context messages and/or system prompt before dispatch to the LLM.
+- **Fail-open resilience**: If a transform throws an error or times out (5 s), the core logs a warning and proceeds with uncompressed/unmodified messages without interrupting the turn.
+- Multiple active transforms execute sequentially in priority order.
 
 ### Context API
 

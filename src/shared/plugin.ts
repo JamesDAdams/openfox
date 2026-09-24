@@ -13,6 +13,7 @@ export type PluginCapability =
   | 'workflows'
   | 'rpc'
   | 'assets'
+  | 'transforms'
 
 export type PluginSlotName =
   | 'header.actions'
@@ -50,6 +51,8 @@ export type PluginZoneId =
   | 'settings.sidebar'
   | 'settings.content'
   | 'modal.footer'
+  | 'stats.modal'
+  | 'stats.modal.summary'
   | (string & {})
 
 export type PluginBadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
@@ -219,7 +222,7 @@ export interface PluginUiPanel {
   id: string
   pluginId?: string
   title: LocalizedString
-  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full'
   kind: 'declarative' | 'iframe'
   content?: DeclarativeNode[]
   url?: string
@@ -269,9 +272,10 @@ export interface PluginSettingsOption {
 
 export interface PluginSettingsField {
   key: string
-  type: 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea' | 'path' | 'button'
+  type: 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea' | 'path' | 'button' | 'status'
   label: LocalizedString
   buttonLabel?: LocalizedString
+  buttonVariant?: 'default' | 'primary' | 'secondary' | 'danger' | 'ghost'
   rpcMethod?: string
   description?: LocalizedString
   default?: PluginSettingValue
@@ -347,12 +351,14 @@ export interface PluginContributionSummary {
   settingsTabs: number
   uiComponents: number
   uiOverrides: number
+  messageTransforms: number
 }
 
 export interface PluginInfo {
   id: string
   displayName: string
   description?: string
+  author?: string
   icon?: string
   logo?: string
   version: string
@@ -412,4 +418,5 @@ export const EMPTY_PLUGIN_CONTRIBUTIONS: PluginContributionSummary = {
   settingsTabs: 0,
   uiComponents: 0,
   uiOverrides: 0,
+  messageTransforms: 0,
 }

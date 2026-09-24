@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { useResource } from '../../hooks/useResource'
 import { useT } from '../../hooks/useT'
 import { useLocalizedString } from '../../hooks/useLocalizedString'
@@ -6,12 +6,33 @@ import { pluginSettingsResource, providersResource } from '../../lib/resources'
 import { invokePluginRpc, savePluginSettings } from '../../lib/plugin-actions'
 import { Button } from '../shared/Button'
 import { Toggle } from '../shared/Toggle'
-import type { PluginSettingsField, PluginSettingScope, PluginSettingValue } from '@shared/plugin.js'
+import type {
+  LocalizedString,
+  PluginBadgeTone,
+  PluginSettingsField,
+  PluginSettingScope,
+  PluginSettingValue,
+} from '@shared/plugin.js'
 
 type FormValues = Record<string, PluginSettingValue | string>
 
+interface StatusFieldState {
+  loading?: boolean
+  running?: boolean
+  text?: string | LocalizedString
+  tone?: PluginBadgeTone
+}
+
 const FIELD_CLASS = 'w-full px-2.5 py-1.5 text-sm text-text-primary bg-bg-tertiary border border-border rounded'
 const MASKED_SECRET = '••••••••••••••••'
+
+const STATUS_TONE_DOT: Record<PluginBadgeTone, string> = {
+  success: 'bg-accent-success',
+  warning: 'bg-accent-warning',
+  danger: 'bg-accent-error',
+  info: 'bg-accent-primary',
+  neutral: 'bg-text-muted',
+}
 
 function isSecretField(field: PluginSettingsField): boolean {
   return field.secret === true || field.type === 'password'
@@ -77,6 +98,9 @@ function initialValue(
   values: Record<string, unknown>,
   secretsSet: string[],
 ): FormValues[string] {
+  if (field.type === 'button' || field.type === 'status') {
+    return ''
+  }
   if (isSecretField(field) && secretsSet.includes(field.key)) {
     return MASKED_SECRET
   }
@@ -101,15 +125,43 @@ export function PluginSettingsForm({
   const [scope, setScope] = useState<PluginSettingScope>(initialScope)
   const { data } = useResource(pluginSettingsResource, pluginId, scope, projectId)
   const [values, setValues] = useState<FormValues>({})
+  const [statusStates, setStatusStates] = useState<Record<string, StatusFieldState>>({})
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+
+  const refreshStatuses = useCallback(async () => {
+    if (!data) return
+    const statusFields = data.schema.fields.filter((f) => f.type === 'status')
+    if (statusFields.length === 0) return
+
+    for (const field of statusFields) {
+      try {
+        const res = (await invokePluginRpc(pluginId, field.rpcMethod ?? field.key, {})) as Record<string, unknown>
+        setStatusStates((prev) => ({
+          ...prev,
+          [field.key]: {
+            running: typeof res?.['running'] === 'boolean' ? res['running'] : undefined,
+            text: (res?.['text'] as string | LocalizedString | undefined) ?? (res?.['message'] as string | undefined),
+            tone: (res?.['tone'] as PluginBadgeTone | undefined) ?? (res?.['running'] ? 'success' : 'danger'),
+            loading: false,
+          },
+        }))
+      } catch {
+        setStatusStates((prev) => ({
+          ...prev,
+          [field.key]: { tone: 'danger', loading: false },
+        }))
+      }
+    }
+  }, [data, pluginId])
 
   useEffect(() => {
     if (!data) return
     const next: FormValues = {}
     for (const field of data.schema.fields) next[field.key] = initialValue(field, data.values, data.secretsSet)
     setValues(next)
-  }, [data])
+    void refreshStatuses()
+  }, [data, refreshStatuses])
 
   if (!data) {
     return <p className="text-sm text-text-muted">{t({ en: 'Loading settings…', fr: 'Chargement des paramètres…' })}</p>
@@ -120,7 +172,7 @@ export function PluginSettingsForm({
   const saveValues = async (nextValues: FormValues) => {
     const payload: Record<string, unknown> = {}
     for (const field of data.schema.fields) {
-      if (field.type === 'button') continue
+      if (field.type === 'button' || field.type === 'status') continue
       const value = nextValues[field.key]
       if (isSecretField(field) && (isMaskedValue(value) || value === '' || value === undefined)) continue
       if (field.type === 'number' && value === '') continue
@@ -209,15 +261,41 @@ export function PluginSettingsForm({
                       void saveValues(next)
                     }}
                   />
+                ) : field.type === 'status' ? (
+                  <div className="flex items-center gap-2 py-1">
+                    <span
+                      className={`inline-block w-2.5 h-2.5 rounded-full ${
+                        STATUS_TONE_DOT[
+                          statusStates[field.key]?.tone ?? (statusStates[field.key]?.running ? 'success' : 'danger')
+                        ]
+                      }`}
+                    />
+                    <span className="text-sm font-medium text-text-primary">
+                      {statusStates[field.key]?.loading
+                        ? t({ en: 'Checking…', fr: 'Vérification…' })
+                        : statusStates[field.key]?.text
+                          ? typeof statusStates[field.key]!.text === 'object'
+                            ? localize(statusStates[field.key]!.text as LocalizedString)
+                            : String(statusStates[field.key]!.text)
+                          : statusStates[field.key]?.running
+                            ? t({ en: 'Running', fr: 'Actif' })
+                            : t({ en: 'Stopped', fr: 'Arrêté' })}
+                    </span>
+                  </div>
                 ) : field.type === 'button' ? (
                   <div className="pt-0.5">
                     <Button
-                      variant="secondary"
+                      variant={
+                        field.buttonVariant === 'primary' || field.buttonVariant === 'danger'
+                          ? field.buttonVariant
+                          : 'secondary'
+                      }
                       size="sm"
                       onClick={async () => {
                         setError(null)
                         try {
                           await invokePluginRpc(pluginId, field.rpcMethod ?? field.key, {})
+                          await refreshStatuses()
                         } catch (actionError) {
                           setError(
                             actionError instanceof Error

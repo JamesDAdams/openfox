@@ -27,9 +27,14 @@ vi.mock('../../hooks/useResource', () => ({
 }))
 
 const savePluginSettings = vi.fn()
+const invokePluginRpc = vi.fn()
 vi.mock('../../lib/plugin-actions', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/plugin-actions')>()
-  return { ...actual, savePluginSettings: (...args: unknown[]) => savePluginSettings(...args) }
+  return {
+    ...actual,
+    savePluginSettings: (...args: unknown[]) => savePluginSettings(...args),
+    invokePluginRpc: (...args: unknown[]) => invokePluginRpc(...args),
+  }
 })
 
 describe('PluginSettingsForm', () => {
@@ -175,5 +180,56 @@ describe('PluginSettingsForm', () => {
     }
     render(<PluginSettingsForm pluginId="demo" />)
     expect(screen.queryByLabelText('Applies to')).toBeNull()
+  })
+
+  it('renders status field and refreshes after button action', async () => {
+    invokePluginRpc.mockResolvedValueOnce({
+      running: true,
+      text: { en: 'Running (http://127.0.0.1:8787)', fr: 'Actif (http://127.0.0.1:8787)' },
+      tone: 'success',
+    })
+
+    settingsRef.current = {
+      schema: {
+        fields: [
+          {
+            key: 'daemonStatus',
+            type: 'status',
+            label: { en: 'Server Status', fr: 'Statut du serveur' },
+            rpcMethod: 'getStatus',
+          },
+          {
+            key: 'restartProxy',
+            type: 'button',
+            label: { en: 'Restart', fr: 'Relancer' },
+            buttonVariant: 'secondary',
+            rpcMethod: 'restartProxy',
+          },
+        ],
+      },
+      values: {},
+      secretsSet: [],
+    }
+
+    render(<PluginSettingsForm pluginId="demo" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Running (http://127.0.0.1:8787)')).toBeDefined()
+    })
+
+    invokePluginRpc.mockResolvedValueOnce({ success: true })
+    invokePluginRpc.mockResolvedValueOnce({
+      running: true,
+      text: { en: 'Running after restart', fr: 'Actif après redémarrage' },
+      tone: 'success',
+    })
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Restart' }))
+
+    await waitFor(() => {
+      expect(invokePluginRpc).toHaveBeenCalledWith('demo', 'restartProxy', {})
+      expect(screen.getByText('Running after restart')).toBeDefined()
+    })
   })
 })

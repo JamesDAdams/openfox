@@ -11,6 +11,7 @@ import type {
   PluginContext,
   PluginHookEvent,
   PluginHookHandler,
+  PluginMessageTransform,
   PluginModelMetadataProvider,
   PluginNotificationRequest,
   PluginRegistry as PluginRegistryContract,
@@ -53,6 +54,7 @@ type Kind =
   | 'uiComponent'
   | 'uiOverride'
   | 'asset'
+  | 'messageTransform'
 
 interface Owned<T> {
   pluginId: string
@@ -186,6 +188,10 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
     this.assets.set(pluginId, set)
   }
 
+  registerMessageTransform(transform: PluginMessageTransform): void {
+    this.register('messageTransform', transform.id, transform)
+  }
+
   notify(request: PluginNotificationRequest): void {
     this.context.notify(request)
   }
@@ -229,6 +235,13 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
 
   getSkillSources(): PluginSkillSource[] {
     return this.list<PluginSkillSource>('skillSource')
+  }
+
+  getMessageTransforms(): { pluginId: string; transform: PluginMessageTransform }[] {
+    return this.listOwned<PluginMessageTransform>('messageTransform').map((entry) => ({
+      pluginId: entry.pluginId,
+      transform: entry.value,
+    }))
   }
 
   getSettingsSchema(pluginId: string): PluginSettingsSchema | undefined {
@@ -307,6 +320,7 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
       settingsTabs: count('settingsTab'),
       uiComponents: count('uiComponent'),
       uiOverrides: count('uiOverride'),
+      messageTransforms: count('messageTransform'),
     }
   }
 
