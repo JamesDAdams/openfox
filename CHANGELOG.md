@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.158 - 2026-09-24
+
+### Bug Fixes
+
+- **Context-drift reminders never truncate again** — full system-prompt diffs and tool schemas are now shown to the agent.
+
 ## 2.0.157 - 2026-09-23
 
 ### Features
