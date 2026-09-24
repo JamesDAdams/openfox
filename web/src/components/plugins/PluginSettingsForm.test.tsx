@@ -232,4 +232,42 @@ describe('PluginSettingsForm', () => {
       expect(screen.getByText('Running after restart')).toBeDefined()
     })
   })
+
+  it('hides fields with hideWhenInstalled when status is installed', async () => {
+    invokePluginRpc.mockResolvedValueOnce({
+      installed: true,
+      text: 'Installed (rtk 0.1.0)',
+      tone: 'success',
+    })
+
+    settingsRef.current = {
+      schema: {
+        fields: [
+          {
+            key: 'daemonStatus',
+            type: 'status',
+            label: { en: 'CLI Status', fr: 'Statut du CLI' },
+            rpcMethod: 'getStatus',
+          },
+          {
+            key: 'installCli',
+            type: 'button',
+            label: { en: 'Install RTK CLI', fr: 'Installer le CLI RTK' },
+            hideWhenInstalled: true,
+            rpcMethod: 'installCli',
+          },
+        ],
+      },
+      values: {},
+      secretsSet: [],
+    }
+
+    render(<PluginSettingsForm pluginId="demo" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Installed (rtk 0.1.0)')).toBeDefined()
+    })
+
+    expect(screen.queryByRole('button', { name: 'Install RTK CLI' })).toBeNull()
+  })
 })

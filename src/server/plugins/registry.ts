@@ -178,7 +178,8 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
   }
 
   registerRpc(method: string, handler: PluginRpcHandler): void {
-    this.register('rpc', method, handler)
+    const pluginId = this.currentPluginId ?? UNKNOWN_PLUGIN
+    this.register('rpc', `${pluginId}:${method}`, handler)
   }
 
   registerAsset(relativePath: string): void {
@@ -277,8 +278,8 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
   }
 
   getRpcHandler(pluginId: string, method: string): PluginRpcHandler | undefined {
-    const entry = this.entries.get('rpc')?.get(method)
-    return entry && entry.pluginId === pluginId ? (entry.value as PluginRpcHandler) : undefined
+    const entry = this.entries.get('rpc')?.get(`${pluginId}:${method}`)
+    return entry ? (entry.value as PluginRpcHandler) : undefined
   }
 
   getAssets(pluginId: string): string[] {
@@ -293,7 +294,13 @@ export class PluginRegistry implements ProviderPluginRegistry, PluginRegistryCon
     const result: { kind: string; id: string }[] = []
     for (const [kind, map] of this.entries) {
       for (const [id, entry] of map) {
-        if (entry.pluginId === pluginId) result.push({ kind, id })
+        if (entry.pluginId === pluginId) {
+          const rawId =
+            (kind === 'rpc' || kind === 'transition') && id.startsWith(`${pluginId}:`)
+              ? id.slice(pluginId.length + 1)
+              : id
+          result.push({ kind, id: rawId })
+        }
       }
     }
     return result

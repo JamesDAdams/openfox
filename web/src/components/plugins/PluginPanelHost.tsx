@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
 import { usePlugins } from '../../hooks/usePlugins'
 import { useLocalizedString } from '../../hooks/useLocalizedString'
 import { usePluginUiStore } from '../../stores/pluginUi'
 import { getSessionToken } from '../../lib/api'
 import { DeclarativeRenderer } from './DeclarativeRenderer'
+import { invokePluginRpc } from '../../lib/plugin-actions'
 import type { PluginActionContext } from './plugin-ui-utils'
 import type { DeclarativeNode, PluginUiPanel } from '@shared/plugin.js'
 
@@ -38,9 +39,26 @@ export function PluginPanelHost() {
     [activePanel, contributions.panels],
   )
 
-  if (!activePanel || !panel) return null
+  const targetPluginId = panel?.pluginId && panel.pluginId !== 'unknown' ? panel.pluginId : activePanel?.pluginId
 
-  const targetPluginId = panel.pluginId && panel.pluginId !== 'unknown' ? panel.pluginId : activePanel.pluginId
+  useEffect(() => {
+    if (!activePanel || !targetPluginId) return
+    const refresh = async () => {
+      try {
+        await invokePluginRpc(targetPluginId, 'refreshGainStats', {})
+      } catch {
+        try {
+          await invokePluginRpc(targetPluginId, 'getStatus', {})
+        } catch {
+          // ignore
+        }
+      }
+    }
+    void refresh()
+  }, [activePanel?.pluginId, activePanel?.panelId, targetPluginId])
+
+  if (!activePanel || !panel || !targetPluginId) return null
+
   const panelContext = activePanel.context ?? {}
   const context: PluginActionContext & { pluginId: string } = { pluginId: targetPluginId, ...panelContext }
   const values: Record<string, unknown> = {}

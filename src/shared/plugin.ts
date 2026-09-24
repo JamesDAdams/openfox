@@ -287,6 +287,7 @@ export interface PluginSettingsField {
   parentKey?: string
   width?: 'full' | 'half'
   section?: LocalizedString
+  hideWhenInstalled?: boolean
 }
 
 export interface PluginSettingsSchema {

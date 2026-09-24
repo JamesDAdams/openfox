@@ -19,6 +19,7 @@ type FormValues = Record<string, PluginSettingValue | string>
 interface StatusFieldState {
   loading?: boolean
   running?: boolean
+  installed?: boolean
   text?: string | LocalizedString
   tone?: PluginBadgeTone
 }
@@ -137,12 +138,20 @@ export function PluginSettingsForm({
     for (const field of statusFields) {
       try {
         const res = (await invokePluginRpc(pluginId, field.rpcMethod ?? field.key, {})) as Record<string, unknown>
+        const installed = res?.['installed'] === true || res?.['running'] === true
         setStatusStates((prev) => ({
           ...prev,
           [field.key]: {
+            installed,
             running: typeof res?.['running'] === 'boolean' ? res['running'] : undefined,
-            text: (res?.['text'] as string | LocalizedString | undefined) ?? (res?.['message'] as string | undefined),
-            tone: (res?.['tone'] as PluginBadgeTone | undefined) ?? (res?.['running'] ? 'success' : 'danger'),
+            text:
+              (res?.['statusText'] as string | undefined) ??
+              (res?.['text'] as string | LocalizedString | undefined) ??
+              (res?.['message'] as string | undefined),
+            tone:
+              (res?.['statusTone'] as PluginBadgeTone | undefined) ??
+              (res?.['tone'] as PluginBadgeTone | undefined) ??
+              (installed ? 'success' : 'danger'),
             loading: false,
           },
         }))
@@ -219,6 +228,11 @@ export function PluginSettingsForm({
       ) : null}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {data.schema.fields.map((field, index) => {
+          const isAnyInstalled = Object.values(statusStates).some((s) => s.installed === true)
+          if (field.hideWhenInstalled && isAnyInstalled) {
+            return null
+          }
+
           const label = localize(field.label)
           const description = field.description ? localize(field.description) : undefined
           const value = values[field.key]

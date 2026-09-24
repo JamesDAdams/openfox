@@ -1919,25 +1919,6 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     res.json({ key, value })
   })
 
-  // RTK availability check
-  app.get('/api/tools/rtk-check', async (_req, res) => {
-    const { spawn } = await import('node:child_process')
-    try {
-      const available = await new Promise<boolean>((resolve) => {
-        const proc = spawn('rtk', ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] })
-        let out = ''
-        proc.stdout?.on('data', (d: Buffer) => {
-          out += d.toString()
-        })
-        proc.on('error', () => resolve(false))
-        proc.on('close', (code) => resolve(code === 0 && out.startsWith('rtk ')))
-      })
-      res.json({ available })
-    } catch {
-      res.json({ available: false })
-    }
-  })
-
   // Shells available for the tools.shell setting (Windows only; empty elsewhere)
   app.get('/api/tools/shells', async (_req, res) => {
     const { listAvailableShells } = await import('./utils/platform.js')
