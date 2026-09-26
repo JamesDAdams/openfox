@@ -1,6 +1,6 @@
 import { Component, useMemo, type ReactNode } from 'react'
 import { usePlugins } from '../../hooks/usePlugins'
-import { isContributionVisible, type PluginActionContext } from './plugin-ui-utils'
+import { extractScopedValues, isContributionVisible, type PluginActionContext } from './plugin-ui-utils'
 import { DeclarativeRenderer } from './DeclarativeRenderer'
 import { usePluginUiStore } from '../../stores/pluginUi'
 import type { DeclarativeNode, PluginUiComponent, PluginUiOverride, PluginZoneId } from '@shared/plugin.js'
@@ -9,16 +9,10 @@ function DynamicPluginComponent({ comp, context }: { comp: PluginUiComponent; co
   const publishedValues = usePluginUiStore((state) => state.values)
   const pluginId = comp.pluginId ?? 'unknown'
 
-  const values: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(publishedValues)) {
-    // Also support unscoped published values from pluginId
-    const pluginPrefix = `${pluginId}::`
-    if (k.startsWith(pluginPrefix)) values[k.slice(pluginPrefix.length)] = v
-    const prefix = `${pluginId}:${comp.id}:`
-    if (k.startsWith(prefix)) values[k.slice(prefix.length)] = v
-    // Support session-scoped published values when sessionId is available in context
-    if (context.sessionId) {
-      const sessionPrefix = `${pluginId}:${comp.id}:${context.sessionId}:`
+  const values = extractScopedValues(publishedValues, pluginId, comp.id)
+  if (context.sessionId) {
+    const sessionPrefix = `${pluginId}:${comp.id}:${context.sessionId}:`
+    for (const [k, v] of Object.entries(publishedValues)) {
       if (k.startsWith(sessionPrefix)) values[k.slice(sessionPrefix.length)] = v
     }
   }

@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useResource } from '../../hooks/useResource'
 import { useT } from '../../hooks/useT'
 import { useLocalizedString } from '../../hooks/useLocalizedString'
@@ -6,10 +7,12 @@ import { pluginSettingsResource, providersResource } from '../../lib/resources'
 import { invokePluginRpc, savePluginSettings } from '../../lib/plugin-actions'
 import { Button } from '../shared/Button'
 import { Toggle } from '../shared/Toggle'
+import { PlusIcon, TrashIcon, OpenExternalIcon } from '../shared/icons'
 import type {
   LocalizedString,
   PluginBadgeTone,
   PluginSettingsField,
+  PluginSettingsLinkButton,
   PluginSettingScope,
   PluginSettingValue,
 } from '@shared/plugin.js'
@@ -43,6 +46,206 @@ function isMaskedValue(value: unknown): boolean {
   return typeof value === 'string' && (value === MASKED_SECRET || /^[•*]+$/.test(value))
 }
 
+function parseListItems(value: unknown): Array<Record<string, unknown>> {
+  if (typeof value !== 'string') return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item),
+    )
+  } catch {
+    return []
+  }
+}
+
+const HREF_PLACEHOLDER = /\{\{\s*([\w.-]+?)\s*\}\}/g
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Resolves a `linkButton` template against a row's values (falling back to the
+ * whole form). Returns `''` when the template has no usable target, which
+ * renders the button disabled.
+ */
+export function resolveLinkButtonHref(linkButton: PluginSettingsLinkButton, values: Record<string, unknown>): string {
+  const selected = linkButton.hrefByField ? String(values[linkButton.hrefByField] ?? '') : ''
+  const template = (linkButton.hrefByValue ?? {})[selected] ?? linkButton.href ?? ''
+  if (!template) return ''
+
+  return template.replace(HREF_PLACEHOLDER, (_match, placeholder: string) => {
+    const [key, accessor] = placeholder.split('.')
+    const raw = values[key ?? '']
+    const value = raw === undefined || raw === null ? '' : String(raw)
+    if (accessor === 'origin') {
+      try {
+        return new URL(value).origin
+      } catch {
+        return ''
+      }
+    }
+    return value
+  })
+}
+
+function LinkButton({
+  linkButton,
+  values,
+  disabled,
+}: {
+  linkButton: PluginSettingsLinkButton
+  values: Record<string, unknown>
+  disabled: boolean
+}) {
+  const localize = useLocalizedString()
+  const label = localize(linkButton.label)
+  const href = resolveLinkButtonHref(linkButton, values)
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled || !isHttpUrl(href)}
+      onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}
+      className="shrink-0 rounded p-1.5 text-text-muted hover:text-accent-primary disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <OpenExternalIcon />
+    </button>
+  )
+}
+
+function newListItem(field: PluginSettingsField): Record<string, unknown> {
+  const item: Record<string, unknown> = {}
+  for (const sub of field.itemFields ?? []) {
+    if (sub.type === 'boolean') item[sub.key] = sub.default === true
+    else if (sub.type === 'number') item[sub.key] = typeof sub.default === 'number' ? sub.default : ''
+    else item[sub.key] = typeof sub.default === 'string' ? sub.default : (sub.options?.[0]?.value ?? '')
+  }
+  return item
+}
+
+function ListFieldInput({
+  field,
+  value,
+  formValues,
+  disabled,
+  onChange,
+}: {
+  field: PluginSettingsField
+  value: string
+  formValues: Record<string, unknown>
+  disabled: boolean
+  onChange: (value: string) => void
+}) {
+  const t = useT()
+  const localize = useLocalizedString()
+  const items = parseListItems(value)
+  const subFields = field.itemFields ?? []
+  const addLabel = field.addLabel ? localize(field.addLabel) : t({ en: 'Add', fr: 'Ajouter' })
+  const removeLabel = field.removeLabel ? localize(field.removeLabel) : t({ en: 'Remove', fr: 'Supprimer' })
+  const atMax = field.maxItems !== undefined && items.length >= field.maxItems
+
+  const commit = (next: Array<Record<string, unknown>>) => onChange(JSON.stringify(next))
+  const updateItem = (index: number, key: string, next: unknown) =>
+    commit(items.map((item, position) => (position === index ? { ...item, [key]: next } : item)))
+
+  return (
+    <div className="flex flex-col gap-2">
+      {items.map((item, index) => (
+        <div key={`${field.key}-${index}`} className="flex items-end gap-2">
+          {subFields.map((sub) => {
+            const id = `plugin-setting-${field.key}-${index}-${sub.key}`
+            const subValue = item[sub.key]
+            return (
+              <div
+                key={sub.key}
+                className={`flex flex-col gap-1 ${sub.type === 'select' ? 'w-28 shrink-0' : 'flex-1 min-w-0'}`}
+              >
+                <label className="text-[10px] text-text-muted" htmlFor={id}>
+                  {localize(sub.label)}
+                </label>
+                <div className="flex items-center gap-1">
+                  {sub.type === 'select' ? (
+                    <select
+                      id={id}
+                      value={String(subValue ?? '')}
+                      disabled={disabled}
+                      onChange={(event) => updateItem(index, sub.key, event.target.value)}
+                      className={FIELD_CLASS}
+                    >
+                      {(sub.options ?? []).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {localize(option.label)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      id={id}
+                      type={sub.type === 'password' ? 'password' : sub.type === 'number' ? 'number' : 'text'}
+                      value={String(subValue ?? '')}
+                      disabled={disabled}
+                      {...(sub.placeholder ? { placeholder: sub.placeholder } : {})}
+                      onFocus={(event) => {
+                        if (isMaskedValue(subValue)) event.target.select()
+                      }}
+                      onChange={(event) => {
+                        const next = event.target.value
+                        if (isMaskedValue(subValue) && next.startsWith(String(subValue))) {
+                          updateItem(index, sub.key, next.slice(String(subValue).length))
+                        } else if (sub.type === 'number') {
+                          updateItem(index, sub.key, next === '' ? '' : Number(next))
+                        } else {
+                          updateItem(index, sub.key, next)
+                        }
+                      }}
+                      className={FIELD_CLASS}
+                    />
+                  )}
+                  {sub.linkButton ? (
+                    <LinkButton linkButton={sub.linkButton} values={{ ...formValues, ...item }} disabled={disabled} />
+                  ) : null}
+                </div>
+              </div>
+            )
+          })}
+          <button
+            type="button"
+            aria-label={removeLabel}
+            title={removeLabel}
+            disabled={disabled}
+            onClick={() => commit(items.filter((_, position) => position !== index))}
+            className="mb-0.5 rounded p-1.5 text-text-muted hover:text-accent-error hover:bg-bg-tertiary disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <TrashIcon />
+          </button>
+        </div>
+      ))}
+      <div>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={disabled || atMax}
+          onClick={() => commit([...items, newListItem(field)])}
+        >
+          <span className="inline-flex items-center gap-1">
+            <PlusIcon className="w-3 h-3" />
+            {addLabel}
+          </span>
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function FieldInput({
   id,
   value,
@@ -50,6 +253,7 @@ function FieldInput({
   multiline,
   type,
   placeholder,
+  disabled,
 }: {
   id: string
   value: string | number
@@ -57,6 +261,7 @@ function FieldInput({
   multiline?: boolean
   type?: string
   placeholder?: string
+  disabled?: boolean
 }) {
   const strVal = String(value ?? '')
   if (multiline) {
@@ -66,6 +271,7 @@ function FieldInput({
         value={strVal}
         onChange={(event) => onChange(event.target.value)}
         rows={4}
+        disabled={disabled}
         className={FIELD_CLASS}
       />
     )
@@ -76,6 +282,7 @@ function FieldInput({
       type={type ?? 'text'}
       value={strVal}
       placeholder={placeholder ?? ''}
+      disabled={disabled}
       onFocus={(event) => {
         if (strVal === MASKED_SECRET) {
           event.target.select()
@@ -102,12 +309,19 @@ function initialValue(
   if (field.type === 'button' || field.type === 'status') {
     return ''
   }
+  if (field.readOnly) {
+    return (field.default as string) ?? ''
+  }
   if (isSecretField(field) && secretsSet.includes(field.key)) {
     return MASKED_SECRET
   }
   const stored = values[field.key]
   if (field.type === 'boolean') return typeof stored === 'boolean' ? stored : ((field.default as boolean) ?? false)
   if (field.type === 'number') return typeof stored === 'number' ? stored : ((field.default as number) ?? '')
+  if (field.type === 'list') {
+    if (typeof stored === 'string') return stored
+    return typeof field.default === 'string' ? field.default : '[]'
+  }
   if (typeof stored === 'string') return stored
   return (field.default as string) ?? ''
 }
@@ -181,7 +395,7 @@ export function PluginSettingsForm({
   const saveValues = async (nextValues: FormValues) => {
     const payload: Record<string, unknown> = {}
     for (const field of data.schema.fields) {
-      if (field.type === 'button' || field.type === 'status') continue
+      if (field.type === 'button' || field.type === 'status' || field.readOnly) continue
       const value = nextValues[field.key]
       if (isSecretField(field) && (isMaskedValue(value) || value === '' || value === undefined)) continue
       if (field.type === 'number' && value === '') continue
@@ -192,11 +406,18 @@ export function PluginSettingsForm({
       setError(result.error ?? t({ en: 'Failed to save settings', fr: 'Échec de l’enregistrement des paramètres' }))
       return
     }
+    // A freshly typed secret is not echoed back by the server: mark it as set so
+    // the input switches to the mask instead of looking empty.
+    const secretsSet = new Set(data.secretsSet)
+    for (const field of data.schema.fields) {
+      const written = payload[field.key]
+      if (isSecretField(field) && typeof written === 'string' && written !== '') secretsSet.add(field.key)
+    }
     pluginSettingsResource.write(
       {
         schema: data.schema,
         values: payload as Record<string, string | number | boolean>,
-        secretsSet: data.secretsSet,
+        secretsSet: [...secretsSet],
       },
       pluginId,
       scope,
@@ -249,6 +470,17 @@ export function PluginSettingsForm({
             (previousField === undefined ||
               previousField.section === undefined ||
               localize(field.section) !== localize(previousField.section))
+
+          const linkButton = field.linkButton
+          const withLinkButton = (node: ReactNode) =>
+            linkButton ? (
+              <div className="flex items-center gap-1">
+                <div className="flex-1 min-w-0">{node}</div>
+                <LinkButton linkButton={linkButton} values={values} disabled={field.readOnly === true} />
+              </div>
+            ) : (
+              node
+            )
 
           return (
             <Fragment key={field.key}>
@@ -323,38 +555,52 @@ export function PluginSettingsForm({
                     </Button>
                   </div>
                 ) : field.type === 'select' ? (
-                  <select
-                    id={`plugin-setting-${field.key}`}
-                    value={String(value ?? '')}
-                    onChange={(event) => setValues((state) => ({ ...state, [field.key]: event.target.value }))}
-                    className={FIELD_CLASS}
-                  >
-                    {(field.options ?? []).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {localize(option.label)}
-                      </option>
-                    ))}
-                  </select>
+                  withLinkButton(
+                    <select
+                      id={`plugin-setting-${field.key}`}
+                      value={String(value ?? '')}
+                      onChange={(event) => setValues((state) => ({ ...state, [field.key]: event.target.value }))}
+                      className={FIELD_CLASS}
+                    >
+                      {(field.options ?? []).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {localize(option.label)}
+                        </option>
+                      ))}
+                    </select>,
+                  )
+                ) : field.type === 'list' ? (
+                  <ListFieldInput
+                    field={field}
+                    value={String(value ?? '[]')}
+                    formValues={values}
+                    disabled={field.readOnly === true}
+                    onChange={(next) => setValues((state) => ({ ...state, [field.key]: next }))}
+                  />
                 ) : field.type === 'textarea' ? (
                   <FieldInput
                     id={`plugin-setting-${field.key}`}
                     value={String(value ?? '')}
                     onChange={(next) => setValues((state) => ({ ...state, [field.key]: next }))}
                     multiline
+                    disabled={field.readOnly === true}
                   />
                 ) : (
-                  <FieldInput
-                    id={`plugin-setting-${field.key}`}
-                    value={String(value ?? '')}
-                    onChange={(next) =>
-                      setValues((state) => ({
-                        ...state,
-                        [field.key]: field.type === 'number' ? (next === '' ? '' : Number(next)) : next,
-                      }))
-                    }
-                    type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
-                    {...(field.placeholder ? { placeholder: field.placeholder } : {})}
-                  />
+                  withLinkButton(
+                    <FieldInput
+                      id={`plugin-setting-${field.key}`}
+                      value={String(value ?? '')}
+                      onChange={(next) =>
+                        setValues((state) => ({
+                          ...state,
+                          [field.key]: field.type === 'number' ? (next === '' ? '' : Number(next)) : next,
+                        }))
+                      }
+                      type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
+                      disabled={field.readOnly === true}
+                      {...(field.placeholder ? { placeholder: field.placeholder } : {})}
+                    />,
+                  )
                 )}
                 {description ? <p className="mt-1 text-xs text-text-muted">{description}</p> : null}
               </div>

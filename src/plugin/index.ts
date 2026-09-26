@@ -35,6 +35,7 @@ export type {
   PluginNotification,
   PluginNotificationAction,
   PluginSettingsField,
+  PluginSettingsLinkButton,
   PluginSettingsSchema,
   PluginSettingsTab,
   PluginSettingScope,

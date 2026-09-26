@@ -6,7 +6,13 @@ import { usePluginUiStore } from '../../stores/pluginUi'
 import { getSessionToken } from '../../lib/api'
 import { DeclarativeRenderer } from './DeclarativeRenderer'
 import { invokePluginRpc } from '../../lib/plugin-actions'
-import type { PluginActionContext } from './plugin-ui-utils'
+import {
+  applyPanelContent,
+  extractScopedValues,
+  nodeDeclarativeKey,
+  pluginRpcContext,
+  type PluginActionContext,
+} from './plugin-ui-utils'
 import type { DeclarativeNode, PluginUiPanel } from '@shared/plugin.js'
 
 const PANEL_SIZES: Record<NonNullable<PluginUiPanel['size']>, 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full'> = {
@@ -43,29 +49,36 @@ export function PluginPanelHost() {
 
   useEffect(() => {
     if (!activePanel || !targetPluginId) return
+    // The panel was opened by an action that already supplied its content —
+    // an initPanel refresh here would clobber it (see ActivePluginPanel.skipInitPanel).
+    if (activePanel.skipInitPanel) return
+    let cancelled = false
     const refresh = async () => {
       try {
-        await invokePluginRpc(targetPluginId, 'refreshGainStats', {})
-      } catch {
-        try {
-          await invokePluginRpc(targetPluginId, 'getStatus', {})
-        } catch {
-          // ignore
+        const res = await invokePluginRpc(
+          targetPluginId,
+          'initPanel',
+          { panelId: activePanel.panelId },
+          pluginRpcContext(activePanel.context ?? {}),
+        )
+        if (!cancelled) {
+          applyPanelContent(targetPluginId, activePanel.panelId, res)
         }
+      } catch {
+        // ignore
       }
     }
     void refresh()
-  }, [activePanel?.pluginId, activePanel?.panelId, targetPluginId])
+    return () => {
+      cancelled = true
+    }
+  }, [activePanel, targetPluginId])
 
   if (!activePanel || !panel || !targetPluginId) return null
 
   const panelContext = activePanel.context ?? {}
   const context: PluginActionContext & { pluginId: string } = { pluginId: targetPluginId, ...panelContext }
-  const values: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(publishedValues)) {
-    const prefix = `${targetPluginId}:${activePanel.panelId}:`
-    if (key.startsWith(prefix)) values[key.slice(prefix.length)] = value
-  }
+  const values = extractScopedValues(publishedValues, targetPluginId, activePanel.panelId)
 
   const iframeUrl = (() => {
     if (panel.kind !== 'iframe' || !panel.url) return undefined
@@ -104,12 +117,7 @@ export function PluginPanelHost() {
       ) : (
         <div className="flex flex-col gap-3">
           {contentNodes.map((node, index) => (
-            <DeclarativeRenderer
-              key={`${index}-${node.type}-${node.type === 'card' && node.title ? node.title.en : ''}`}
-              node={node}
-              values={values}
-              context={context}
-            />
+            <DeclarativeRenderer key={nodeDeclarativeKey(node, index)} node={node} values={values} context={context} />
           ))}
         </div>
       )}

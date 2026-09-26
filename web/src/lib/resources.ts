@@ -1,5 +1,5 @@
 import { authFetch } from './api'
-import { resource, snapshot } from './resourceCache'
+import { refreshPrefix, resource, snapshot } from './resourceCache'
 import {
   fetchPluginList,
   fetchNotifications,
@@ -891,3 +891,23 @@ export const pluginToolsResource = resource<{ tools: PluginToolInfo[] }, []>({
   fetch: fetchPluginTools,
   maxAgeMs: 0,
 })
+
+/**
+ * Cache-key prefixes of the core item domains, so a plugin RPC that writes
+ * items to disk can declare what changed and have every mounted view converge.
+ */
+export const ITEM_RESOURCE_PREFIXES: Record<string, string> = {
+  agents: 'agents:',
+  commands: 'commands:',
+  skills: 'skills:',
+  workflows: 'workflows:',
+  mcpServers: 'mcp:servers',
+}
+
+/** Refetch the cached item lists for the given domains (`agents`, `skills`, …). */
+export function refreshItemResources(kinds: string[]): void {
+  for (const kind of kinds) {
+    const prefix = ITEM_RESOURCE_PREFIXES[kind]
+    if (prefix) refreshPrefix(prefix)
+  }
+}

@@ -378,6 +378,27 @@ describe('PluginHost', () => {
     expect(host.getSettingsView('settings-plugin').values['limit']).toBe(10)
   })
 
+  it('never persists or exposes read-only settings fields', async () => {
+    await writePlugin(
+      configDirectory,
+      'readonly-plugin',
+      2,
+      `registry.registerSettings({ fields: [
+        { key: 'official', type: 'text', label: { en: 'Official', fr: 'Officiel' }, default: 'https://official.test', readOnly: true },
+        { key: 'extra', type: 'text', label: { en: 'Extra', fr: 'Extra' } },
+      ] });`,
+    )
+    const host = makeHost(configDirectory)
+    await host.start()
+
+    expect(host.updateSettings('readonly-plugin', { official: 'https://hacked.test', extra: 'kept' })).toEqual({
+      errors: [],
+    })
+    expect(getAllSettings()['plugin.readonly-plugin.global.official']).toBeUndefined()
+    expect(host.getSettingsView('readonly-plugin').values['official']).toBeUndefined()
+    expect(host.getSettingsView('readonly-plugin').values['extra']).toBe('kept')
+  })
+
   it('scopes plugin settings per project when requested', async () => {
     await writePlugin(
       configDirectory,

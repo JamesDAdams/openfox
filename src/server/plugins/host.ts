@@ -42,7 +42,12 @@ import {
   installPluginFromPath,
   removeNpmArtifacts,
 } from './install.js'
-import { readPluginSettings, readPluginSettingsView, writePluginSettings } from './settings.js'
+import {
+  pluginStorageKey as storageKey,
+  readPluginSettings,
+  readPluginSettingsView,
+  writePluginSettings,
+} from './settings.js'
 import { setPluginModelMetadataProviders } from './model-metadata.js'
 import { setPluginMessageTransforms } from './message-transforms.js'
 import { setPluginHookEmitter } from './hook-emitter.js'
@@ -514,10 +519,6 @@ export class PluginHost {
 
 function joinPluginsDir(configDirectory: string): string {
   return `${configDirectory}/plugins`
-}
-
-function storageKey(pluginId: string, key: string): string {
-  return `plugin.${pluginId}.storage.${key}`
 }
 
 function readStorageValue(pluginId: string, key: string): PluginSettingValue | undefined {
