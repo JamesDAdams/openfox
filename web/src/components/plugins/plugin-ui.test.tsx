@@ -954,6 +954,90 @@ describe('PluginZone and DeclarativeRenderer', () => {
     expect(screen.getByText('Custom Brand')).toBeDefined()
   })
 
+  it('calls an override contentSource RPC with the zone context and renders its content', async () => {
+    invokePluginRpc.mockResolvedValue({
+      content: { type: 'text', text: { en: 'Accounts for provider one', fr: 'Comptes du fournisseur un' } },
+    })
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      overrides: [
+        {
+          id: 'auth-override',
+          pluginId: 'demo',
+          zone: 'provider.modal.auth',
+          mode: 'replace',
+          replacement: { type: 'text', text: { en: 'Static shell', fr: 'Coquille statique' } },
+          contentSource: { kind: 'rpc', method: 'getAuthUi' },
+        },
+      ],
+    }
+
+    render(
+      <PluginZone id="provider.modal.auth" context={{ providerId: 'provider-one' }}>
+        <span data-testid="native-auth">Connect</span>
+      </PluginZone>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Accounts for provider one')).toBeDefined())
+    expect(invokePluginRpc).toHaveBeenCalledWith(
+      'demo',
+      'getAuthUi',
+      { contributionId: 'auth-override', providerId: 'provider-one' },
+      {},
+    )
+    expect(screen.queryByText('Static shell')).toBeNull()
+  })
+
+  it('polls an override contentSource while mounted and stops after unmount', async () => {
+    invokePluginRpc.mockResolvedValue({
+      content: { type: 'text', text: { en: 'Polled content', fr: 'Contenu interrogé' } },
+    })
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      overrides: [
+        {
+          id: 'auth-override',
+          pluginId: 'demo',
+          zone: 'provider.modal.auth',
+          mode: 'replace',
+          contentSource: { kind: 'rpc', method: 'getAuthUi', refreshMs: 30 },
+        },
+      ],
+    }
+
+    const { unmount } = render(<PluginZone id="provider.modal.auth" context={{ providerId: 'provider-one' }} />)
+
+    await waitFor(() => expect(invokePluginRpc.mock.calls.length).toBeGreaterThanOrEqual(2))
+    unmount()
+    const callsAtUnmount = invokePluginRpc.mock.calls.length
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    expect(invokePluginRpc.mock.calls.length).toBe(callsAtUnmount)
+  })
+
+  it('keeps the last content when a contentSource refresh fails', async () => {
+    invokePluginRpc
+      .mockResolvedValueOnce({ content: { type: 'text', text: { en: 'First content', fr: 'Premier contenu' } } })
+      .mockRejectedValue(new Error('boom'))
+    contributionsRef.current = {
+      ...contributionsRef.current,
+      overrides: [
+        {
+          id: 'auth-override',
+          pluginId: 'demo',
+          zone: 'provider.modal.auth',
+          mode: 'replace',
+          contentSource: { kind: 'rpc', method: 'getAuthUi', refreshMs: 30 },
+        },
+      ],
+    }
+
+    render(<PluginZone id="provider.modal.auth" context={{ providerId: 'provider-one' }} />)
+
+    await waitFor(() => expect(screen.getByText('First content')).toBeDefined())
+    await waitFor(() => expect(invokePluginRpc.mock.calls.length).toBeGreaterThanOrEqual(2))
+    expect(screen.getByText('First content')).toBeDefined()
+  })
+
   it('injects components before, inside, and after native content with proper ordering', () => {
     contributionsRef.current = {
       ...contributionsRef.current,

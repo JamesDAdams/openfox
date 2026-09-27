@@ -210,6 +210,16 @@ export function isContributionVisible(
     const actual = Boolean(context.messageId)
     if (actual !== condition.hasMessage) return false
   }
+  if (condition.eq) {
+    for (const [key, expected] of Object.entries(condition.eq)) {
+      if (context[key] !== expected) return false
+    }
+  }
+  if (condition.neq) {
+    for (const [key, expected] of Object.entries(condition.neq)) {
+      if (context[key] === expected) return false
+    }
+  }
   return true
 }
 
@@ -232,10 +242,10 @@ const RPC_ERROR_TITLE = {
 
 export async function activatePluginAction(
   pluginId: string | undefined,
-  activation: PluginActivation,
+  activation: PluginActivation | undefined,
   context: PluginActionContext = {},
 ): Promise<void> {
-  if (!pluginId) return
+  if (!pluginId || !activation) return
   try {
     if (activation.kind === 'rpc') {
       const mergedParams = {
@@ -264,11 +274,24 @@ export async function activatePluginAction(
               : ((context['tabId'] as string | undefined) ?? (context['tab'] as string | undefined))
           if (targetId) {
             applyPanelContent(pluginId, targetId, resultObj)
+          } else if (resultObj['content'] && typeof resultObj['content'] === 'object') {
+            usePluginUiStore.getState().setState(pluginId, 'content', 'content', resultObj['content'])
           }
         }
         const invalidate = resultObj['invalidate']
         if (Array.isArray(invalidate)) {
           void import('../../lib/resources').then((m) => m.refreshItemResources(invalidate as string[])).catch(() => {})
+        }
+
+        // If the RPC response returned a login/OAuth challenge or URL, automatically open or handle it
+        if (resultObj['challenge'] && typeof resultObj['challenge'] === 'object') {
+          const challenge = resultObj['challenge'] as { verificationUrl?: string; directUrl?: string; url?: string }
+          const targetUrl = challenge.directUrl ?? challenge.verificationUrl ?? challenge.url
+          if (targetUrl && typeof targetUrl === 'string') {
+            window.open(targetUrl, '_blank', 'noopener,noreferrer')
+          }
+        } else if (typeof resultObj['url'] === 'string') {
+          window.open(resultObj['url'], '_blank', 'noopener,noreferrer')
         }
       }
 

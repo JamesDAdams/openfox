@@ -22,7 +22,8 @@ import { buildModelsUrl } from './llm/url-utils.js'
 
 import { createMockLLMClient } from './llm/mock.js'
 import { createProviderManager, parseDefaultModelSelection } from './provider-manager.js'
-import { isReasoningEffortValidForModel } from '../shared/reasoning-effort.js'
+import { cascadeProviderDelete } from './providers/adapters/provider-deletion.js'
+import { isReasoningEffortValidForModel, collapseModeFamilies } from '../shared/reasoning-effort.js'
 import { createToolRegistry, setMcpTools, getBuiltInToolNames } from './tools/index.js'
 import { ALWAYS_ALLOWED, ALWAYS_ALLOWED_FOR_SUBAGENTS, TOP_LEVEL_ONLY_TOOLS } from './tools/tool-policy.js'
 import { McpManager, createMcpTools } from './mcp/index.js'
@@ -217,6 +218,20 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       await providerManager.refreshProviderModels(activeProvider.id).catch((err) => {
         logger.debug('Startup model refetch failed', {
           providerId: activeProvider.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    }
+
+    // Background-refresh transport-adapter providers that have no stored models
+    // so their model list (with reasoningEfforts) is available immediately in the UI.
+    const transportProviders = providerManager
+      .getProviders()
+      .filter((p) => p.transportAdapter && p.models.length === 0 && p.id !== activeProvider?.id)
+    for (const p of transportProviders) {
+      providerManager.refreshProviderModels(p.id).catch((err) => {
+        logger.debug('Startup transport provider model refresh failed', {
+          providerId: p.id,
           error: err instanceof Error ? err.message : String(err),
         })
       })
@@ -2183,27 +2198,34 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       const { fetchModelsWithContext } = await import('./provider-manager.js')
       const { getModelProfile } = await import('./llm/profiles.js')
       const { getCatalogEntry } = await import('./providers/model-catalog.js')
-      const models = await fetchModelsWithContext(
+      const rawModels = await fetchModelsWithContext(
         url,
         apiKey,
         backend as 'ollama' | 'vllm' | 'sglang' | 'llamacpp' | 'lmstudio' | 'unsloth' | 'unknown' | undefined,
       )
-      if (models.length === 0) {
+      if (rawModels.length === 0) {
         return res.status(404).json({ error: `No models found at ${buildModelsUrl(url)}`, url })
       }
+      const models = collapseModeFamilies(rawModels)
       res.json({
         models: models.map((m) => {
           const profile = getModelProfile(m.id)
           const catalog = getCatalogEntry(m.id)
           return {
             id: m.id,
+            name: m.name,
             contextWindow: m.contextWindow,
             supportsVision: m.supportsVision ?? profile.supportsVision,
             defaultTemperature: profile.temperature,
             defaultTopP: profile.topP,
             defaultTopK: profile.topK,
             defaultMaxTokens: profile.defaultMaxTokens,
-            ...(catalog ? { reasoningEfforts: catalog.reasoningEfforts } : {}),
+            ...(m.modes?.length ? { modes: m.modes } : {}),
+            ...(m.reasoningEfforts?.length
+              ? { reasoningEfforts: m.reasoningEfforts }
+              : catalog
+                ? { reasoningEfforts: catalog.reasoningEfforts }
+                : {}),
           }
         }),
         url,
@@ -2668,6 +2690,11 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const { id } = req.params
     const { loadGlobalConfig, saveGlobalConfig, removeProvider } = await import('../cli/config.js')
     const globalConfig = await loadGlobalConfig(config.mode ?? 'production', config.globalConfigPath)
+    const existingProvider = globalConfig.providers.find((p) => p.id === id)
+
+    // Deleting a provider deletes the credentials (accounts) it created.
+    await cascadeProviderDelete(providerAdapters.getAuth(existingProvider?.authAdapter), id)
+
     const updatedConfig = removeProvider(globalConfig, id)
     await saveGlobalConfig(config.mode ?? 'production', updatedConfig, config.globalConfigPath)
 

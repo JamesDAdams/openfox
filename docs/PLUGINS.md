@@ -504,6 +504,37 @@ registry.registerUiPanel({
 })
 ```
 
+**Zones, components and overrides**
+
+Zones are named mount points in the core UI. `registerUiComponent({ zone, component })`
+injects a node into a zone; `registerUiOverride({ zone, mode, replacement })`
+replaces (`mode: 'replace'`) or hides (`mode: 'hide'`) the native content of a
+zone. Both accept `visibleWhen`, including `{ eq: { key: value } }` matched
+against the zone context (`provider.modal.auth` and `provider.modal.step2` pass
+`providerId`, `backend`, `authAdapter`, `transportAdapter`; `providerId` is the
+real provider id, so per-provider data — accounts, tokens — must be scoped by
+it).
+
+```ts
+registry.registerUiOverride({
+  id: 'my-provider-auth',
+  zone: 'provider.modal.auth',
+  mode: 'replace',
+  visibleWhen: { eq: { transportAdapter: 'my-transport' } },
+  replacement: staticShellNode, // provider-agnostic fallback
+  contentSource: { kind: 'rpc', method: 'getAuthUi', refreshMs: 3000 },
+})
+```
+
+`contentSource` keeps a zone's content live instead of freezing it at
+registration time: the host calls the RPC when the contribution mounts and, when
+`refreshMs` is set, again on that interval while it stays mounted (cancelled on
+unmount). The RPC receives the zone context as params (`providerId`, `modelId`,
+`tabId`, `contributionId`) plus `sessionId`/`workdir`/`projectId`, and returns
+`{ content: DeclarativeNode }` or `{ nodes: DeclarativeNode[] }`. Source content
+wins over `component`/`replacement`; a failing call keeps the last rendered
+content, so the static declaration is only ever the fallback.
+
 **Declarative node types:** `text`, `keyValue`, `table`, `progress`, `badge`, `button`, `stack`, `card`, `callout`, `icon`, `details`, `input`, `select`, `iframe`, `divider`. String values may contain `{{key}}` placeholders filled from values you publish with `context.publish(panelId, key, value)`; published state arrives over WebSocket (`plugin.ui_state`) and re-renders the open panel.
 
 **Panel Lifecycle Hooks:**

@@ -50,9 +50,11 @@ const CALLOUT_CLASSES: Record<PluginBadgeTone, string> = {
   danger: 'bg-accent-error/10 border-accent-error/30 text-text-primary',
 }
 
-export function interpolate(text: string, values?: Record<string, unknown>): string {
-  if (!values) return text
-  return text.replace(/\{\{(\w+)\}\}/g, (match, key: string) => (key in values ? String(values[key]) : match))
+export function interpolate(text: unknown, values?: Record<string, unknown>): string {
+  if (text === null || text === undefined) return ''
+  const str = String(text)
+  if (!values) return str
+  return str.replace(/\{\{(\w+)\}\}/g, (match, key: string) => (key in values ? String(values[key]) : match))
 }
 
 export interface DeclarativeRendererProps {
@@ -402,7 +404,7 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
           aria-label={tooltipText || labelText || undefined}
           onClick={() => {
             if (!node.disabled) {
-              void activatePluginAction(context.pluginId, node.onActivate, context)
+              void activatePluginAction(context.pluginId, node.action ?? node.onActivate, context)
             }
           }}
           className={`transition-colors inline-flex items-center justify-center ${

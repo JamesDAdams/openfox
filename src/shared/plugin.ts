@@ -55,6 +55,10 @@ export type PluginZoneId =
   | 'modal.footer'
   | 'stats.modal'
   | 'stats.modal.summary'
+  | 'provider.modal.step1'
+  | 'provider.modal.step2'
+  | 'provider.modal.auth'
+  | 'provider.modal.model_config'
   | (string & {})
 
 export type PluginBadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
@@ -81,6 +85,8 @@ export interface PluginVisibilityCondition {
   hasSession?: boolean
   hasProject?: boolean
   hasMessage?: boolean
+  eq?: Record<string, unknown>
+  neq?: Record<string, unknown>
 }
 
 export interface PluginUiAction {
@@ -149,7 +155,8 @@ export type DeclarativeNode =
       variant?: 'default' | 'primary' | 'danger' | 'ghost' | 'pill'
       icon?: string
       disabled?: boolean
-      onActivate: PluginActivation
+      onActivate?: PluginActivation
+      action?: PluginActivation
     }
   | { type: 'divider' }
   | {
@@ -218,6 +225,19 @@ export type DeclarativeNode =
       width?: string | number
     }
 
+/**
+ * Live content source for a plugin UI contribution. The host calls the RPC with
+ * the zone context (providerId, modelId, tabId, plus sessionId/workdir/projectId)
+ * when the contribution mounts and, when `refreshMs` is set, again on that
+ * interval while it stays mounted. The RPC returns `{ content }` (a single
+ * declarative node) or `{ nodes }` (a list, rendered as a column stack).
+ */
+export interface PluginUiContentSource {
+  kind: 'rpc'
+  method: string
+  refreshMs?: number
+}
+
 export interface PluginUiComponent {
   id: string
   pluginId?: string
@@ -226,6 +246,8 @@ export interface PluginUiComponent {
   order?: number
   visibleWhen?: PluginVisibilityCondition
   component: DeclarativeNode
+  /** When set, the rendered node comes from this RPC instead of `component`. */
+  contentSource?: PluginUiContentSource
 }
 
 export interface PluginUiOverride {
@@ -236,6 +258,8 @@ export interface PluginUiOverride {
   order?: number
   visibleWhen?: PluginVisibilityCondition
   replacement?: DeclarativeNode
+  /** When set, the rendered node comes from this RPC instead of `replacement`. */
+  contentSource?: PluginUiContentSource
 }
 
 export interface PluginUiPanel {
