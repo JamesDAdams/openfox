@@ -3,8 +3,8 @@ import { requestPathAccess, PathAccessDeniedError, isPathAllowed, clearAllowedPa
 import { setPluginDangerLevels, clearPluginDangerLevels } from '../plugins/danger-levels.js'
 
 describe('Path Security with Plugin Danger Levels', () => {
-  const WORKDIR = '/app/project'
-  const OUTSIDE_PATH = '/app/external/file.txt'
+  const WORKDIR = process.platform === 'win32' ? 'C:\\app\\project' : '/app/project'
+  const OUTSIDE_PATH = process.platform === 'win32' ? 'C:\\app\\external\\file.txt' : '/app/external/file.txt'
   const SESSION_ID = 'session-dl-test'
 
   beforeEach(() => {
