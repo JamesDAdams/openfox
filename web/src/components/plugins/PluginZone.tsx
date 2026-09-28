@@ -48,9 +48,10 @@ function useContentSource(
   const sessionId = contextString(context, 'sessionId')
   const workdir = contextString(context, 'workdir')
   const projectId = contextString(context, 'projectId')
+  const projectName = contextString(context, 'projectName')
 
   useEffect(() => {
-    if (!pluginId || !method) {
+    if (!pluginId || pluginId === 'unknown' || !method) {
       setContent(undefined)
       return
     }
@@ -59,6 +60,8 @@ function useContentSource(
     if (providerId) params['providerId'] = providerId
     if (modelId) params['modelId'] = modelId
     if (tabId) params['tabId'] = tabId
+    if (workdir) params['workdir'] = workdir
+    if (projectName) params['projectName'] = projectName
 
     const load = async () => {
       try {
@@ -86,7 +89,7 @@ function useContentSource(
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [pluginId, method, itemId, refreshMs, providerId, modelId, tabId, sessionId, workdir, projectId])
+  }, [pluginId, method, itemId, refreshMs, providerId, modelId, tabId, sessionId, workdir, projectId, projectName])
 
   return content
 }

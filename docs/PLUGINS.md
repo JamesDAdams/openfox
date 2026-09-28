@@ -535,7 +535,7 @@ unmount). The RPC receives the zone context as params (`providerId`, `modelId`,
 wins over `component`/`replacement`; a failing call keeps the last rendered
 content, so the static declaration is only ever the fallback.
 
-**Declarative node types:** `text`, `keyValue`, `table`, `progress`, `badge`, `button`, `stack`, `card`, `callout`, `icon`, `details`, `input`, `select`, `iframe`, `divider`. String values may contain `{{key}}` placeholders filled from values you publish with `context.publish(panelId, key, value)`; published state arrives over WebSocket (`plugin.ui_state`) and re-renders the open panel.
+**Declarative node types:** `text`, `keyValue`, `table`, `progress`, `badge`, `button`, `toggle`, `stack`, `card`, `callout`, `icon`, `details`, `input`, `select`, `iframe`, `divider`. String values may contain `{{key}}` placeholders filled from values you publish with `context.publish(panelId, key, value)`; published state arrives over WebSocket (`plugin.ui_state`) and re-renders the open panel.
 
 **Panel Lifecycle Hooks:**
 

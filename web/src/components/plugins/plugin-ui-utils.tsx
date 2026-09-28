@@ -147,7 +147,9 @@ export function applyPanelContent(pluginId: string, targetId: string, result: un
       ? (resultObj['content'] as DeclarativeNode[])
       : Array.isArray(resultObj['nodes'])
         ? (resultObj['nodes'] as DeclarativeNode[])
-        : undefined
+        : resultObj['content'] && typeof resultObj['content'] === 'object'
+          ? ([resultObj['content']] as DeclarativeNode[])
+          : undefined
     if (content) {
       usePluginUiStore.getState().setState(pluginId, targetId, 'content', content)
       return true
@@ -223,15 +225,22 @@ export function isContributionVisible(
   return true
 }
 
-export function pluginRpcContext(context: { sessionId?: unknown; workdir?: unknown; projectId?: unknown }): {
+export function pluginRpcContext(context: {
+  sessionId?: unknown
+  workdir?: unknown
+  projectId?: unknown
+  projectName?: unknown
+}): {
   sessionId?: string
   workdir?: string
   projectId?: string
+  projectName?: string
 } {
   return {
     ...(typeof context.sessionId === 'string' ? { sessionId: context.sessionId } : {}),
     ...(typeof context.workdir === 'string' ? { workdir: context.workdir } : {}),
     ...(typeof context.projectId === 'string' ? { projectId: context.projectId } : {}),
+    ...(typeof context.projectName === 'string' ? { projectName: context.projectName } : {}),
   }
 }
 
@@ -300,7 +309,10 @@ export async function activatePluginAction(
     }
 
     if (activation.kind === 'openPanel') {
-      usePluginUiStore.getState().openPanel(pluginId, activation.panelId, pluginRpcContext(context))
+      const activePanel = usePluginUiStore.getState().activePanel
+      const targetPluginId =
+        !pluginId || pluginId === 'unknown' ? activePanel?.pluginId || 'openfox-codebase-memory' : pluginId
+      usePluginUiStore.getState().openPanel(targetPluginId, activation.panelId, pluginRpcContext(context))
       return
     }
 

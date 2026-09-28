@@ -21,6 +21,7 @@ export type PluginSlotName =
   | 'session.header.actions'
   | 'message.actions'
   | 'composer.actions'
+  | 'composer.top'
   | 'session.row.badges'
   | 'session.header.badges'
   | 'plugin.menu'
@@ -47,6 +48,7 @@ export type PluginZoneId =
   | 'message.bubble'
   | 'message.actions'
   | 'composer'
+  | 'composer.top'
   | 'composer.toolbar'
   | 'composer.actions'
   | 'session.footer'
@@ -208,6 +210,16 @@ export type DeclarativeNode =
       disabled?: boolean
       onChange?: PluginActivation
       onBlur?: PluginActivation
+    }
+  | {
+      type: 'toggle'
+      id?: string
+      enabled?: boolean
+      defaultChecked?: boolean
+      disabled?: boolean
+      label?: LocalizedString
+      onChange?: PluginActivation
+      onActivate?: PluginActivation
     }
   | {
       type: 'select'

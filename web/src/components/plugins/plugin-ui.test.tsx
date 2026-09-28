@@ -1423,6 +1423,32 @@ describe('PluginZone and DeclarativeRenderer', () => {
       {},
     )
   })
+
+  it('renders a declarative toggle and triggers RPC on toggle', async () => {
+    const node = {
+      type: 'toggle' as const,
+      id: 'auto-index',
+      enabled: true,
+      label: { en: 'Auto index', fr: 'Indexation auto' },
+      onActivate: { kind: 'rpc' as const, method: 'toggleAutoIndex' },
+    }
+    const context = { pluginId: 'test-plugin' }
+
+    const view = render(<DeclarativeRenderer node={node} values={{ 'auto-index': true }} context={context} />)
+    const toggle = screen.getByRole('switch', { name: 'Auto index' })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+
+    view.rerender(<DeclarativeRenderer node={node} values={{ 'auto-index': false }} context={context} />)
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+
+    await userEvent.setup().click(toggle)
+    expect(invokePluginRpc).toHaveBeenCalledWith(
+      'test-plugin',
+      'toggleAutoIndex',
+      { fieldId: 'auto-index', value: 'true' },
+      {},
+    )
+  })
 })
 
 describe('activatePluginAction', () => {

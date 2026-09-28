@@ -3,6 +3,7 @@ import { useLocalizedString } from '../../hooks/useLocalizedString'
 import { activatePluginAction, badgeToneClasses, pluginIcon, type PluginActionContext } from './plugin-ui-utils'
 import type { DeclarativeNode, PluginBadgeTone } from '@shared/plugin.js'
 import { ChevronDownIcon } from '../shared/icons'
+import { Toggle } from '../shared/Toggle'
 
 const PROGRESS_COLORS: Record<string, string> = {
   neutral: 'bg-text-muted',
@@ -511,6 +512,33 @@ export function DeclarativeRenderer({ node, values = {}, context = {} }: Declara
 
     case 'select': {
       return <DeclarativeSelect node={node} values={values} context={context} />
+    }
+
+    case 'toggle': {
+      const raw = node.id ? values[node.id] : undefined
+      const isEnabled =
+        raw !== undefined ? raw === true || raw === 'true' : (node.enabled ?? Boolean(node.defaultChecked))
+      const labelText = node.label ? localize(node.label) : undefined
+
+      return (
+        <Toggle
+          enabled={isEnabled}
+          disabled={node.disabled}
+          label={labelText}
+          onClick={() => {
+            if (node.disabled) return
+            const next = !isEnabled
+            const action = node.onActivate ?? node.onChange
+            if (action) {
+              void activatePluginAction(context.pluginId, action, {
+                ...context,
+                fieldId: node.id,
+                value: next ? 'true' : 'false',
+              })
+            }
+          }}
+        />
+      )
     }
 
     case 'iframe': {
