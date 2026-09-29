@@ -1295,6 +1295,58 @@ export function extractGitNoVerify(command: string): boolean {
 // ===========================================================================
 
 /**
+ * Auto-resolve path access without prompting (night mode and sub-agents).
+ * Dangerous auto-approves and adds the paths to the session allowlist; a
+ * plugin-provided danger level defers to the plugin's decision; anything else
+ * fails closed with a PathAccessDeniedError.
+ */
+async function autoResolvePathAccess(
+  paths: string[],
+  workdir: string,
+  sessionId: string,
+  tool: string,
+  dangerLevel: string | undefined,
+  projectId: string | undefined,
+  command?: string,
+): Promise<void> {
+  const result = await checkPathsAccess(paths, workdir, sessionId)
+  if (!result.needsConfirmation) return
+
+  const allPaths = [...new Set([...result.deniedPaths, ...result.sensitivePaths])]
+  if (dangerLevel === 'dangerous') {
+    addAllowedPaths(sessionId, allPaths)
+    return
+  }
+
+  if (dangerLevel && dangerLevel !== 'normal' && dangerLevel !== 'dangerous') {
+    const decision = await evaluatePluginPathAccess(dangerLevel, {
+      paths: allPaths,
+      workdir,
+      sessionId,
+      projectId,
+      tool,
+      command,
+    })
+    if (decision?.action === 'allow') {
+      addAllowedPaths(sessionId, allPaths)
+      return
+    }
+    if (decision?.action === 'deny') {
+      const hasDenied = result.deniedPaths.length > 0
+      const hasSensitive = result.sensitivePaths.length > 0
+      const reason: PathDenialReason =
+        hasDenied && hasSensitive ? 'both' : hasDenied ? 'outside_workdir' : 'sensitive_file'
+      throw new PathAccessDeniedError(allPaths, tool, reason, decision.message)
+    }
+  }
+
+  const hasDenied = result.deniedPaths.length > 0
+  const hasSensitive = result.sensitivePaths.length > 0
+  const reason: PathDenialReason = hasDenied && hasSensitive ? 'both' : hasDenied ? 'outside_workdir' : 'sensitive_file'
+  throw new PathAccessDeniedError(allPaths, tool, reason)
+}
+
+/**
  * Request access to paths outside the sandbox or sensitive files.
  * If paths require confirmation, sends a confirmation event to the client and suspends
  * tool execution until the user responds.
@@ -1307,7 +1359,9 @@ export function extractGitNoVerify(command: string): boolean {
  * @param onEvent - Callback to send events to the client
  * @param dangerLevel - When 'dangerous', bypass confirmation and auto-approve all paths
  * @param command - Optional command string to check for dangerous patterns
- * @throws PathAccessDeniedError if user denies access
+ * @param nightMode - Unattended session: never prompt, auto-resolve from the danger level
+ *   (dangerous → auto-approve, normal → auto-deny, including git --no-verify)
+ * @throws PathAccessDeniedError if user denies access (or night mode auto-denies)
  */
 export async function requestPathAccess(
   paths: string[],
@@ -1320,49 +1374,40 @@ export async function requestPathAccess(
   command?: string,
   isSubAgent?: boolean,
   projectId?: string,
+  nightMode?: boolean,
 ): Promise<void> {
+  // Night mode: no one is home to confirm. Auto-resolve from the danger level
+  // — dangerous approves everything (and lifts the git --no-verify always-ask
+  // rule), normal fails closed. Same policy as the sub-agent branch.
+  if (nightMode) {
+    if (dangerLevel === 'dangerous') {
+      await autoResolvePathAccess(paths, workdir, sessionId, tool, dangerLevel, projectId, command)
+      return
+    }
+
+    const dangerousPatterns = command ? extractDangerousPatterns(command) : []
+    const gitNoVerify = command ? extractGitNoVerify(command) : false
+    if (gitNoVerify) {
+      throw new PathAccessDeniedError(
+        ['git --no-verify'],
+        tool,
+        'git_no_verify',
+        'Night mode (normal danger level) auto-denied git --no-verify: no one is available to confirm hook bypass. Resolve the underlying issue (e.g. fix lint errors) instead of skipping hooks.',
+      )
+    }
+    if (dangerousPatterns.length > 0) {
+      throw new PathAccessDeniedError(dangerousPatterns, tool, 'dangerous_command')
+    }
+    await autoResolvePathAccess(paths, workdir, sessionId, tool, dangerLevel, projectId, command)
+    return
+  }
+
   // Sub-agent shortcut: skip all confirmation dialogs since they don't render
   // properly in the small sub-agent window. Fail closed in normal mode;
   // auto-approve everything in dangerous mode.
   if (isSubAgent) {
-    const result = await checkPathsAccess(paths, workdir, sessionId)
-    if (!result.needsConfirmation) return
-
-    if (dangerLevel === 'dangerous') {
-      const allPaths = [...new Set([...result.deniedPaths, ...result.sensitivePaths])]
-      addAllowedPaths(sessionId, allPaths)
-      return
-    }
-
-    if (dangerLevel && dangerLevel !== 'normal' && dangerLevel !== 'dangerous') {
-      const allPaths = [...new Set([...result.deniedPaths, ...result.sensitivePaths])]
-      const decision = await evaluatePluginPathAccess(dangerLevel, {
-        paths: allPaths,
-        workdir,
-        sessionId,
-        projectId,
-        tool,
-        command,
-      })
-      if (decision?.action === 'allow') {
-        addAllowedPaths(sessionId, allPaths)
-        return
-      }
-      if (decision?.action === 'deny') {
-        const hasDenied = result.deniedPaths.length > 0
-        const hasSensitive = result.sensitivePaths.length > 0
-        const reason: PathDenialReason =
-          hasDenied && hasSensitive ? 'both' : hasDenied ? 'outside_workdir' : 'sensitive_file'
-        throw new PathAccessDeniedError(allPaths, tool, reason, decision.message)
-      }
-    }
-
-    const allPaths = [...new Set([...result.deniedPaths, ...result.sensitivePaths])]
-    const hasDenied = result.deniedPaths.length > 0
-    const hasSensitive = result.sensitivePaths.length > 0
-    const reason: PathDenialReason =
-      hasDenied && hasSensitive ? 'both' : hasDenied ? 'outside_workdir' : 'sensitive_file'
-    throw new PathAccessDeniedError(allPaths, tool, reason)
+    await autoResolvePathAccess(paths, workdir, sessionId, tool, dangerLevel, projectId, command)
+    return
   }
 
   // Helper to emit path.confirmation_pending event

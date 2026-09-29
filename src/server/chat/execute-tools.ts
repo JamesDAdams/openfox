@@ -22,6 +22,7 @@ export interface ToolBatchContext {
   sessionId: string
   workdir: string
   dangerLevel?: DangerLevel
+  nightMode?: boolean
   isSubAgent?: boolean
   turnMetrics: TurnMetrics
   signal?: AbortSignal | undefined
@@ -224,6 +225,9 @@ export async function executeTools(
     }
     if (ctx.dangerLevel) {
       toolContext.dangerLevel = ctx.dangerLevel
+    }
+    if (ctx.nightMode) {
+      toolContext.nightMode = true
     }
     if (ctx.isSubAgent) {
       toolContext.isSubAgent = true

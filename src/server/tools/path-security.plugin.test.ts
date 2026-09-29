@@ -1,22 +1,42 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { mkdtemp, rm, mkdir, realpath } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { requestPathAccess, PathAccessDeniedError, isPathAllowed, clearAllowedPaths } from './path-security.js'
 import { setPluginDangerLevels, clearPluginDangerLevels } from '../plugins/danger-levels.js'
 
+const SESSION_ID = 'session-dl-test'
+
+// Real canonical paths (like the main path-security suite): a real temp workdir
+// and /etc/passwd as the outside path. Canonicalizing up front keeps the
+// allowlist assertions exact even on hosts where paths are symlinked
+// (e.g. a /app that resolves elsewhere).
+let WORKDIR: string
+let OUTSIDE_PATH: string
+let testDir: string
+
+beforeAll(async () => {
+  testDir = await mkdtemp(join(tmpdir(), 'openfox-plugin-danger-level-'))
+  WORKDIR = join(testDir, 'project', 'workdir')
+  await mkdir(WORKDIR, { recursive: true })
+  OUTSIDE_PATH = await realpath('/etc/passwd')
+})
+
+afterAll(async () => {
+  await rm(testDir, { recursive: true, force: true })
+})
+
+beforeEach(() => {
+  clearAllowedPaths(SESSION_ID)
+  clearPluginDangerLevels()
+})
+
+afterEach(() => {
+  clearAllowedPaths(SESSION_ID)
+  clearPluginDangerLevels()
+})
+
 describe('Path Security with Plugin Danger Levels', () => {
-  const WORKDIR = process.platform === 'win32' ? 'C:\\app\\project' : '/app/project'
-  const OUTSIDE_PATH = process.platform === 'win32' ? 'C:\\app\\external\\file.txt' : '/app/external/file.txt'
-  const SESSION_ID = 'session-dl-test'
-
-  beforeEach(() => {
-    clearAllowedPaths(SESSION_ID)
-    clearPluginDangerLevels()
-  })
-
-  afterEach(() => {
-    clearAllowedPaths(SESSION_ID)
-    clearPluginDangerLevels()
-  })
-
   it('auto-approves outside paths when plugin danger level returns allow', async () => {
     setPluginDangerLevels([
       {

@@ -77,6 +77,8 @@ export type ToolHandler<TArgs> = (args: TArgs, context: ToolContext, helpers: To
 export async function requestUserConfirmation(context: ToolContext, toolLabel: string, desc: string): Promise<boolean> {
   // In dangerous mode, auto-approve all shell guard confirmations
   if (context.dangerLevel === 'dangerous') return Promise.resolve(true)
+  // Night mode (normal danger level): no one is home — fail closed, same as sub-agents
+  if (context.nightMode) return Promise.resolve(false)
   // Skip workspace/git action confirmations if user opted out via settings
   if (toolLabel === 'workspace' || toolLabel === 'command') {
     try {
@@ -238,6 +240,7 @@ export function createTool<TArgs>(name: string, definition: LLMToolDefinition, h
               command,
               context.isSubAgent,
               projectId,
+              context.nightMode,
             )
           }
         },

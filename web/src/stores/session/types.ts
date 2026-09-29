@@ -177,6 +177,7 @@ export interface SessionState {
   exitWorkflow: (sessionId: string) => void
   switchMode: (sessionId: string, mode: SessionMode) => void
   switchDangerLevel: (sessionId: string, dangerLevel: DangerLevel) => Promise<boolean>
+  setNightMode: (sessionId: string, enabled: boolean) => Promise<boolean>
   editCriteria: (sessionId: string, criteria: Criterion[]) => void
   compactContext: (sessionId: string) => void
   setSessionProvider: (
