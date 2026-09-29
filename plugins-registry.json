@@ -126,5 +126,13 @@
     "githubUrl": "https://github.com/JamesDAdams/openfox-whitelist",
     "author": "James Adams",
     "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#10B981\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/><polyline points=\"9 12 11 14 15 10\"/></svg>"
+  },
+  {
+    "name": "openfox-pareto-line",
+    "displayName": "Pareto Line",
+    "description": "Intelligence Index vs Cost Pareto line comparison based on Artificial Analysis for available OpenFox models.",
+    "githubUrl": "https://github.com/JamesDAdams/openfox-pareto-line",
+    "author": "James Adams",
+    "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#10b981\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/><circle cx=\"19\" cy=\"7\" r=\"2\"/><path d=\"M6 18c3-4 7-6 13-11\" stroke-dasharray=\"2 2\"/></svg>"
   }
 ]
