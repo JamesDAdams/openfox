@@ -129,6 +129,16 @@ export interface TopLevelLoopConfig {
   mode: ToolMode
   retryPatterns?: RetryPatternConfig[]
   maxRetriesPerTurn?: number
+  /** Resolves retry patterns and the retry cap fresh on every LLM round, so a
+   *  mid-turn edit (deleting/toggling a pattern in the UI) takes effect on the
+   *  next round. When set, takes precedence over the static `retryPatterns`
+   *  and `maxRetriesPerTurn` above. */
+  retryPatternsProvider?:
+    | (() => Promise<{
+        retryPatterns: RetryPatternConfig[]
+        maxRetriesPerTurn: number
+      }>)
+    | undefined
   /** Function to append events (provided by orchestrator) */
   append: (event: import('../events/types.js').TurnEvent) => void
   sessionManager: SessionManager
@@ -413,6 +423,15 @@ export async function runTopLevelAgentLoop(
         ...(signal ? { signal } : {}),
       })
 
+      // Resolve retry patterns fresh each round so a mid-turn edit (deleting
+      // or toggling a pattern, changing the cap) takes effect on the next
+      // LLM round instead of on the next turn.
+      const freshRetry = config.retryPatternsProvider ? await config.retryPatternsProvider() : undefined
+      if (freshRetry) {
+        retryLimiter.setMaxRetries(freshRetry.maxRetriesPerTurn)
+      }
+      const roundRetryPatterns = freshRetry ? freshRetry.retryPatterns : config.retryPatterns
+
       const streamGen = streamLLMPure({
         messageId: assistantMsgId,
         systemPrompt: transformResult.systemPrompt,
@@ -423,7 +442,7 @@ export async function runTopLevelAgentLoop(
         toolChoice: 'auto',
         signal,
         subAgentAliases,
-        ...(config.retryPatterns ? { retryPatterns: config.retryPatterns } : {}),
+        ...(roundRetryPatterns ? { retryPatterns: roundRetryPatterns } : {}),
         ...(modelSettings && { modelSettings }),
         preflight: (path) =>
           preflightPathTool(path, {
