@@ -1052,7 +1052,7 @@ export function ProviderModal({
   useEffect(() => {
     if (!isOpen || !formAuthAdapter || !editProvider?.id) return
     void refreshProviderAuthStatus(editProvider.id)
-  }, [isOpen, formTransportAdapter, editProvider?.id])
+  }, [isOpen, formAuthAdapter, editProvider?.id])
 
   useEffect(() => {
     if (!deviceChallenge) return
@@ -1124,7 +1124,10 @@ export function ProviderModal({
   async function refreshProviderAuthStatus(providerId: string) {
     // Authorized transient read: provider auth status is a one-shot check, not shared state.
     const response = await authFetch(`/api/provider-auth/${providerId}/status`)
-    if (!response.ok) return 'error' as const
+    if (!response.ok) {
+      setProviderAuthState('error')
+      return 'error' as const
+    }
     const data = (await response.json()) as { state: 'disconnected' | 'pending' | 'connected' | 'expired' | 'error' }
     const state =
       data.state === 'connected'
