@@ -134,5 +134,13 @@
     "githubUrl": "https://github.com/JamesDAdams/openfox-pareto-line",
     "author": "James Adams",
     "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#10b981\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/><circle cx=\"19\" cy=\"7\" r=\"2\"/><path d=\"M6 18c3-4 7-6 13-11\" stroke-dasharray=\"2 2\"/></svg>"
+  },
+  {
+    "name": "openfox-multirepo-plugin",
+    "displayName": "Multi-Repo & Multi-DevServer",
+    "description": "Multi-repository Git support and multi-devserver orchestration plugin for OpenFox.",
+    "githubUrl": "https://github.com/JamesDAdams/openfox-multi-rep",
+    "author": "James Adams",
+    "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"6\" y1=\"3\" x2=\"6\" y2=\"15\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"M18 9a9 9 0 0 1-9 9\"/></svg>"
   }
 ]
