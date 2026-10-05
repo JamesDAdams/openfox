@@ -13,6 +13,7 @@ export interface ToolContext {
   projectId?: string
   sessionManager: SessionManager // Injected dependency (replaces singleton import)
   dangerLevel?: DangerLevel // When 'dangerous', bypass path confirmations
+  nightMode?: boolean // Unattended session: blocking prompts auto-resolve (ask_user answered, confirmations resolved by danger level)
   isSubAgent?: boolean // When true, sub-agent path restrictions apply (deny outside workdir unless dangerous)
   signal?: AbortSignal | undefined // For cancelling long-running operations (e.g., shell commands)
   onProgress?: ((message: string) => void) | undefined

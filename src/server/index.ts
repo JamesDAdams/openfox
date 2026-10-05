@@ -1396,6 +1396,26 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     res.json({ session: toClientSession(updatedSession!) })
   })
 
+  // Night mode (REST)
+  app.put('/api/sessions/:id/night-mode', async (req, res) => {
+    const sessionId = req.params.id
+    const session = sessionManager.getSession(sessionId)
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+
+    const { nightMode } = req.body
+    if (typeof nightMode !== 'boolean') {
+      return res.status(400).json({ error: 'nightMode is required and must be a boolean' })
+    }
+
+    sessionManager.setNightMode(sessionId, nightMode)
+
+    const updatedSession = sessionManager.getSession(sessionId)
+
+    res.json({ session: toClientSession(updatedSession!) })
+  })
+
   // Session MCP server overrides (per-session)
   app.get('/api/sessions/:id/mcp/overrides', async (req, res) => {
     const sessionId = req.params.id

@@ -779,6 +779,11 @@ ${COMPACTION_PROMPT}`,
         if (session.dangerLevel) {
           batchContext.dangerLevel = session.dangerLevel
         }
+        // Fresh per iteration: `session` was re-required from the DB above, so a
+        // mid-turn toggle of night mode takes effect on this very batch.
+        if (session.nightMode) {
+          batchContext.nightMode = true
+        }
         if (config.subAgentMetadata) {
           batchContext.isSubAgent = true
         }
