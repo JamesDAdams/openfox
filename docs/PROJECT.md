@@ -1,170 +1,170 @@
-# OpenFox — Description détaillée
+# OpenFox — Detailed Description
 
-## 1. Vue d'ensemble et objectifs fonctionnels
+## 1. Overview and Functional Goals
 
-OpenFox est un assistant de codage agentique "Local-LLM-first" (v2.0.160). C'est un agent autonome conçu pour fonctionner avec des backends LLM locaux (vLLM, sglang, ollama, llamacpp) via une API compatible OpenAI.
+OpenFox is a "Local-LLM-first" agentic coding assistant (v2.0.160). It is an autonomous agent designed to work with local LLM backends (vLLM, sglang, ollama, llamacpp) via an OpenAI-compatible API.
 
-Fonctionnalités clés :
+Key features:
 
-- Workflows multi-tours avec planification et exécution
-- Exécution contractuelle (critères d'acceptation)
-- Workflows déclaratifs multi-étapes
-- Vérification itérative
-- Intégration LSP (Language Server Protocol)
-- Support des plugins
-- Interface web React + CLI
-- Internationalisation EN/FR
+- Multi-turn workflows with planning and execution
+- Contractual execution (acceptance criteria)
+- Multi-step declarative workflows
+- Iterative verification
+- LSP (Language Server Protocol) integration
+- Plugin support
+- React Web UI + CLI
+- Internationalization EN/FR
 
-## 2. Architecture interne
+## 2. Internal Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        OpenFox                               │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ CLI      │  │ Serveur  │  │ UI Web   │  │ Plugins  │   │
-│  │ (src/cli)│  │ (Express │  │ (React   │  │ (src/    │   │
-│  │          │  │  + WS)   │  │  + Vite) │  │  plugin) │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-│                                                              │
+│                        OpenFox                              │
+│                                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │ CLI      │  │ Server   │  │ Web UI   │  │ Plugins  │     │
+│  │ (src/cli)│  │ (Express │  │ (React   │  │ (src/    │     │
+│  │          │  │  + WS)   │  │  + Vite) │  │  plugin) │     │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │
+│                                                             │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │                    Serveur (src/server/)              │   │
-│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐        │   │
-│  │  │ agents │ │ chat   │ │ config │ │ context│        │   │
-│  │  └────────┘ └────────┘ └────────┘ └────────┘        │   │
-│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐        │   │
-│  │  │ db     │ │ git    │ │ llm    │ │ lsp    │        │   │
-│  │  └────────┘ └────────┘ └────────┘ └────────┘        │   │
-│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐        │   │
-│  │  │ mcp    │ │ routes │ │ runner │ │ session│        │   │
-│  │  └────────┘ └────────┘ └────────┘ └────────┘        │   │
-│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐        │   │
-│  │  │ skills │ │ tasks  │ │terminal│ │tools   │        │   │
-│  │  └────────┘ └────────┘ └────────┘ └────────┘        │   │
-│  │  ┌────────┐ ┌────────┐ ┌────────┐                  │   │
-│  │  │workflows│ │ events │ │ queue  │                  │   │
-│  │  └────────┘ └────────┘ └────────┘                  │   │
+│  │                    Server (src/server/)              │   │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐         │   │
+│  │  │ agents │ │ chat   │ │ config │ │ context│         │   │
+│  │  └────────┘ └────────┘ └────────┘ └────────┘         │   │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐         │   │
+│  │  │ db     │ │ git    │ │ llm    │ │ lsp    │         │   │
+│  │  └────────┘ └────────┘ └────────┘ └────────┘         │   │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐         │   │
+│  │  │ mcp    │ │ routes │ │ runner │ │ session│         │   │
+│  │  └────────┘ └────────┘ └────────┘ └────────┘         │   │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐         │   │
+│  │  │ skills │ │ tasks  │ │terminal│ │tools   │         │   │
+│  │  └────────┘ └────────┘ └────────┘ └────────┘         │   │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐                   │   │
+│  │  │workflows│ │ events │ │ queue  │                   │   │
+│  │  └────────┘ └────────┘ └────────┘                   │   │
 │  └──────────────────────────────────────────────────────┘   │
-│                                                              │
+│                                                             │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │                    Shared (src/shared/)               │   │
-│  │  Code partagé entre client et serveur                │   │
+│  │                    Shared (src/shared/)              │   │
+│  │  Shared code between client and server               │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 3. Flux principaux
+## 3. Main Flows
 
-### Flux 1 : Utilisateur envoie un message
+### Flow 1: User sends a message
 
 ```
-1. web/src/App.tsx → composant Chat
-2. openfox/src/server/routes/ → route POST /api/chat
-3. openfox/src/server/llm/ → provider-manager sélectionne le provider
-4. openfox/src/server/providers/ → provider LLM
-5. Réponse → WebSocket → web/src/stores/ → UI
+1. web/src/App.tsx → Chat component
+2. openfox/src/server/routes/ → POST /api/chat route
+3. openfox/src/server/llm/ → provider-manager selects provider
+4. openfox/src/server/providers/ → LLM provider
+5. Response → WebSocket → web/src/stores/ → UI
 ```
 
-### Flux 2 : Agent exécute une tâche
+### Flow 2: Agent executes a task
 
 ```
 1. openfox/src/server/runner/ → agent loop
-2. openfox/src/server/tools/ → exécution des outils
-3. openfox/src/server/llm/ → appel LLM
-4. openfox/src/server/session/ → mise à jour de la session
-5. openfox/src/server/events/ → événements → WebSocket → UI
+2. openfox/src/server/tools/ → tool execution
+3. openfox/src/server/llm/ → LLM call
+4. openfox/src/server/session/ → session update
+5. openfox/src/server/events/ → events → WebSocket → UI
 ```
 
-### Flux 3 : Workflow déclaratif
+### Flow 3: Declarative workflow
 
 ```
-1. openfox/src/server/workflows/ → moteur de workflows
-2. openfox/src/server/agents/ → sous-agents
-3. openfox/src/server/tasks/ → tâches
-4. openfox/src/server/runner/ → exécution
+1. openfox/src/server/workflows/ → workflow engine
+2. openfox/src/server/agents/ → sub-agents
+3. openfox/src/server/tasks/ → tasks
+4. openfox/src/server/runner/ → execution
 ```
 
-### Flux 4 : Plugin LLM
+### Flow 4: LLM Plugin
 
 ```
 1. openfox/src/server/llm/ → provider-manager
-2. provider-manager → plugin (ex: openfox-cheaperinference)
-3. plugin → transport HTTP → API du provider
-4. Réponse → provider-manager → runner → UI
+2. provider-manager → plugin (e.g. openfox-cheaperinference)
+3. plugin → HTTP transport → provider API
+4. Response → provider-manager → runner → UI
 ```
 
-## 4. Modèle de données et API publique
+## 4. Data Model and Public API
 
-### Entités principales (SQLite)
+### Main Entities (SQLite)
 
-- **Session** : session de travail avec un agent
-- **Message** : message dans une session
-- **Project** : projet ouvert dans OpenFox
-- **Task** : tâche dans le task board
-- **Event** : événement (event sourcing)
+- **Session**: working session with an agent
+- **Message**: message within a session
+- **Project**: project opened in OpenFox
+- **Task**: task on the task board
+- **Event**: event (event sourcing)
 
-### API HTTP (routes)
+### HTTP API (routes)
 
-- `POST /api/chat` — envoyer un message
-- `GET /api/sessions` — lister les sessions
-- `GET /api/projects` — lister les projets
-- `GET /api/tasks` — lister les tâches
-- `GET /api/mcp/servers` — lister les serveurs MCP
-- `GET /api/board` — récupérer le task board
+- `POST /api/chat` — send a message
+- `GET /api/sessions` — list sessions
+- `GET /api/projects` — list projects
+- `GET /api/tasks` — list tasks
+- `GET /api/mcp/servers` — list MCP servers
+- `GET /api/board` — get task board
 
-### API WebSocket
+### WebSocket API
 
-- Streaming des messages agent
-- Streaming des tool calls et résultats
-- Mise à jour en temps réel des sessions
+- Agent message streaming
+- Tool calls and results streaming
+- Real-time session updates
 
-## 5. Modules rôle, fichiers clés, dépendances
+## 5. Modules: Role, Key Files, Dependencies
 
-| Module    | Rôle                           | Fichiers clés                                    |
-| --------- | ------------------------------ | ------------------------------------------------ |
-| CLI       | Interface en ligne de commande | `src/cli/index.ts`, `src/cli/main.ts`            |
-| Serveur   | Backend Express + WebSocket    | `src/server/index.ts`, `src/server/routes/`      |
-| UI Web    | Interface React                | `web/src/App.tsx`, `web/src/components/`         |
-| Plugins   | Système de plugins             | `src/plugin/index.ts`                            |
-| Providers | Providers LLM                  | `src/provider/index.ts`, `src/server/providers/` |
-| Agents    | Sous-agents                    | `src/server/agents/`, `src/server/sub-agents/`   |
-| Workflows | Moteur de workflows            | `src/server/workflows/`                          |
-| Tasks     | Gestion des tâches             | `src/server/tasks/`                              |
-| Terminal  | Terminal (node-pty + xterm)    | `src/server/terminal/`                           |
-| Tools     | Outils de l'agent              | `src/server/tools/`                              |
-| MCP       | Model Context Protocol         | `src/server/mcp/`                                |
-| LSP       | Language Server Protocol       | `src/server/lsp/`                                |
-| DB        | Base de données SQLite         | `src/server/db/`                                 |
-| Git       | Intégration Git                | `src/server/git/`                                |
-| Skills    | Système de skills              | `src/server/skills/`                             |
-| Events    | Système d'événements           | `src/server/events/`                             |
-| Queue     | File d'attente                 | `src/server/queue/`                              |
-| Session   | Gestion des sessions           | `src/server/session/`                            |
-| Context   | Gestion du contexte            | `src/server/context/`                            |
-| Config    | Configuration                  | `src/server/config.ts`                           |
-| Auth      | Authentification               | `src/server/auth.ts`                             |
-| I18N      | Internationalisation           | `src/server/i18n.ts`                             |
+| Module    | Role                        | Key Files                                        |
+| --------- | --------------------------- | ------------------------------------------------ |
+| CLI       | Command line interface      | `src/cli/index.ts`, `src/cli/main.ts`            |
+| Server    | Express + WebSocket backend | `src/server/index.ts`, `src/server/routes/`      |
+| Web UI    | React frontend              | `web/src/App.tsx`, `web/src/components/`         |
+| Plugins   | Plugin system               | `src/plugin/index.ts`                            |
+| Providers | LLM providers               | `src/provider/index.ts`, `src/server/providers/` |
+| Agents    | Sub-agents                  | `src/server/agents/`, `src/server/sub-agents/`   |
+| Workflows | Workflow engine             | `src/server/workflows/`                          |
+| Tasks     | Task management             | `src/server/tasks/`                              |
+| Terminal  | Terminal (node-pty + xterm) | `src/server/terminal/`                           |
+| Tools     | Agent tools                 | `src/server/tools/`                              |
+| MCP       | Model Context Protocol      | `src/server/mcp/`                                |
+| LSP       | Language Server Protocol    | `src/server/lsp/`                                |
+| DB        | SQLite database             | `src/server/db/`                                 |
+| Git       | Git integration             | `src/server/git/`                                |
+| Skills    | Skills system               | `src/server/skills/`                             |
+| Events    | Event system                | `src/server/events/`                             |
+| Queue     | Task queue                  | `src/server/queue/`                              |
+| Session   | Session management          | `src/server/session/`                            |
+| Context   | Context management          | `src/server/context/`                            |
+| Config    | Configuration               | `src/server/config.ts`                           |
+| Auth      | Authentication              | `src/server/auth.ts`                             |
+| I18n      | Internationalization        | `src/server/i18n.ts`                             |
 
-## 6. Configuration variables d'environnement
+## 6. Environment Variables
 
-| Variable             | Rôle               | Défaut                               |
-| -------------------- | ------------------ | ------------------------------------ |
-| `OPENFOX_DEV`        | Mode développement | `false`                              |
-| `OPENFOX_PORT`       | Port du serveur    | `10369` (prod), `10370+` (dev)       |
-| `OPENFOX_PASSWORD`   | Mot de passe       | `password`                           |
-| `OPENFOX_CONFIG_DIR` | Dossier de config  | `~/.config/openfox/`                 |
-| `OPENFOX_DB_PATH`    | Chemin de la DB    | `~/.local/share/openfox/sessions.db` |
+| Variable             | Role             | Default Value                        |
+| -------------------- | ---------------- | ------------------------------------ |
+| `OPENFOX_DEV`        | Development mode | `false`                              |
+| `OPENFOX_PORT`       | Server port      | `10369` (prod), `10370+` (dev)       |
+| `OPENFOX_PASSWORD`   | Password         | `password`                           |
+| `OPENFOX_CONFIG_DIR` | Config directory | `~/.config/openfox/`                 |
+| `OPENFOX_DB_PATH`    | DB path          | `~/.local/share/openfox/sessions.db` |
 
-## 7. Tests et déploiement
+## 7. Tests and Deployment
 
 ### Tests
 
-- **Unitaires** : Vitest (`npx vitest run`)
-- **E2E** : Playwright (`cd e2e-playwright && npx playwright test`)
-- **Web** : Testing Library + happy-dom/jsdom
+- **Unit**: Vitest (`npx vitest run`)
+- **E2E**: Playwright (`cd e2e-playwright && npx playwright test`)
+- **Web**: Testing Library + happy-dom/jsdom
 
-### Déploiement
+### Deployment
 
-- **Build** : `npm run build` (tsup pour le serveur, Vite pour le web)
-- **Production** : `npm start` (port 10369)
-- **Développement** : `npm run dev` (port 10370+)
+- **Build**: `npm run build` (tsup for server, Vite for web)
+- **Production**: `npm start` (port 10369)
+- **Development**: `npm run dev` (port 10370+)

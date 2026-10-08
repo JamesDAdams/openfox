@@ -254,41 +254,41 @@ Need to trace through a session, understand why the agent did something, or find
 
 NEVER modify production configuration files (e.g., `~/.config/openfox/`). These are user-specific and should only be changed by the user.
 
-## Dépendances inter-projets
+## Cross-Project Dependencies
 
-**Consomme** : plugins OpenFox (dans `openfox-plugins/`), Agent Office (via `openfox-plugins/openfox-agent-office`).
+**Consumes**: OpenFox plugins (in `openfox-plugins/`), Agent Office (via `openfox-plugins/openfox-agent-office`).
 
-**Consommé par** : tous les plugins OpenFox (via `openfox/provider` ou `openfox/plugin`), `openfox-plugins/openfox-agent-office` (lance Agent Office comme sous-processus), `agent-office-plugins/agentoffice-openfox` (pont inverse).
+**Consumed by**: all OpenFox plugins (via `openfox/provider` or `openfox/plugin`), `openfox-plugins/openfox-agent-office` (runs Agent Office as a managed sub-process), `agent-office-plugins/agentoffice-openfox` (reverse bridge).
 
-**Points de contact** :
+**Touchpoints**:
 
-- Plugins : `src/plugin/index.ts` (registre), `src/provider/index.ts` (providers LLM)
-- Agent Office : `src/server/routes/` (API HTTP), `src/server/ws/` (WebSocket)
+- Plugins: `src/plugin/index.ts` (registry), `src/provider/index.ts` (LLM providers)
+- Agent Office: `src/server/routes/` (HTTP API), `src/server/ws/` (WebSocket)
 
-## Pièges connus
+## Known Gotchas
 
-- `dist/` est le point d'entrée chargé par les plugins, pas `src/`. Toujours builder après modification.
-- `e2e-playwright/` est lourd, ne le lire que pour les tests e2e.
-- Le dev server peut déjà être running. Ne pas le tuer.
-- Les fichiers `.test.ts` sont co-locés dans `src/`, pas dans un dossier `tests/` séparé.
-- `credentials.json` et `credentials.key` dans les plugins providers ne doivent jamais être commités.
+- `dist/` is the entry point loaded by plugins, not `src/`. Always build after modifying.
+- `e2e-playwright/` is heavy, read only for e2e tests.
+- Dev server may already be running. Do not kill it.
+- `.test.ts` files are co-located in `src/`, not in a separate `tests/` directory.
+- `credentials.json` and `credentials.key` in provider plugins must never be committed.
 
-## Ne pas lire / ne pas toucher
+## Do Not Read / Do Not Touch
 
 - `node_modules/`, `dist/`, `build/`, `.git/`
-- `e2e-playwright/` (sauf pour tests e2e)
-- `~/.config/openfox/`, `~/.local/share/openfox/` (config production)
+- `e2e-playwright/` (except for e2e tests)
+- `~/.config/openfox/`, `~/.local/share/openfox/` (production config)
 
-## Pour aller plus loin
+## Further Reading
 
-- [docs/PROJECT.md](docs/PROJECT.md) — description détaillée, architecture interne, flux principaux
-- [docs/PLUGINS.md](docs/PLUGINS.md) — architecture des plugins
-- [docs/PLUGIN-ARCHITECTURE.md](docs/PLUGIN-ARCHITECTURE.md) — API plugin détaillée
-- [docs/WORKFLOWS.md](docs/WORKFLOWS.md) — format des workflows
-- [docs/I18N.md](docs/I18N.md) — internationalisation
-- [docs/SESSION-DEBUGGING.md](docs/SESSION-DEBUGGING.md) — debugging des sessions
-- [docs/RELEASE.md](docs/RELEASE.md) — procédure de release
+- [docs/PROJECT.md](docs/PROJECT.md) — detailed description, internal architecture, primary flows
+- [docs/PLUGINS.md](docs/PLUGINS.md) — plugin architecture
+- [docs/PLUGIN-ARCHITECTURE.md](docs/PLUGIN-ARCHITECTURE.md) — detailed plugin API
+- [docs/WORKFLOWS.md](docs/WORKFLOWS.md) — workflow format
+- [docs/I18N.md](docs/I18N.md) — internationalization
+- [docs/SESSION-DEBUGGING.md](docs/SESSION-DEBUGGING.md) — session debugging
+- [docs/RELEASE.md](docs/RELEASE.md) — release procedure
 
 ---
 
-> Après toute modification qui change la structure, une commande, une convention, un contrat entre projets ou un flux principal, mets à jour ce fichier et/ou `docs/PROJECT.md` dans le même commit. Si une information ici est fausse, corrige-la.
+> After any change affecting structure, a command, a convention, an inter-project contract, or a primary flow, update this file and/or `docs/PROJECT.md` in the same commit. If any information here is inaccurate, fix it.
