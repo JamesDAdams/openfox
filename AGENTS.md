@@ -253,3 +253,42 @@ Need to trace through a session, understand why the agent did something, or find
 ## Production Config
 
 NEVER modify production configuration files (e.g., `~/.config/openfox/`). These are user-specific and should only be changed by the user.
+
+## Dépendances inter-projets
+
+**Consomme** : plugins OpenFox (dans `openfox-plugins/`), Agent Office (via `openfox-plugins/openfox-agent-office`).
+
+**Consommé par** : tous les plugins OpenFox (via `openfox/provider` ou `openfox/plugin`), `openfox-plugins/openfox-agent-office` (lance Agent Office comme sous-processus), `agent-office-plugins/agentoffice-openfox` (pont inverse).
+
+**Points de contact** :
+
+- Plugins : `src/plugin/index.ts` (registre), `src/provider/index.ts` (providers LLM)
+- Agent Office : `src/server/routes/` (API HTTP), `src/server/ws/` (WebSocket)
+
+## Pièges connus
+
+- `dist/` est le point d'entrée chargé par les plugins, pas `src/`. Toujours builder après modification.
+- `e2e-playwright/` est lourd, ne le lire que pour les tests e2e.
+- Le dev server peut déjà être running. Ne pas le tuer.
+- Les fichiers `.test.ts` sont co-locés dans `src/`, pas dans un dossier `tests/` séparé.
+- `credentials.json` et `credentials.key` dans les plugins providers ne doivent jamais être commités.
+
+## Ne pas lire / ne pas toucher
+
+- `node_modules/`, `dist/`, `build/`, `.git/`
+- `e2e-playwright/` (sauf pour tests e2e)
+- `~/.config/openfox/`, `~/.local/share/openfox/` (config production)
+
+## Pour aller plus loin
+
+- [docs/PROJECT.md](docs/PROJECT.md) — description détaillée, architecture interne, flux principaux
+- [docs/PLUGINS.md](docs/PLUGINS.md) — architecture des plugins
+- [docs/PLUGIN-ARCHITECTURE.md](docs/PLUGIN-ARCHITECTURE.md) — API plugin détaillée
+- [docs/WORKFLOWS.md](docs/WORKFLOWS.md) — format des workflows
+- [docs/I18N.md](docs/I18N.md) — internationalisation
+- [docs/SESSION-DEBUGGING.md](docs/SESSION-DEBUGGING.md) — debugging des sessions
+- [docs/RELEASE.md](docs/RELEASE.md) — procédure de release
+
+---
+
+> Après toute modification qui change la structure, une commande, une convention, un contrat entre projets ou un flux principal, mets à jour ce fichier et/ou `docs/PROJECT.md` dans le même commit. Si une information ici est fausse, corrige-la.
